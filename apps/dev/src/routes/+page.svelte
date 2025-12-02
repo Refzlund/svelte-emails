@@ -247,7 +247,7 @@
 				'>{#if serverOutputMode === 'html'}{data.serverOutput.html}{:else if serverOutputMode === 'text'}{data.serverOutput.text}{:else}{JSON.stringify(data.serverOutput.headers, null, 2)}{/if}</pre>
 			</div>
 		{:else}
-			<Email.Render bind:output {mode} {prettify} vars={{ first_name: 'John'}}>
+			<Email.Render bind:output {mode} {prettify} placeholders={{ first_name: 'John'}}>
 				<MyEmail />
 			</Email.Render>
 		{/if}

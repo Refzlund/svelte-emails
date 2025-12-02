@@ -42,8 +42,8 @@ Sets up the IR tree collector context and provides bindable output.
 		 * - 'html+style': Format HTML structure and CSS (style attributes + style tags)
 		 */
 		prettify?: 'none' | 'html' | 'html+style'
-		/** Variables for interpolation */
-		vars?: RenderOptions['vars']
+		/** Placeholder values for [[variable]] interpolation */
+		placeholders?: RenderOptions['placeholders']
 		/** Style configuration (component theming, rem base size, etc.) */
 		style?: StyleConfig
 		/** Bindable output containing html, text, and headers */
@@ -55,7 +55,7 @@ Sets up the IR tree collector context and provides bindable output.
 	let { 
 		mode = 'preview',
 		prettify = 'html+style',
-		vars = {}, 
+		placeholders = {}, 
 		style, 
 		output = $bindable(null),
 		children 
@@ -77,7 +77,7 @@ Sets up the IR tree collector context and provides bindable output.
 	// Render from IR tree when root is available and update bindable output
 	const rendered = $derived.by(() => {
 		if (!root) return null
-		const result = renderTree(root, { vars, style })
+		const result = renderTree(root, { placeholders, style })
 		return result
 	})
 

@@ -239,6 +239,10 @@ Tailwind-like attributes on any component:
 ```svelte
 <Div mobile-only>Shown only on mobile</Div>
 <Div desktop-only>Shown only on desktop</Div>
+<Div cols responsive>
+    <Div>2 columns on Desktop</Div>
+    <Div>1 column on Mobile</Div>
+</Div>
 ```
 
 ### Opacity
@@ -257,7 +261,7 @@ Tailwind-like attributes on any component:
 </script>
 
 <Email.Preview
-    vars={{ 'first_name': 'John' }}
+    placeholders={{ 'first_name': 'John' }}
     style={merge(presets.base, {
         Button: {
             background: '#2563eb',
@@ -269,7 +273,7 @@ Tailwind-like attributes on any component:
 </Email.Preview>
 ```
 
-`vars` replace `[[variable]]` placeholders in text content.
+`placeholders` replace `[[variable]]` placeholders in text content.
 
 ### Available Presets
 
@@ -291,13 +295,13 @@ Use `merge()` to combine presets or override specific values.
 ## Rendering Server-Side
 
 ```ts
-import { render } from 'svelte-emails'
+import { render, merge, presets } from 'svelte-emails'
 import MyEmail from './MyEmail.email.svelte'
 
 const result = await render(MyEmail, {
-    vars: { first_name: 'John' },
-    style: {...},
-    props: {...}
+    placeholders: { first_name: 'John' }, // replaces [[first_name]] in content
+    style: merge(presets.serif, { ... }),
+    props: {...} // props passed onto the component
 })
 
 if (result.ok) {

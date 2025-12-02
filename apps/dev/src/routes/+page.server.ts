@@ -3,7 +3,7 @@ import MyEmail from './MyEmail.email.svelte'
 
 export async function load() {
 	const output = await render(MyEmail, {
-		vars: { first_name: 'John' },
+		placeholders: { first_name: 'John' },
 		props: {}
 	})
 

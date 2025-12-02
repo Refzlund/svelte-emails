@@ -56,8 +56,8 @@ const Table = Object.assign(_Table, {
  * Options for the render() function.
  */
 export interface RenderEmailOptions<TProps extends Record<string, unknown> = Record<string, unknown>> {
-	/** Variables for content interpolation (e.g., { first_name: 'Alice' }) */
-	vars?: Record<string, string>
+	/** Placeholder values for [[variable]] interpolation (e.g., { first_name: 'Alice' }) */
+	placeholders?: Record<string, string>
 	/** Style configuration (component theming, rem base size, etc.) */
 	style?: StyleConfig
 	/** Props to pass to the email component */
@@ -71,7 +71,7 @@ export interface RenderEmailOptions<TProps extends Record<string, unknown> = Rec
  * collects the IR tree, and converts it to email-safe HTML.
  * 
  * @param EmailComponent - The email component to render (must contain <Email> at root)
- * @param options - Render options (vars, style, props)
+ * @param options - Render options (placeholders, style, props)
  * @returns Object containing html, text, and headers
  * 
  * @example
@@ -80,7 +80,7 @@ export interface RenderEmailOptions<TProps extends Record<string, unknown> = Rec
  * import MyEmail from './MyEmail.email.svelte'
  * 
  * const result = await render(MyEmail, {
- *   vars: { first_name: 'Alice', order_id: '12345' },
+ *   placeholders: { first_name: 'Alice', order_id: '12345' },
  *   style: presets.minimal,
  *   props: { orderTotal: 99.99 }
  * })
@@ -94,7 +94,7 @@ export async function render<TProps extends Record<string, unknown> = Record<str
 	EmailComponent: Component<TProps>,
 	options: RenderEmailOptions<TProps> = {}
 ): Promise<RenderOutput> {
-	const { vars = {}, style, props = {} as TProps } = options
+	const { placeholders = {}, style, props = {} as TProps } = options
 
 	// Create a collector to capture the IR tree
 	let root: Mail.EmailNode | null = null
@@ -125,7 +125,7 @@ export async function render<TProps extends Record<string, unknown> = Record<str
 	}
 
 	// Render the IR tree to HTML and text
-	return renderTree(root, { vars, style })
+	return renderTree(root, { placeholders, style })
 }
 
 export {

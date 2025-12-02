@@ -97,7 +97,7 @@ export {
 // Content Processing
 export {
 	parseMarkdown,
-	interpolateVariables,
+	interpolatePlaceholders,
 	escapeHtml,
 	unescapeHtml,
 	stripHtmlToText,

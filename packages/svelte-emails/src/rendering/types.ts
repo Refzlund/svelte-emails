@@ -27,8 +27,8 @@ export interface RenderOutput {
  * Options passed to the render function.
  */
 export interface RenderOptions {
-	/** Variables for interpolation (e.g., { first_name: 'Alice' }) */
-	vars?: Record<string, string>
+	/** Placeholder values for [[variable]] interpolation (e.g., { first_name: 'Alice' }) */
+	placeholders?: Record<string, string>
 	/** Style configuration (component theming, rem base size, etc.) */
 	style?: StyleConfig
 }
@@ -163,8 +163,8 @@ export interface ParsedAttrs {
  * Context maintained during rendering traversal.
  */
 export interface RenderContext {
-	/** Variable values for interpolation */
-	vars: Record<string, string>
+	/** Placeholder values for [[variable]] interpolation */
+	placeholders: Record<string, string>
 	/** Footnotes collected for plain text output (links become [1], [2], etc.) */
 	footnotes: Array<{ label: string; url: string }>
 	/** Email headers collected during rendering (e.g., List-Unsubscribe) */

@@ -32,7 +32,7 @@ import {
 	wrapWithMargin,
 	wrapWithResponsive,
 	parseMarkdown,
-	interpolateVariables,
+	interpolatePlaceholders,
 	escapeHtml,
 	formatFootnotes,
 	htmlAttrs,
@@ -85,7 +85,7 @@ export function renderTree(root: Mail.EmailNode, options: RenderOptions = {}): R
 	const style = merge(basePreset, options.style) as StyleConfig
 
 	const context: RenderContext = {
-		vars: options.vars ?? {},
+		placeholders: options.placeholders ?? {},
 		footnotes: [],
 		headers: {},
 		style
@@ -251,7 +251,7 @@ function renderEmailNode(
 	
 	// Preview text (hidden, appears in inbox list)
 	const previewHtml = node.preview 
-		? buildPreviewText(interpolateVariables(node.preview, context))
+		? buildPreviewText(interpolatePlaceholders(node.preview, context))
 		: ''
 
 	// Build content container style
@@ -283,7 +283,7 @@ function renderEmailNode(
  */
 function buildHeadSection(node: Mail.EmailNode, context: RenderContext): string {
 	const subject = node.subject 
-		? interpolateVariables(node.subject, context)
+		? interpolatePlaceholders(node.subject, context)
 		: ''
 
 	// Only media query CSS - everything else is inlined
@@ -606,7 +606,7 @@ function renderTextNode(
 	const mergedCss = { ...variantStyles, ...parsed.css }
 
 	// Process content: variables first, then markdown
-	let content = interpolateVariables(node.content, context)
+	let content = interpolatePlaceholders(node.content, context)
 	content = parseMarkdown(content, context)
 
 	const inlineStyle = toInlineCSS(mergedCss, inherited)
@@ -764,11 +764,11 @@ function renderButtonNode(
 	const inlineStyle = toInlineCSS(mergedCss, inherited)
 
 	// Process href and content with variables
-	const href = interpolateVariables(node.href, context)
+	const href = interpolatePlaceholders(node.href, context)
 	// Use content prop if available, otherwise render children
 	const childInherited = extractInheritable(parsed, inherited)
 	const content = node.content 
-		? parseMarkdown(interpolateVariables(node.content, context), context)
+		? parseMarkdown(interpolatePlaceholders(node.content, context), context)
 		: renderChildren(node.children, childInherited, context, rootSize)
 
 	let html = `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" style="${inlineStyle}">${content}</a>`
@@ -798,8 +798,8 @@ function renderImgNode(
 	const parsed = parseAttrs(node.attrs, inherited, rootSize)
 
 	// Process src and alt with variables
-	const src = interpolateVariables(node.src, context)
-	const alt = node.alt ? interpolateVariables(node.alt, context) : ''
+	const src = interpolatePlaceholders(node.src, context)
+	const alt = node.alt ? interpolatePlaceholders(node.alt, context) : ''
 
 	// Reset browser defaults for images:
 	// - display: block removes bottom gap (inline images have text baseline gap)
@@ -830,7 +830,7 @@ function renderImgNode(
 
 	// Wrap in anchor if href is provided (clickable image)
 	if (node.href) {
-		const href = interpolateVariables(node.href, context)
+		const href = interpolatePlaceholders(node.href, context)
 		html = `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${html}</a>`
 	}
 
@@ -967,11 +967,11 @@ function renderLinkNode(
 	const inlineStyle = toInlineCSS(mergedCss, inherited)
 	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
 
-	const href = interpolateVariables(node.href, context)
+	const href = interpolatePlaceholders(node.href, context)
 	// Use content prop if available, otherwise render children
 	const childInherited = extractInheritable(parsed, inherited)
 	const content = node.content
-		? parseMarkdown(interpolateVariables(node.content, context), context)
+		? parseMarkdown(interpolatePlaceholders(node.content, context), context)
 		: renderChildren(node.children, childInherited, context, rootSize)
 
 	return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer"${styleAttr}>${content}</a>`
@@ -1005,11 +1005,11 @@ function renderUnsubscribeNode(
 	const inlineStyle = toInlineCSS(mergedCss, inherited)
 	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
 
-	const href = interpolateVariables(node.href, context)
+	const href = interpolatePlaceholders(node.href, context)
 	// Use content prop if available, otherwise render children
 	const childInherited = extractInheritable(parsed, inherited)
 	const content = node.content
-		? escapeHtml(interpolateVariables(node.content, context))
+		? escapeHtml(interpolatePlaceholders(node.content, context))
 		: renderChildren(node.children, childInherited, context, rootSize)
 
 	// Add List-Unsubscribe header
@@ -1386,7 +1386,7 @@ function renderContainerToText(
 
 function renderTextNodeToText(node: Mail.TextNode, context: RenderContext): string {
 	// Interpolate variables
-	let content = interpolateVariables(node.content, context)
+	let content = interpolatePlaceholders(node.content, context)
 	
 	// Strip HTML-specific markdown syntax while preserving standard markdown
 	content = stripHtmlSpecificMarkdown(content)
@@ -1440,33 +1440,33 @@ function stripHtmlSpecificMarkdown(content: string): string {
 }
 
 function renderButtonNodeToText(node: Mail.ButtonNode, context: RenderContext): string {
-	const href = interpolateVariables(node.href, context)
+	const href = interpolatePlaceholders(node.href, context)
 	let content = node.content 
-		? interpolateVariables(node.content, context)
+		? interpolatePlaceholders(node.content, context)
 		: node.children.map((c) => renderNodeToText(c, context)).join('')
 	content = content.trim() || 'Link'
 	return `[${content}](${href})`
 }
 
 function renderImgNodeToText(node: Mail.ImgNode, context: RenderContext): string {
-	const src = interpolateVariables(node.src, context)
-	const alt = node.alt ? interpolateVariables(node.alt, context) : 'Image'
+	const src = interpolatePlaceholders(node.src, context)
+	const alt = node.alt ? interpolatePlaceholders(node.alt, context) : 'Image'
 	return `![${alt}](${src})`
 }
 
 function renderLinkNodeToText(node: Mail.LinkNode, context: RenderContext): string {
-	const href = interpolateVariables(node.href, context)
+	const href = interpolatePlaceholders(node.href, context)
 	let content = node.content 
-		? interpolateVariables(node.content, context)
+		? interpolatePlaceholders(node.content, context)
 		: node.children.map((c) => renderNodeToText(c, context)).join('')
 	content = content.trim() || 'Link'
 	return `[${content}](${href})`
 }
 
 function renderUnsubscribeNodeToText(node: Mail.UnsubscribeNode, context: RenderContext): string {
-	const href = interpolateVariables(node.href, context)
+	const href = interpolatePlaceholders(node.href, context)
 	const content = node.content 
-		? interpolateVariables(node.content, context)
+		? interpolatePlaceholders(node.content, context)
 		: node.children.map((c) => renderNodeToText(c, context)).join('')
 	return `${content}: ${href}`
 }

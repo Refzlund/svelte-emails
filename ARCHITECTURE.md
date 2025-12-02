@@ -98,7 +98,7 @@ Produces this IR:
 | `parse-attrs.ts` | `parseAttrs()`, `remToPx()`, `parseColumnTemplate()`, `parseGap()`, `parseCellPadding()`, `extractColspanFromAttrs()`, `extractRowspanFromAttrs()`, and individual parsers |
 | `colors.ts` | `blendColor()`, `parseHex()`, `rgbToHex()`, `parseColorWithOpacity()` |
 | `html-helpers.ts` | `toInlineCSS()`, `htmlAttrs()`, `wrapWithMargin()`, `presentationTable()` |
-| `content.ts` | `parseMarkdown()`, `interpolateVariables()`, `escapeHtml()` |
+| `content.ts` | `parseMarkdown()`, `interpolatePlaceholders()`, `escapeHtml()` |
 
 ### IR Node Structure
 
@@ -186,13 +186,13 @@ The renderer uses several key types to manage state during traversal:
 ```ts
 // Options passed to render() or renderTree()
 interface RenderOptions {
-  vars?: Record<string, string | number>  // Variable values for interpolation
+  placeholders?: Record<string, string | number>  // Placeholder values for [[variable]] interpolation
   style?: StyleConfig                      // Theme/preset configuration
 }
 
 // Internal context passed through the render tree
 interface RenderContext {
-  vars: Record<string, string | number>   // Variables for content interpolation
+  placeholders: Record<string, string | number>   // Placeholder values for content interpolation
   footnotes: Footnote[]                   // Collected link footnotes for text output
   headers: Record<string, string>         // Email headers (e.g., List-Unsubscribe)
   style: StyleConfig                      // Active style configuration
@@ -272,7 +272,7 @@ The rendering pipeline transforms the IR tree into final HTML and plain text out
 ### Preview Mode (`<Email.Preview>`)
 
 ```
-IR Tree → renderTree(root, { vars, style }) → HTML → Inject into <iframe>
+IR Tree → renderTree(root, { placeholders, style }) → HTML → Inject into <iframe>
 ```
 
 The iframe isolation ensures:
@@ -283,13 +283,13 @@ The iframe isolation ensures:
 ### Server Render (`render()`)
 
 ```
-IR Tree → renderTree(root, { vars, style }) → { html, text, headers }
+IR Tree → renderTree(root, { placeholders, style }) → { html, text, headers }
 ```
 
 The `render()` function returns HTML, plain text, and email headers:
 
 ```ts
-const { html, text, headers } = render(MyEmail, { vars: { name: 'Alice' } })
+const { html, text, headers } = render(MyEmail, { placeholders: { name: 'Alice' } })
 // headers may include: { 'List-Unsubscribe': '<mailto:...>, <https://...>' }
 ```
 
@@ -1217,7 +1217,7 @@ Markdown in variable content that contains `<`, `>`, `&`:
 // But AFTER variable interpolation
 
 // Processing order:
-// 1. interpolateVariables() — replaces [[var]]
+// 1. interpolatePlaceholders() — replaces [[var]]
 // 2. escapeHtml() — escapes <, >, & in variable values
 // 3. parseMarkdown() — processes markdown syntax
 ```
@@ -1257,14 +1257,14 @@ Use double brackets `[[variable_name]]` to insert variables:
 <Button href='https://example.com/track/[[tracking_id]]'>Track Package</Button>
 ```
 
-#### Providing Variables
+#### Providing Placeholder Values
 
-Pass a `vars` object to `render()` or `<Email.Preview>`:
+Pass a `placeholders` object to `render()` or `<Email.Render>`:
 
 ```ts
 // Server-side rendering
 const { html, text } = render(MyEmail, {
-  vars: {
+  placeholders: {
     first_name: 'Alice',
     order_id: '12345',
     tracking_id: 'TRK-789'
@@ -1272,37 +1272,37 @@ const { html, text } = render(MyEmail, {
 })
 
 // Preview component
-<Email.Preview vars={{ first_name: 'Alice', order_id: '12345' }}>
+<Email.Render placeholders={{ first_name: 'Alice', order_id: '12345' }}>
   <MyEmail />
-</Email.Preview>
+</Email.Render>
 ```
 
-#### When Variables Are Replaced
+#### When Placeholders Are Replaced
 
-Variable interpolation happens **during the HTML/text rendering phase**, after the IR tree is built but before final output:
+Placeholder interpolation happens **during the HTML/text rendering phase**, after the IR tree is built but before final output:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  Rendering Pipeline                                                         │
 │                                                                             │
-│  1. Component Registration  → IR tree built (variables NOT replaced yet)   │
+│  1. Component Registration  → IR tree built (placeholders NOT replaced yet)│
 │                                                                             │
 │  2. renderTree() called     → Traverse IR tree                              │
 │       │                                                                     │
-│       ├─ renderTextNode()   → interpolateVariables(content, vars)          │
+│       ├─ renderTextNode()   → interpolatePlaceholders(content, placeholders)│
 │       │                        ↳ '[[first_name]]' → 'Alice'                │
 │       │                                                                     │
-│       ├─ renderButtonNode() → interpolateVariables(content, vars)          │
-│       │                     → interpolateVariables(href, vars)             │
+│       ├─ renderButtonNode() → interpolatePlaceholders(content, placeholders)│
+│       │                     → interpolatePlaceholders(href, placeholders)   │
 │       │                                                                     │
-│       └─ renderLinkNode()   → interpolateVariables(content, vars)          │
-│                             → interpolateVariables(href, vars)             │
+│       └─ renderLinkNode()   → interpolatePlaceholders(content, placeholders)│
+│                             → interpolatePlaceholders(href, placeholders)   │
 │                                                                             │
-│  3. HTML/Text output        → Variables fully replaced                      │
+│  3. HTML/Text output        → Placeholders fully replaced                   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key insight:** The IR tree stores raw template strings (e.g., `'Hello [[first_name]]!'`). Variable replacement is deferred to render time, allowing the same IR tree to be rendered with different variable sets without rebuilding the component tree.
+**Key insight:** The IR tree stores raw template strings (e.g., `'Hello [[first_name]]!'`). Placeholder replacement is deferred to render time, allowing the same IR tree to be rendered with different placeholder sets without rebuilding the component tree.
 
 #### Where Variables Work
 
@@ -1331,27 +1331,27 @@ Step 1:  'Hello **Alice**!'        (variable replaced)
 Step 2:  'Hello <strong>Alice</strong>!'  (markdown parsed)
 ```
 
-#### The `interpolateVariables()` Function
+#### The `interpolatePlaceholders()` Function
 
 ```ts
 // From src/rendering/content.ts
 
 /**
- * Replace [[variable]] placeholders with values from vars object.
+ * Replace [[placeholder]] syntax with values from the placeholders object.
  * Values are HTML-escaped to prevent XSS.
  * 
- * @param content - String containing [[variable]] placeholders
- * @param vars - Object mapping variable names to values
- * @returns String with variables replaced
+ * @param content - String containing [[placeholder]] syntax
+ * @param placeholders - Object mapping placeholder names to values
+ * @returns String with placeholders replaced
  */
-function interpolateVariables(
+function interpolatePlaceholders(
   content: string,
-  vars: Record<string, string | number | undefined>
+  placeholders: Record<string, string | number | undefined>
 ): string {
-  return content.replace(/\[\[(\w+)\]\]/g, (match, varName) => {
-    const value = vars[varName]
+  return content.replace(/\[\[(\w+)\]\]/g, (match, name) => {
+    const value = placeholders[name]
     if (value === undefined) {
-      // Keep placeholder if variable not provided (helps debugging)
+      // Keep placeholder if value not provided (helps debugging)
       return match
     }
     return escapeHtml(String(value))
@@ -1361,10 +1361,10 @@ function interpolateVariables(
 
 #### Security
 
-**All variable values are HTML-escaped by default:**
+**All placeholder values are HTML-escaped by default:**
 
 ```ts
-vars: { name: '<script>alert("xss")</script>' }
+placeholders: { name: '<script>alert("xss")</script>' }
 // Renders as: &lt;script&gt;alert("xss")&lt;/script&gt;
 ```
 
@@ -1375,7 +1375,7 @@ This prevents XSS attacks when user-provided data is used in emails.
 If a variable is referenced but not provided, the placeholder remains in the output:
 
 ```ts
-render(MyEmail, { vars: { first_name: 'Alice' } })
+render(MyEmail, { placeholders: { first_name: 'Alice' } })
 // <Text content='Hi [[first_name]], your code is [[code]]' />
 // → "Hi Alice, your code is [[code]]"
 ```
@@ -1485,7 +1485,7 @@ The default root size is `16px`. Override it via the `style` option:
 
 ```ts
 render(MyEmail, {
-  vars: { name: 'Alice' },
+  placeholders: { name: 'Alice' },
   style: {
     root: { size: 18 }  // 1rem = 18px
   }
@@ -2182,7 +2182,7 @@ The renderer performs a **depth-first traversal** of the IR tree, maintaining in
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  renderTree(root, options)                                                  │
 │    │                                                                        │
-│    ├─ Initialize RenderContext (vars, footnotes, headers, style)            │
+│    ├─ Initialize RenderContext (placeholders, footnotes, headers, style)   │
 │    ├─ Initialize InheritedStyles from StyleConfig defaults                  │
 │    │                                                                        │
 │    └─ renderNodeToHtml(node, inherited, context, rootSize)                  │
@@ -2275,9 +2275,9 @@ function hasMarkdownChars(content: string): boolean {
 
 function processContent(content: string, context: RenderContext): string {
   if (!hasMarkdownChars(content)) {
-    return interpolateVariables(content, context)
+    return interpolatePlaceholders(content, context)
   }
-  return parseMarkdown(interpolateVariables(content, context), context)
+  return parseMarkdown(interpolatePlaceholders(content, context), context)
 }
 ```
 
@@ -2343,7 +2343,7 @@ Plain text is generated separately from HTML to avoid parsing HTML string:
 function renderNodeToText(node: Mail.IRNode, context: RenderContext): string {
   switch (node.type) {
     case 'text':
-      return stripMarkdown(interpolateVariables(node.content, context))
+      return stripMarkdown(interpolatePlaceholders(node.content, context))
     case 'div':
       return node.children.map(c => renderNodeToText(c, context)).join('\n')
     // ...
@@ -2852,7 +2852,7 @@ import MyEmail from './MyEmail.email.svelte'
 // Server-side rendering in +page.server.ts
 export async function load() {
 	const result = await render(MyEmail, {
-		vars: { name: 'Alice' }
+		placeholders: { name: 'Alice' }
 	})
 	return { html: result.html, text: result.text }
 }
@@ -2871,7 +2871,7 @@ The `render()` function performs these steps:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│  render(MyEmail, { vars })                                                   │
+│  render(MyEmail, { placeholders })                                           │
 │    │                                                                         │
 │    ├─ 1. Create collector: { registerRoot(node) { root = node } }            │
 │    │                                                                         │
@@ -2891,7 +2891,7 @@ The `render()` function performs these steps:
 │    │                                                                         │
 │    ├─ 4. root now contains complete IR tree                                  │
 │    │                                                                         │
-│    └─ 5. return renderTree(root, { vars }) → { html, text, headers }        │
+│    └─ 5. return renderTree(root, { placeholders }) → { html, text, headers } │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -3067,10 +3067,10 @@ The `render()` function is async and must be awaited:
 
 ```ts
 // ✅ CORRECT
-const result = await render(MyEmail, { vars })
+const result = await render(MyEmail, { placeholders })
 
 // ❌ WRONG - render returns a Promise
-const result = render(MyEmail, { vars })  // result is Promise<RenderOutput>
+const result = render(MyEmail, { placeholders })  // result is Promise<RenderOutput>
 ```
 
 This is because Svelte 5's `render()` from `svelte/server` returns a Promise.

@@ -461,27 +461,27 @@ function renderMarkdownTable(lines: string[], context: RenderContext): string {
 // ============================================================================
 
 /**
- * Interpolate variables in content.
- * Replaces [[variable_name]] with values from context.vars.
- * Unknown variables are left as-is for debugging.
+ * Interpolate placeholders in content.
+ * Replaces [[placeholder_name]] with values from context.placeholders.
+ * Unknown placeholders are left as-is for debugging.
  * 
- * @param content - Content with variable placeholders
- * @param context - Render context containing variable values
- * @returns Content with variables replaced
+ * @param content - Content with [[placeholder]] syntax
+ * @param context - Render context containing placeholder values
+ * @returns Content with placeholders replaced
  * 
  * @example
  * ```ts
- * const context = { vars: { first_name: 'Alice' }, footnotes: [], headers: {} }
- * interpolateVariables('Hello [[first_name]]!', context)
+ * const context = { placeholders: { first_name: 'Alice' }, footnotes: [], headers: {} }
+ * interpolatePlaceholders('Hello [[first_name]]!', context)
  * // → 'Hello Alice!'
  * 
- * interpolateVariables('Hello [[unknown]]!', context)
+ * interpolatePlaceholders('Hello [[unknown]]!', context)
  * // → 'Hello [[unknown]]!' (preserved for debugging)
  * ```
  */
-export function interpolateVariables(content: string, context: RenderContext): string {
+export function interpolatePlaceholders(content: string, context: RenderContext): string {
 	return content.replace(/\[\[([^\]]+)\]\]/g, (_, varName: string) => {
-		const value = context.vars[varName.trim()]
+		const value = context.placeholders[varName.trim()]
 		return value !== undefined ? escapeHtml(value) : `[[${varName}]]`
 	})
 }
@@ -542,7 +542,7 @@ export function unescapeHtml(str: string): string {
  * 
  * @example
  * ```ts
- * const context = { vars: {}, footnotes: [], headers: {} }
+ * const context = { placeholders: {}, footnotes: [], headers: {} }
  * stripHtmlToText('Click <a href="https://example.com">here</a>!', context)
  * // → 'Click here[1]!'
  * // context.footnotes = [{ label: '[1]', url: 'https://example.com' }]
