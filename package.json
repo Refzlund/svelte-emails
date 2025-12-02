@@ -1,0 +1,19 @@
+{
+	"name": "svelte-emaily-repository",
+	"scripts": {
+		"dev": "cd apps/dev && bun run dev"
+	},
+	"workspaces": {
+		"packages": [
+			"packages/*",
+			"apps/*"
+		],
+		"catalog": {
+			"@sveltejs/kit": "^2.48.5",
+			"@sveltejs/vite-plugin-svelte": "^6.2.1",
+			"svelte": "^5.43.8",
+			"typescript": "^5.9.3",
+			"vite": "^7.2.2"
+		}
+	}
+}
