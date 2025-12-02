@@ -22,7 +22,8 @@ import type {
 	RenderOptions,
 	InheritedStyles,
 	RenderContext,
-	ParsedAttrs
+	ParsedAttrs,
+StyleConfig
 } from './rendering'
 import {
 	parseAttrs,
@@ -45,7 +46,7 @@ import {
 	extractRowspanFromAttrs,
 	MOBILE_BREAKPOINT
 } from './rendering'
-import { getRootSize } from './styles'
+import { getRootSize, merge, basePreset } from './styles'
 
 // Re-export types for consumers
 export type { RenderOutput, RenderOptions } from './rendering'
@@ -80,29 +81,31 @@ const DEFAULT_CONTENT_WIDTH = 600
  * @returns Object containing html, text, and headers outputs
  */
 export function renderTree(root: Mail.EmailNode, options: RenderOptions = {}): RenderOutput {
+	// Merge user style with base preset for complete defaults
+	const style = merge(basePreset, options.style) as StyleConfig
+
 	const context: RenderContext = {
 		vars: options.vars ?? {},
 		footnotes: [],
 		headers: {},
-		style: options.style ?? {}
+		style
 	}
 
 	// Get root size for rem-to-px conversion
-	const rootSize = getRootSize(options.style)
+	const rootSize = getRootSize(style)
 
 	// Initialize inherited styles from config
 	// These serve as defaults for the entire tree
-	// Sensible defaults: white background, black text, 16px font
-	const defaultColor = options.style?.root?.color ?? '#000000'
+	const defaultColor = style.root?.color ?? '#000000'
 	const defaultInherited: InheritedStyles = {
-		backgroundColor: options.style?.root?.background ?? '#ffffff',
+		backgroundColor: style.root?.background ?? '#ffffff',
 		color: defaultColor,
 		borderColor: defaultColor, // Border inherits from text color
-		fontFamily: options.style?.root?.fontFamily,
+		fontFamily: style.root?.fontFamily,
 		fontSize: `${rootSize}px`,
-		lineHeight: typeof options.style?.root?.lineHeight === 'number' 
-			? String(options.style.root.lineHeight) 
-			: options.style?.root?.lineHeight,
+		lineHeight: typeof style.root?.lineHeight === 'number' 
+			? String(style.root.lineHeight) 
+			: style.root?.lineHeight,
 		opacity: 1
 	}
 
@@ -240,8 +243,8 @@ function renderEmailNode(
 	// Render children
 	const childrenHtml = renderChildren(node.children, childInherited, context, rootSize)
 
-	// Build head section with dynamic content width for media queries
-	const headHtml = buildHeadSection(node, context, contentWidth)
+	// Build head section (only media queries - reset styles are inlined)
+	const headHtml = buildHeadSection(node, context)
 
 	// Build body with wrapper tables
 	const bodyStyle = `margin: 0; padding: 0; width: 100%; background-color: ${bodyBgColor};`
@@ -272,31 +275,30 @@ function renderEmailNode(
  * Build the <head> section with meta tags, MSO XML, and styles.
  * Output is minified for smaller email size.
  * 
+ * Only includes media query styles since all other styles are inlined.
+ * Reset styles (body, table, img) are applied inline to relevant elements.
+ * 
  * @param node - Email node for subject extraction
  * @param context - Render context for variable interpolation
- * @param contentWidth - Content container width (default: 600)
  */
-function buildHeadSection(node: Mail.EmailNode, context: RenderContext, contentWidth: number = DEFAULT_CONTENT_WIDTH): string {
+function buildHeadSection(node: Mail.EmailNode, context: RenderContext): string {
 	const subject = node.subject 
 		? interpolateVariables(node.subject, context)
 		: ''
 
-	// CSS rules minified (no newlines between rules)
+	// Only media query CSS - everything else is inlined
+	// This is the inline-first approach for maximum email client compatibility
 	const css = [
-		'body{margin:0;padding:0;width:100%!important;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}',
-		'table{border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt}',
-		'img{border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;max-width:100%;height:auto}',
-		`.email-container{width:100%!important;max-width:${contentWidth}px!important}`,
 		`@media screen and (max-width:${MOBILE_BREAKPOINT}px){`,
-		'.email-container{width:100%!important}',
-		'.responsive-grid td{display:block!important;width:100%!important}',
-		'.responsive-grid td>table{display:table!important;width:100%!important}',
-		'.responsive-grid td>table>tbody>tr>td{display:table-cell!important}',
-		'.mobile-only{display:table-cell!important;max-height:none!important;overflow:visible!important;width:auto!important}',
-		'td.mobile-only{display:table-cell!important}',
-		'div.mobile-only{display:block!important}',
-		'.desktop-only{display:none!important;width:0!important;max-width:0!important;height:0!important;overflow:hidden!important;mso-hide:all!important;font-size:0!important;line-height:0!important}',
-		'td.desktop-only{display:none!important;padding:0!important;width:0!important;max-width:0!important}',
+		`.email-container{width:100%!important}`,
+		`.responsive-grid td{display:block!important;width:100%!important}`,
+		`.responsive-grid td>table{display:table!important;width:100%!important}`,
+		`.responsive-grid td>table>tbody>tr>td{display:table-cell!important}`,
+		`.mobile-only{display:table-cell!important;max-height:none!important;overflow:visible!important;width:auto!important}`,
+		`td.mobile-only{display:table-cell!important}`,
+		`div.mobile-only{display:block!important}`,
+		`.desktop-only{display:none!important;width:0!important;max-width:0!important;height:0!important;overflow:hidden!important;mso-hide:all!important;font-size:0!important;line-height:0!important}`,
+		`td.desktop-only{display:none!important;padding:0!important;width:0!important;max-width:0!important}`,
 		'}'
 	].join('')
 
@@ -456,7 +458,7 @@ function renderDivAsGrid(
 			if (autoWidth || hasFixedWidthChildren) {
 				autoWidths = node.children.map((child) => {
 					const childWidth = extractWidthFromAttrs(child.attrs, rootSize)
-					return childWidth ?? autoWidth
+					return childWidth ?? autoWidth!
 				})
 			}
 		}
@@ -642,6 +644,11 @@ function getTextTag(variant: Mail.TextNode['variant']): string {
 /**
  * Get variant-specific styles from StyleConfig.
  * These are merged with explicit attrs (attrs take precedence).
+ * 
+ * Resets browser defaults for text elements since we use inline-first approach:
+ * - h1-h6: margin, font-size, font-weight (browsers apply defaults)
+ * - p: margin
+ * - small: font-size (browsers make it smaller)
  */
 function getTextVariantStyles(
 	variant: Mail.TextNode['variant'],
@@ -649,9 +656,34 @@ function getTextVariantStyles(
 	rootSize: number
 ): Record<string, string> {
 	const textConfig = context.style.Text
-	if (!textConfig) return {}
-
 	const css: Record<string, string> = {}
+
+	// Reset browser defaults based on element type
+	switch (variant) {
+		case 'h1':
+		case 'h2':
+		case 'h3':
+		case 'h4':
+		case 'h5':
+		case 'h6':
+			// Headings have browser default margin, font-size, font-weight
+			css.margin = '0'
+			css.padding = '0'
+			css.fontSize = 'inherit'
+			css.fontWeight = 'inherit'
+			break
+		case 'paragraph':
+			// Paragraphs have browser default margin
+			css.margin = '0'
+			css.padding = '0'
+			break
+		case 'small':
+			// Small has browser default smaller font-size
+			css.fontSize = 'inherit'
+			break
+	}
+
+	if (!textConfig) return css
 
 	// Apply base text color if set
 	if (textConfig.color) {
@@ -769,6 +801,17 @@ function renderImgNode(
 	const src = interpolateVariables(node.src, context)
 	const alt = node.alt ? interpolateVariables(node.alt, context) : ''
 
+	// Reset browser defaults for images:
+	// - display: block removes bottom gap (inline images have text baseline gap)
+	// - max-width: 100% prevents overflow
+	// - height: auto maintains aspect ratio
+	const resetCss: Record<string, string> = {
+		display: 'block',
+		maxWidth: '100%',
+		height: 'auto'
+	}
+	const mergedCss = { ...resetCss, ...parsed.css }
+
 	const attrs: Record<string, string | number | undefined> = {
 		src,
 		alt,
@@ -779,8 +822,8 @@ function renderImgNode(
 	if (node.width) attrs.width = node.width
 	if (node.height) attrs.height = node.height
 
-	// Add inline styles if any
-	const inlineStyle = toInlineCSS(parsed.css, inherited)
+	// Add inline styles (reset styles + parsed attrs)
+	const inlineStyle = toInlineCSS(mergedCss, inherited)
 	if (inlineStyle) attrs.style = inlineStyle
 
 	let html = `<img ${htmlAttrs(attrs)}>`
@@ -803,12 +846,24 @@ function renderImgNode(
 // ============================================================================
 
 /**
- * Render a Spacer node as empty table cell with height.
+ * Render a Spacer node with context-aware dimensions.
  * 
- * IMPLEMENTATION:
- * - Uses an empty table cell with specified height
- * - Default height from StyleConfig.Spacer.size
- * - Can be overridden via attrs (h-[40px])
+ * Behavior depends on layoutContext (computed from parent in Spacer.svelte):
+ * 
+ * - vertical (default/rows layout):
+ *   • Uses height for spacing (default: 2rem)
+ *   • Width: 100%
+ *   • Creates vertical gap between stacked elements
+ * 
+ * - horizontal (cols layout):
+ *   • Uses width for spacing (default: 2rem)
+ *   • Height: 1px (minimal)
+ *   • Creates horizontal gap between side-by-side elements
+ * 
+ * - table-cell (Table.Row):
+ *   • Uses width for sizing (no default)
+ *   • Height: 1px (minimal)
+ *   • Acts as empty cell placeholder
  */
 function renderSpacerNode(
 	node: Mail.SpacerNode,
@@ -817,12 +872,28 @@ function renderSpacerNode(
 	rootSize: number
 ): string {
 	const parsed = parseAttrs(node.attrs, inherited, rootSize)
+	const layoutContext = node.layoutContext ?? 'vertical'
 
-	// Get height from attrs or config default
-	const defaultHeight = context.style.Spacer?.size ?? '16px'
-	const height = parsed.css.height ?? defaultHeight
+	// Get default size from config
+	const configSize = context.style.Spacer?.size ?? '2rem'
 
-	return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height: ${height}; line-height: ${height}; font-size: 0;">&nbsp;</td></tr></table>`
+	if (layoutContext === 'vertical') {
+		// Vertical: height-based spacing, full width
+		const height = parsed.css.height ?? node.size ?? configSize
+		return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height: ${height}; line-height: ${height}; font-size: 0;">&nbsp;</td></tr></table>`
+	}
+
+	if (layoutContext === 'horizontal') {
+		// Horizontal: width-based spacing, minimal height
+		const width = parsed.css.width ?? node.size ?? configSize
+		return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="width: ${width}; height: 1px; line-height: 1px; font-size: 0;">&nbsp;</td></tr></table>`
+	}
+
+	// table-cell: width-based, minimal height, no default size
+	// Used as empty cell placeholder - the cell itself provides the spacing via column widths
+	const width = parsed.css.width ?? node.size
+	const widthStyle = width ? `width: ${width}; ` : ''
+	return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="${widthStyle}height: 1px; line-height: 1px; font-size: 0;">&nbsp;</td></tr></table>`
 }
 
 /**
@@ -1084,6 +1155,7 @@ interface TableRowRenderOptions {
  * - Column widths from parent Table are applied by index
  * - Cells can span multiple columns via `span-*` attribute
  * - Cells can span multiple rows via `row-span-*` attribute
+ * - Border styles on row are applied to cells (<tr> doesn't support borders reliably)
  */
 function renderTableRowNode(
 	node: Mail.TableRowNode,
@@ -1111,11 +1183,27 @@ function renderTableRowNode(
 	const rowPaddingLeft = parsed.css.paddingLeft
 	const rowPaddingRight = parsed.css.paddingRight
 
+	// Extract border styles from row - borders on <tr> don't work reliably in email clients
+	// Apply to cells instead (top border on all cells, bottom border on all cells)
+	const rowBorderColor = parsed.css.borderColor
+	const rowBorderTopWidth = parsed.css.borderTopWidth
+	const rowBorderBottomWidth = parsed.css.borderBottomWidth
+	const rowBorderTopStyle = parsed.css.borderTopStyle ?? (rowBorderTopWidth ? 'solid' : undefined)
+	const rowBorderBottomStyle = parsed.css.borderBottomStyle ?? (rowBorderBottomWidth ? 'solid' : undefined)
+	const rowBorderLeftWidth = parsed.css.borderLeftWidth
+	const rowBorderRightWidth = parsed.css.borderRightWidth
+	const rowBorderLeftStyle = parsed.css.borderLeftStyle ?? (rowBorderLeftWidth ? 'solid' : undefined)
+	const rowBorderRightStyle = parsed.css.borderRightStyle ?? (rowBorderRightWidth ? 'solid' : undefined)
+	// Full border shorthand
+	const rowBorderWidth = parsed.css.borderWidth
+	const rowBorderStyle = parsed.css.borderStyle ?? (rowBorderWidth ? 'solid' : undefined)
+
 	// Track column index for width assignment
 	let colIndex = 0
+	const totalChildren = node.children.length
 
 	// Each child becomes a cell
-	const cellsHtml = node.children.map((child) => {
+	const cellsHtml = node.children.map((child, childIndex) => {
 		const cellHtml = renderNodeToHtml(child, childInherited, context, rootSize)
 		
 		// Build cell attributes
@@ -1132,7 +1220,29 @@ function renderTableRowNode(
 		// Background from row
 		if (bgStyle) cellStyles.push(bgStyle)
 
-		// Border on cells
+		// Apply row border styles to cells (since <tr> doesn't support borders)
+		// Full border (border-*) applies to all sides
+		if (rowBorderWidth && rowBorderColor) {
+			cellStyles.push(`border: ${rowBorderWidth} ${rowBorderStyle} ${rowBorderColor}`)
+		} else {
+			// Directional borders (border-y, border-x, etc.)
+			// Top and bottom borders apply to all cells
+			if (rowBorderTopWidth && rowBorderColor) {
+				cellStyles.push(`border-top: ${rowBorderTopWidth} ${rowBorderTopStyle} ${rowBorderColor}`)
+			}
+			if (rowBorderBottomWidth && rowBorderColor) {
+				cellStyles.push(`border-bottom: ${rowBorderBottomWidth} ${rowBorderBottomStyle} ${rowBorderColor}`)
+			}
+			// Left border only on first cell, right border only on last cell
+			if (rowBorderLeftWidth && rowBorderColor && childIndex === 0) {
+				cellStyles.push(`border-left: ${rowBorderLeftWidth} ${rowBorderLeftStyle} ${rowBorderColor}`)
+			}
+			if (rowBorderRightWidth && rowBorderColor && childIndex === totalChildren - 1) {
+				cellStyles.push(`border-right: ${rowBorderRightWidth} ${rowBorderRightStyle} ${rowBorderColor}`)
+			}
+		}
+
+		// Border from parent Table's borderColor option (for cell borders)
 		if (borderColor) {
 			cellStyles.push(`border: 1px solid ${borderColor}`)
 		}
@@ -1180,13 +1290,26 @@ function renderTableRowNode(
 		return `<${cellTag}${attrsStr}${styleAttr}>${cellHtml}</${cellTag}>`
 	}).join('')
 
-	// For <tr>, exclude padding (already applied to cells) but keep other styles
+	// For <tr>, exclude padding and borders (already applied to cells)
+	// <tr> doesn't support padding or borders reliably in email clients
 	const rowCss = { ...parsed.css }
 	delete rowCss.padding
 	delete rowCss.paddingTop
 	delete rowCss.paddingBottom
 	delete rowCss.paddingLeft
 	delete rowCss.paddingRight
+	// Remove border properties - they're applied to cells instead
+	delete rowCss.borderWidth
+	delete rowCss.borderStyle
+	delete rowCss.borderColor
+	delete rowCss.borderTopWidth
+	delete rowCss.borderTopStyle
+	delete rowCss.borderBottomWidth
+	delete rowCss.borderBottomStyle
+	delete rowCss.borderLeftWidth
+	delete rowCss.borderLeftStyle
+	delete rowCss.borderRightWidth
+	delete rowCss.borderRightStyle
 	
 	const inlineStyle = toInlineCSS(rowCss, inherited)
 	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''

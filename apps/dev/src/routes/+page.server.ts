@@ -1,8 +1,8 @@
 import { render } from 'svelte-emails'
 import MyEmail from './MyEmail.email.svelte'
 
-export function load() {
-	const output = render(MyEmail, {
+export async function load() {
+	const output = await render(MyEmail, {
 		vars: { first_name: 'John' },
 		props: {}
 	})

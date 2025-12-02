@@ -40,6 +40,8 @@ export interface HeadingStyle {
 	lineHeight?: string | number
 	/** Text color */
 	color?: string
+	/** Padding (e.g., '0', '8px 0', '16px') */
+	padding?: string
 	/** Optional rule/divider below heading */
 	rule?: {
 		/** Rule color */
@@ -49,6 +51,18 @@ export interface HeadingStyle {
 		/** Spacing between text and rule */
 		spacing?: string
 	}
+}
+
+/**
+ * Span (inline text) style configuration.
+ */
+export interface SpanStyle {
+	/** Font size */
+	size?: string
+	/** Line height */
+	lineHeight?: string | number
+	/** Text color */
+	color?: string
 }
 
 /**
@@ -74,13 +88,17 @@ export interface TextStyle {
 		size?: string
 		lineHeight?: string | number
 		color?: string
+		padding?: string
 	}
 	/** Small text styles */
 	Small?: {
 		size?: string
 		lineHeight?: string | number
 		color?: string
+		padding?: string
 	}
+	/** Span (inline text) styles */
+	Span?: SpanStyle
 }
 
 /**
@@ -246,246 +264,45 @@ export interface StyleConfig {
 // Presets
 // ============================================================================
 
-/**
- * Minimal preset — clean, modern defaults.
- * Uses system fonts and subtle styling.
- */
-export const minimal: StyleConfig = {
-	root: {
-		color: '#1b1b1d',
-		background: '#ffffff',
-		size: 16,
-		lineHeight: 1.5,
-		fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-	},
-	Text: {
-		color: 'inherit',
-		H1: {
-			size: '2.5rem',
-			weight: 700,
-			lineHeight: 1.2
-		},
-		H2: {
-			size: '2rem',
-			weight: 700,
-			lineHeight: 1.25
-		},
-		H3: {
-			size: '1.5rem',
-			weight: 600,
-			lineHeight: 1.3
-		},
-		H4: {
-			size: '1.25rem',
-			weight: 600,
-			lineHeight: 1.35
-		},
-		H5: {
-			size: '1rem',
-			weight: 600,
-			lineHeight: 1.4
-		},
-		H6: {
-			size: '0.875rem',
-			weight: 600,
-			lineHeight: 1.4
-		},
-		Paragraph: {
-			size: '1rem',
-			lineHeight: 1.6
-		},
-		Small: {
-			size: '0.875rem',
-			lineHeight: 1.5
-		}
-	},
-	Link: {
-		color: '#2563eb',
-		textDecoration: 'underline'
-	},
-	Button: {
-		color: '#ffffff',
-		background: '#2563eb',
-		padding: '12px 24px',
-		borderRadius: '6px',
-		fontWeight: 600
-	},
-	Spacer: {
-		size: '2rem'
-	},
-	Divider: {
-		color: '#e5e7eb',
-		thickness: '1px',
-		style: 'solid'
-	},
-	Code: {
-		color: '#1f2937',
-		background: '#f3f4f6',
-		padding: '2px 6px',
-		borderRadius: '4px',
-		fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-		size: '0.875em'
-	},
-	Codeblock: {
-		color: '#1f2937',
-		background: '#f3f4f6',
-		padding: '16px',
-		borderRadius: '8px',
-		fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-		size: '0.875rem',
-		lineHeight: 1.5
-	},
-	Highlight: {
-		color: 'inherit',
-		background: '#fef08a'
-	},
-	Unsubscribe: {
-		color: '#6b7280',
-		size: '0.75rem'
-	},
-	Table: {
-		borderColor: '#e5e7eb',
-		borderWidth: '1px',
-		headerBackground: '#f9fafb',
-		headerColor: '#111827',
-		headerWeight: 600,
-		stripedBackground: '#f9fafb',
-		cellPadding: '12px 16px',
-		compactCellPadding: '8px 12px'
-	}
-}
+// Re-export presets from dedicated folder
+export * as presets from './presets'
 
-/**
- * Dark preset — dark mode compatible.
- * Uses dark backgrounds with light text.
- */
-export const dark: StyleConfig = {
-	root: {
-		color: '#e5e7eb',
-		background: '#111827',
-		size: 16,
-		lineHeight: 1.5,
-		fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-	},
-	Text: {
-		color: 'inherit',
-		H1: {
-			size: '2.5rem',
-			weight: 700,
-			lineHeight: 1.2,
-			color: '#f9fafb'
-		},
-		H2: {
-			size: '2rem',
-			weight: 700,
-			lineHeight: 1.25,
-			color: '#f9fafb'
-		},
-		H3: {
-			size: '1.5rem',
-			weight: 600,
-			lineHeight: 1.3,
-			color: '#f9fafb'
-		},
-		H4: {
-			size: '1.25rem',
-			weight: 600,
-			lineHeight: 1.35,
-			color: '#f9fafb'
-		},
-		H5: {
-			size: '1rem',
-			weight: 600,
-			lineHeight: 1.4,
-			color: '#f9fafb'
-		},
-		H6: {
-			size: '0.875rem',
-			weight: 600,
-			lineHeight: 1.4,
-			color: '#f9fafb'
-		},
-		Paragraph: {
-			size: '1rem',
-			lineHeight: 1.6
-		},
-		Small: {
-			size: '0.875rem',
-			lineHeight: 1.5,
-			color: '#9ca3af'
-		}
-	},
-	Link: {
-		color: '#60a5fa',
-		textDecoration: 'underline'
-	},
-	Button: {
-		color: '#111827',
-		background: '#60a5fa',
-		padding: '12px 24px',
-		borderRadius: '6px',
-		fontWeight: 600
-	},
-	Spacer: {
-		size: '2rem'
-	},
-	Divider: {
-		color: '#374151',
-		thickness: '1px',
-		style: 'solid'
-	},
-	Code: {
-		color: '#e5e7eb',
-		background: '#1f2937',
-		padding: '2px 6px',
-		borderRadius: '4px',
-		fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-		size: '0.875em'
-	},
-	Codeblock: {
-		color: '#e5e7eb',
-		background: '#1f2937',
-		padding: '16px',
-		borderRadius: '8px',
-		fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-		size: '0.875rem',
-		lineHeight: 1.5
-	},
-	Highlight: {
-		color: '#1f2937',
-		background: '#fde68a'
-	},
-	Unsubscribe: {
-		color: '#9ca3af',
-		size: '0.75rem'
-	},
-	Table: {
-		borderColor: '#374151',
-		borderWidth: '1px',
-		headerBackground: '#1f2937',
-		headerColor: '#f9fafb',
-		headerWeight: 600,
-		stripedBackground: '#1f2937',
-		cellPadding: '12px 16px',
-		compactCellPadding: '8px 12px'
-	}
-}
-
-/**
- * Collection of all available presets.
- */
-export const presets = {
-	minimal,
-	dark
-} as const
+// Import base preset for use in renderer
+import { base } from './presets/base'
+export { base as basePreset }
 
 // ============================================================================
 // Utility Functions
 // ============================================================================
 
 /**
+ * Prepend font families to an existing font stack.
+ * Used when merging font presets to maintain fallbacks.
+ * 
+ * @param newFonts - Font families to prepend
+ * @param existingFonts - Existing font stack
+ * @returns Combined font stack with newFonts first
+ * 
+ * @example
+ * ```ts
+ * prependFontFamily('Arial', 'Helvetica, sans-serif')
+ * // Returns: 'Arial, Helvetica, sans-serif'
+ * 
+ * prependFontFamily('"Open Sans"', 'Arial, sans-serif')
+ * // Returns: '"Open Sans", Arial, sans-serif'
+ * ```
+ */
+export function prependFontFamily(newFonts: string, existingFonts?: string): string {
+	if (!existingFonts) return newFonts
+	return `${newFonts}, ${existingFonts}`
+}
+
+/**
  * Deep merge two style configurations.
  * The second argument overrides values from the first.
+ * 
+ * Special handling for fontFamily: prepends instead of replacing,
+ * so fallback fonts are preserved.
  * 
  * @param base - Base style configuration
  * @param overrides - Overrides to apply
@@ -493,13 +310,13 @@ export const presets = {
  * 
  * @example
  * ```ts
- * const custom = merge(presets.minimal, {
+ * const custom = merge(presets.base, {
  *   root: { size: 18 },
  *   Button: { background: '#ff0000' }
  * })
  * ```
  */
-export function merge<T extends Record<string, unknown>>(
+export function merge<T extends Record<any, any>>(
 	base: T,
 	overrides?: Partial<T>
 ): T {
@@ -511,7 +328,14 @@ export function merge<T extends Record<string, unknown>>(
 		const baseValue = base[key]
 		const overrideValue = overrides[key]
 
-		if (
+		// Special handling for fontFamily: prepend instead of replace
+		if (key === 'fontFamily' && typeof overrideValue === 'string') {
+			if (typeof baseValue === 'string') {
+				result[key] = prependFontFamily(overrideValue, baseValue) as T[Extract<keyof T, string>]
+			} else {
+				result[key] = overrideValue as T[Extract<keyof T, string>]
+			}
+		} else if (
 			typeof baseValue === 'object' &&
 			baseValue !== null &&
 			!Array.isArray(baseValue) &&

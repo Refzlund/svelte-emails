@@ -24,7 +24,7 @@
 	<nav style='
 		display: flex;
 		align-items: center;
-		justify-content: center;
+		justify-content: start;
 		gap: 8px;
 		padding: 12px 24px;
 		background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);

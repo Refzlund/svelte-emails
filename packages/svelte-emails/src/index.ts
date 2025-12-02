@@ -24,7 +24,7 @@ import _TableRow from './Elements/Table/Row.svelte'
 import { renderTree } from './renderer'
 import type { RenderOutput, RenderOptions } from './renderer'
 import type { Mail, Collector } from './context'
-import { setSSRCollector } from './context'
+import { EMAIL_ROOT_CONTEXT_KEY } from './context'
 import type { StyleConfig } from './styles'
 import type { Component } from 'svelte'
 import { render as svelteRender } from 'svelte/server'
@@ -90,10 +90,10 @@ export interface RenderEmailOptions<TProps extends Record<string, unknown> = Rec
  * console.log(result.headers)  // { 'List-Unsubscribe': '...' }
  * ```
  */
-export function render<TProps extends Record<string, unknown> = Record<string, unknown>>(
+export async function render<TProps extends Record<string, unknown> = Record<string, unknown>>(
 	EmailComponent: Component<TProps>,
 	options: RenderEmailOptions<TProps> = {}
-): RenderOutput {
+): Promise<RenderOutput> {
 	const { vars = {}, style, props = {} as TProps } = options
 
 	// Create a collector to capture the IR tree
@@ -104,21 +104,19 @@ export function render<TProps extends Record<string, unknown> = Record<string, u
 		}
 	}
 
-	// Set the SSR collector before rendering
-	// This is used as a fallback when Svelte's context API doesn't work in SSR
-	setSSRCollector(collector)
+	// Create context map with the collector
+	// This is passed to svelteRender so components can access it via getContext()
+	const context = new Map<symbol, unknown>([
+		[EMAIL_ROOT_CONTEXT_KEY, collector]
+	])
 
-	try {
-		// Use Svelte's server-side render directly with the email component
-		svelteRender(EmailComponent, {
-			props: props as Record<string, unknown>
-		})
-	} finally {
-		// Clear the SSR collector after rendering
-		setSSRCollector(null)
-	}
+	// Use Svelte's server-side render with context
+	// Note: render() returns a Promise in Svelte 5 and must be awaited
+	await svelteRender(EmailComponent, {
+		props,
+		context
+	})
 
-	// Check if root was collected
 	if (!root) {
 		throw new Error(
 			'render() failed: No <Email> component found in the component tree. ' +
@@ -152,12 +150,13 @@ export type { RenderOutput, RenderOptions }
 export * from './context'
 
 // Re-export style utilities and presets
-export { merge, presets, getRootSize } from './styles'
+export { merge, presets, getRootSize, prependFontFamily, basePreset } from './styles'
 export type {
 	StyleConfig,
 	RootStyle,
 	TextStyle,
 	HeadingStyle,
+	SpanStyle,
 	LinkStyle,
 	ButtonStyle,
 	SpacerStyle,

@@ -21,8 +21,9 @@
 7. [HTML Output Strategy](#html-output-strategy) — table layout, inline styles
 8. [Component Reference](#component-reference) — all components and their options
 9. [Style Presets](#style-presets) — preset structure and customization
-10. [Testing & Development](#testing--development) — dev server, file conventions
-11. [Known Limitations](#known-limitations--workarounds) — email client constraints
+10. [SSR & Server Rendering](#ssr--server-rendering) — Symbol.for keys, onDestroy caveat, debugging
+11. [Testing & Development](#testing--development) — dev server, file conventions
+12. [Known Limitations](#known-limitations--workarounds) — email client constraints
 
 ---
 
@@ -214,15 +215,27 @@ interface InheritedStyles {
 
 ## Component Registration Flow
 
-Context is managed via `createContext` for type safety:
+Context is managed via stable Symbol keys for SSR compatibility:
 
 ```ts
 // context.ts
-import { createContext } from 'svelte'
+import { getContext, setContext } from 'svelte'
 
-export const [getEmailRoot, setEmailRoot] = createContext<Collector>()
-export const [getEmailParent, setEmailParent] = createContext<ParentNode>()
+// Stable keys using Symbol.for() - required for SSR
+export const EMAIL_ROOT_CONTEXT_KEY = Symbol.for('svelte-emails:root-collector')
+export const EMAIL_PARENT_CONTEXT_KEY = Symbol.for('svelte-emails:parent-node')
+
+export function getEmailRoot(): Collector {
+	return getContext<Collector>(EMAIL_ROOT_CONTEXT_KEY)
+}
+
+export function setEmailRoot(collector: Collector): Collector {
+	return setContext(EMAIL_ROOT_CONTEXT_KEY, collector)
+}
 ```
+
+> **Why Symbol.for() instead of createContext()?**  
+> The `render()` function needs to inject context from *outside* the component tree via Svelte's server `render({ context: Map })` API. Svelte's `createContext()` generates an internal key that isn't accessible externally. Using `Symbol.for()` creates a stable, globally-unique key that can be used both in `index.ts` (when creating the context Map) and in components (when reading context). See [SSR & Server Rendering](#ssr--server-rendering) for full details.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -2715,6 +2728,75 @@ For vertical layouts, use `rows-[...]`:
 </Div>
 ```
 
+### Spacer Component Detail
+
+The `<Spacer>` component creates empty space between elements. Its behavior adapts based on the **layout context** it's placed in:
+
+**Context-Aware Behavior:**
+
+| Parent Context | Primary Dimension | Secondary Dimension | Default Size |
+|----------------|-------------------|---------------------|--------------|
+| Standalone / `<Div rows>` | Height | Width = 100% | `2rem` (32px) |
+| `<Div cols>` | Width | Height = 1px | `2rem` (32px) |
+| `<Table.Row>` | Width | Height = 1px | 0 (empty cell) |
+
+**Why context matters:**
+
+In **vertical layouts** (default, `rows`), spacers create vertical gaps — the height is what matters, and width should fill the container.
+
+In **horizontal layouts** (`cols`, `Table.Row`), spacers create horizontal gaps — the width is what matters, and height should be minimal (1px) to avoid affecting row height.
+
+Inside `<Table.Row>`, a spacer without explicit dimensions acts as an **empty cell placeholder** with no height contribution, perfect for leaving cells blank in data tables.
+
+**Examples:**
+
+```svelte
+<!-- Vertical spacing (default behavior) -->
+<Div rows>
+  <Text content='Section 1' />
+  <Spacer h-6 />              <!-- 24px tall, full width -->
+  <Text content='Section 2' />
+</Div>
+
+<!-- Horizontal spacing in columns -->
+<Div cols>
+  <Div>Column 1</Div>
+  <Spacer w-4 />              <!-- 16px wide, 1px tall -->
+  <Div>Column 2</Div>
+</Div>
+
+<!-- Empty cell placeholder in tables -->
+<Table cols-[50%_25%_25%]>
+  <Table.Row>
+    <Spacer />                <!-- Empty cell, no height contribution -->
+    <Text content='Right-aligned totals' span-2 align-right />
+  </Table.Row>
+</Table>
+
+<!-- Explicit dimensions override context defaults -->
+<Table.Row>
+  <Spacer w-[100px] />        <!-- 100px wide cell -->
+  <Text content='After spacer' />
+</Table.Row>
+```
+
+**Spacer attributes:**
+- `h-*` — Explicit height (e.g., `h-4`, `h-[20px]`)
+- `w-*` — Explicit width (e.g., `w-4`, `w-[100px]`)
+- `span-*` — Column span when inside `<Table.Row>`
+
+**Implementation note:**
+
+The spacer's layout context is tracked via the IR node structure. When a `SpacerNode` is rendered, the renderer checks its parent node type:
+
+1. **Parent is `DivNode` with `direction: 'cols'`** → Horizontal spacer mode
+2. **Parent is `TableRowNode`** → Table cell mode (horizontal, minimal height)
+3. **Otherwise** → Vertical spacer mode (default)
+
+This context-awareness ensures spacers behave intuitively without requiring explicit dimension attributes in most cases.
+
+---
+
 Presets provide sensible defaults that can be customized:
 
 ```ts
@@ -2754,6 +2836,244 @@ interface StylePreset {
   Unsubscribe: { color, size }
 }
 ```
+
+---
+
+## SSR & Server Rendering
+
+### Overview
+
+`svelte-emails` is designed for server-side rendering (SSR). The `render()` function uses Svelte's `svelte/server` module to render email components and collect the IR tree.
+
+```ts
+import { render } from 'svelte-emails'
+import MyEmail from './MyEmail.email.svelte'
+
+// Server-side rendering in +page.server.ts
+export async function load() {
+	const result = await render(MyEmail, {
+		vars: { name: 'Alice' }
+	})
+	return { html: result.html, text: result.text }
+}
+```
+
+### How Server Rendering Works
+
+The `render()` function performs these steps:
+
+1. **Create a collector** — An object that captures the root `EmailNode` when components register
+2. **Build context Map** — Create a `Map<symbol, unknown>` with the collector
+3. **Call Svelte's server render** — Pass the context Map to `render()` from `svelte/server`
+4. **Components register** — Each component reads context, creates IR nodes, and adds itself to parent
+5. **Extract IR tree** — After render completes, the collector has the full IR tree
+6. **Convert to HTML** — Pass IR tree to `renderTree()` for HTML/text output
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  render(MyEmail, { vars })                                                   │
+│    │                                                                         │
+│    ├─ 1. Create collector: { registerRoot(node) { root = node } }            │
+│    │                                                                         │
+│    ├─ 2. Create context Map with EMAIL_ROOT_CONTEXT_KEY                      │
+│    │      context.set(Symbol.for('svelte-emails:root-collector'), collector) │
+│    │                                                                         │
+│    ├─ 3. await svelteRender(EmailComponent, { props, context })              │
+│    │      │                                                                  │
+│    │      ├─ <Email> calls getEmailRoot() → collector                        │
+│    │      │          calls collector.registerRoot(emailNode)                 │
+│    │      │          sets EMAIL_PARENT_CONTEXT_KEY to emailNode              │
+│    │      │                                                                  │
+│    │      └─ <Div>, <Text>, etc. each:                                       │
+│    │           - getEmailParent() to get parent node                         │
+│    │           - addChild(parent, node) to register with parent              │
+│    │           - setEmailParent(node) for their children                     │
+│    │                                                                         │
+│    ├─ 4. root now contains complete IR tree                                  │
+│    │                                                                         │
+│    └─ 5. return renderTree(root, { vars }) → { html, text, headers }        │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Why Symbol.for() for Context Keys
+
+**The Problem:**
+
+Svelte's `createContext()` is the idiomatic way to create type-safe context, but it generates an internal Symbol key that isn't accessible outside components. For SSR, we need to inject context *from outside* the component tree:
+
+```ts
+// In render() function - OUTSIDE component tree
+const context = new Map()
+context.set(???, collector)  // What key to use?
+
+// createContext() key isn't accessible here
+// const [getCtx, setCtx] = createContext<Collector>()  // Key is internal
+```
+
+**The Solution:**
+
+Use `Symbol.for()` which creates globally-unique but stable keys:
+
+```ts
+// context.ts
+export const EMAIL_ROOT_CONTEXT_KEY = Symbol.for('svelte-emails:root-collector')
+
+// In render() - can use the same symbol
+const context = new Map([
+	[EMAIL_ROOT_CONTEXT_KEY, collector]
+])
+
+// In components - same symbol resolves to same key
+const collector = getContext<Collector>(EMAIL_ROOT_CONTEXT_KEY)
+```
+
+`Symbol.for('key')` returns the same Symbol instance for the same key string across module boundaries and server/client contexts. This ensures the context Map in `render()` uses the exact same key that components look up.
+
+### Critical SSR Caveat: onDestroy Runs During SSR
+
+**The Problem:**
+
+In Svelte, `onDestroy` is the **only lifecycle hook that runs during SSR**. Other hooks like `onMount`, `beforeUpdate`, and `afterUpdate` do not run server-side.
+
+This causes issues when components use `onDestroy` for cleanup:
+
+```svelte
+<!-- This pattern BREAKS in SSR -->
+<script lang='ts'>
+	import { onDestroy } from 'svelte'
+	import { getEmailParent, addChild } from '../context'
+
+	const parent = getEmailParent()
+	const node = { type: 'div', attrs: [], children: [] }
+	
+	// addChild returns a cleanup function that removes the child
+	const cleanup = addChild(parent, node)
+	
+	// ❌ PROBLEM: onDestroy runs during SSR, immediately removing the child!
+	onDestroy(cleanup)
+</script>
+```
+
+**Why this happens:**
+
+1. During SSR, Svelte renders the component tree synchronously
+2. After rendering, Svelte calls all `onDestroy` callbacks to clean up
+3. The cleanup function removes children from their parents
+4. Result: IR tree is empty when `render()` completes
+
+**The Solution:**
+
+The `addChild()` function detects SSR mode and returns a no-op cleanup:
+
+```ts
+// context.ts
+const isSSR = typeof window === 'undefined'
+
+export function addChild(parent: Mail.IRParentNode, child: Mail.IRNode): () => void {
+	const children = parent.children as Mail.IRNode[]
+	children.push(child)
+
+	// In SSR, return no-op because onDestroy runs during SSR
+	// and would remove children we just added
+	if (isSSR) {
+		return () => {}
+	}
+
+	// In browser, return real cleanup for dynamic content support
+	return () => {
+		const index = children.indexOf(child)
+		if (index !== -1) children.splice(index, 1)
+	}
+}
+```
+
+**Component usage pattern:**
+
+```svelte
+<script lang='ts'>
+	import { onDestroy } from 'svelte'
+	import { getEmailParent, addChild, setEmailParent } from '../context'
+
+	const parent = getEmailParent()
+	const node: Mail.DivNode = { type: 'div', attrs: [], children: [] }
+	
+	// addChild handles SSR internally - safe to pass to onDestroy
+	onDestroy(addChild(parent, node))
+	
+	// Set context for children
+	setEmailParent(node)
+</script>
+
+{@render children?.()}
+```
+
+### SSR vs Browser Behavior Summary
+
+| Aspect | Browser (Preview) | Server (render()) |
+|--------|-------------------|-------------------|
+| Context source | `setEmailRoot()` in `<Email.Render>` | `context` Map passed to `svelteRender()` |
+| Context key | `Symbol.for('...')` | `Symbol.for('...')` (same) |
+| `onMount` | ✅ Runs | ❌ Does not run |
+| `onDestroy` | ✅ Runs on unmount | ⚠️ Runs after SSR render |
+| `addChild` cleanup | Returns real cleanup | Returns no-op |
+| IR tree lifetime | Lives across re-renders | Single render, then discarded |
+
+### SSR Debugging Tips
+
+**1. "No <Email> component found" error:**
+
+This means `collector.registerRoot()` was never called. Check:
+- The component tree includes `<Email>` at the root
+- Context is being passed to `svelteRender()` correctly
+- `EMAIL_ROOT_CONTEXT_KEY` is the same symbol in both places
+
+**2. IR tree has no children:**
+
+This usually means `onDestroy` cleanup is running during SSR. Check:
+- `addChild()` is handling the SSR case correctly
+- No other cleanup code is removing children
+
+**3. Context not found:**
+
+Components throw if context is missing:
+```ts
+export function getEmailParent(): Mail.IRParentNode {
+	const parent = getContext<Mail.IRParentNode>(EMAIL_PARENT_CONTEXT_KEY)
+	if (!parent) {
+		throw new Error('getEmailParent() called outside of Email component tree')
+	}
+	return parent
+}
+```
+
+Check that:
+- Component is inside an `<Email>` wrapper
+- Context is being set correctly by parent components
+
+### Plain Objects for IR Nodes
+
+IR nodes are plain JavaScript objects rather than `$state()` proxies:
+
+```ts
+// Plain object (no reactivity needed)
+const node: Mail.DivNode = { type: 'div', attrs: [], children: [] }
+```
+
+This is a design choice, not a technical requirement. `$state()` works fine in SSR, but since IR nodes are constructed once and passed to `renderTree()`, there's no benefit to reactivity. Plain objects keep the code simple and explicit.
+
+### Async Rendering
+
+The `render()` function is async and must be awaited:
+
+```ts
+// ✅ CORRECT
+const result = await render(MyEmail, { vars })
+
+// ❌ WRONG - render returns a Promise
+const result = render(MyEmail, { vars })  // result is Promise<RenderOutput>
+```
+
+This is because Svelte 5's `render()` from `svelte/server` returns a Promise.
 
 ---
 

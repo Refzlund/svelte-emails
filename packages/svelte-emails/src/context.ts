@@ -7,7 +7,19 @@
  * @see ARCHITECTURE.md for detailed information about the component registration flow.
  */
 
-import { createContext } from 'svelte'
+import { getContext, setContext } from 'svelte'
+
+// ============================================================================
+// Stable Context Keys (for SSR compatibility)
+// ============================================================================
+
+/**
+ * Stable key for the email root collector context.
+ * Using a Symbol ensures the key is unique but consistent across module loads.
+ * This is required for SSR because createContext() generates a new key per import.
+ */
+export const EMAIL_ROOT_CONTEXT_KEY = Symbol.for('svelte-emails:root-collector')
+export const EMAIL_PARENT_CONTEXT_KEY = Symbol.for('svelte-emails:parent-node')
 
 // ============================================================================
 // IR (Intermediate Representation) Types
@@ -87,10 +99,16 @@ export namespace Mail {
 	}
 
 	/**
-	 * Spacer node - vertical spacing
+	 * Spacer node - spacing between elements
+	 * Behavior adapts based on layout context:
+	 * - vertical: height-based, full width (default/rows layout)
+	 * - horizontal: width-based, 1px height (cols layout)
+	 * - table-cell: width-based, minimal height (Table.Row)
 	 */
 	export interface SpacerNode extends BaseNode<'spacer'> {
 		size?: string
+		/** Layout context computed from parent - determines dimension behavior */
+		layoutContext?: 'vertical' | 'horizontal' | 'table-cell'
 	}
 
 	/**
@@ -191,45 +209,51 @@ export interface Collector {
 }
 
 // ============================================================================
-// Context Definitions
+// Context Functions
 // ============================================================================
 
 /**
- * Module-level collector for SSR fallback.
- * When using svelte/server's render(), the Svelte 5 context API may not work
- * reliably, so we use a module-level variable as a fallback.
+ * Get the root collector context.
+ * Works in both client (preview) and server (render) modes.
  */
-let ssrCollector: Collector | null = null
-
-/**
- * Set the SSR collector (called before SSR render).
- */
-export function setSSRCollector(collector: Collector | null): void {
-	ssrCollector = collector
+export function getEmailRoot(): Collector {
+	return getContext<Collector>(EMAIL_ROOT_CONTEXT_KEY)
 }
 
 /**
- * Get the SSR collector.
+ * Set the root collector context.
+ * Called by Email.Preview (client) or passed via render() context option (server).
  */
-export function getSSRCollector(): Collector | null {
-	return ssrCollector
+export function setEmailRoot(collector: Collector): Collector {
+	return setContext(EMAIL_ROOT_CONTEXT_KEY, collector)
 }
 
 /**
- * Context for the root collector.
- * Set by Email.Preview or render(), accessed by Email component.
+ * Get the current parent node context.
  */
-export const [getEmailRoot, setEmailRoot] = createContext<Collector>()
+export function getEmailParent(): Mail.IRParentNode {
+	return getContext<Mail.IRParentNode>(EMAIL_PARENT_CONTEXT_KEY)
+}
 
 /**
- * Context for the current parent node.
- * Each component gets its parent, registers itself, then sets itself as parent for children.
+ * Set the current parent node context.
  */
-export const [getEmailParent, setEmailParent] = createContext<Mail.IRParentNode>()
+export function setEmailParent(node: Mail.IRParentNode): Mail.IRParentNode {
+	return setContext(EMAIL_PARENT_CONTEXT_KEY, node)
+}
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+/**
+ * Detect if we're running in SSR mode.
+ * In SSR, we don't want cleanup functions to run because:
+ * 1. SSR is a one-time render, there's no "unmounting"
+ * 2. Svelte's onDestroy runs during SSR (unlike other lifecycle hooks)
+ * 3. Running cleanup would remove children we just added
+ */
+const isSSR = typeof window === 'undefined'
 
 /**
  * Add a child node to a parent node.
@@ -238,6 +262,9 @@ export const [getEmailParent, setEmailParent] = createContext<Mail.IRParentNode>
  * Returns a cleanup function that removes the child from the parent.
  * This should be called in `onDestroy` to support dynamic content
  * (e.g., conditional rendering with {#if} or {#each} blocks).
+ * 
+ * Note: In SSR mode, returns a no-op function because onDestroy runs
+ * during SSR and would otherwise remove children immediately after adding.
  * 
  * Note: TableNode only accepts TableRowNode children - this is enforced
  * at runtime with an error if violated.
@@ -266,7 +293,14 @@ export function addChild(parent: Mail.IRParentNode, child: Mail.IRNode): () => v
 	const children = parent.children as Mail.IRNode[]
 	children.push(child)
 
-	// Return cleanup function to remove child from parent
+	// In SSR, return no-op because onDestroy runs during SSR
+	// and would remove children we just added
+	if (isSSR) {
+		return () => {}
+	}
+
+	// In browser, return cleanup function to remove child from parent
+	// This supports dynamic content (conditional rendering, {#each}, etc.)
 	return () => {
 		const index = children.indexOf(child)
 		if (index !== -1) children.splice(index, 1)

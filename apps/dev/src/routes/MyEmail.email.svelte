@@ -113,27 +113,27 @@
 			</Table.Row>
 
 			<!-- Totals: Item Total -->
-			<Table.Row py-1>
+			<Table.Row py-0.5 pt-3>
 				<Spacer />
 				<Text.Small span-2 content="Item Total:" text-[#666666] align-right />
 				<Text.Small content="${itemTotal.toFixed(2)}" text-[#333333] align-right />
 			</Table.Row>
 
 			<!-- Totals: Shipping -->
-			<Table.Row py-1>
+			<Table.Row py-0.5>
 				<Spacer />
 				<Text.Small span-2 content="Standard Shipping:" text-[#666666] align-right />
 				<Text.Small content="FREE" text-[#333333] align-right />
 			</Table.Row>
 
 			<!-- Totals: Tax -->
-			<Table.Row py-1>
+			<Table.Row py-0.5>
 				<Spacer span-2 />
 				<Text.Small span-2 content="Tax: $0.00" text-[#999999] align-right />
 			</Table.Row>
 
 			<!-- Totals: Grand Total -->
-			<Table.Row py-1>
+			<Table.Row py-0.5>
 				<Spacer />
 				<Text span-2 content="**TOTAL:**" text-[#333333] text-[12px] font-bold align-right />
 				<Text content="**${total.toFixed(2)} USD**" text-[#333333] text-[12px] font-bold align-right />
@@ -216,9 +216,6 @@
 		/>
 	</Div>
 
-	<Spacer h-6 />
-
-	<!-- Money Back Guarantee Section -->
 	<Div p-8 align-middle>
 		<Text.H3 content="**Love it or your money back.**" text-[#6b2cf5] text-[28px] leading-snug />
 		<Spacer h-6 />

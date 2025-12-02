@@ -258,17 +258,9 @@ Tailwind-like attributes on any component:
 
 <Email.Preview
     vars={{ 'first_name': 'John' }}
-    style={merge(presets.minimal, {
-        root: {
-            color: '#1b1b1d',
-            background: '#ffffff',
-            size: '16px',
-            fontFamily: 'system-ui, sans-serif'
-        },
+    style={merge(presets.base, {
         Button: {
-            color: '#ffffff',
             background: '#2563eb',
-            padding: '12px 24px',
             borderRadius: '6px'
         }
     })}
@@ -278,6 +270,21 @@ Tailwind-like attributes on any component:
 ```
 
 `vars` replace `[[variable]]` placeholders in text content.
+
+### Available Presets
+
+| Preset | Description | Example |
+|--------|-------------|---------|
+| `presets.base` | Default preset with sensible defaults | System UI fonts |
+| `presets.dark` | Dark mode styling | Dark background, light text |
+| `presets.sansSerif` | Sans-serif font stack | Arial, Helvetica |
+| `presets.serif` | Serif font stack | Georgia, Times New Roman |
+| `presets.monospace` | Monospace font stack | Consolas, Courier New |
+| `presets.rounded` | Friendly rounded fonts | Verdana, Trebuchet MS |
+| `presets.humanist` | Warm humanist fonts | Segoe UI, Lucida Grande |
+| `presets.geometric` | Modern geometric fonts | Century Gothic, Futura |
+
+Use `merge()` to combine presets or override specific values.
 
 ---
 

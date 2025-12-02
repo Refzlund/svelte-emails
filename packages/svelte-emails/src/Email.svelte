@@ -37,7 +37,9 @@ Use `max-w-*` to customize the content container width:
 <script lang='ts'>
 	import type { Snippet } from 'svelte'
 	import type { EmailAttributes } from './style-attributes'
-	import { getEmailRoot, getSSRCollector, setEmailParent, type Mail, type Collector } from './context'
+	import { getEmailRoot, setEmailParent, type Mail, type Collector } from './context'
+	import { hasContext } from 'svelte'
+	import { EMAIL_ROOT_CONTEXT_KEY } from './context'
 
 	interface Props extends EmailAttributes {
 		/** Preview text shown in email client inbox (before opening) */
@@ -48,22 +50,16 @@ Use `max-w-*` to customize the content container width:
 
 	const { preview = '', children, ...attrs }: Props = $props()
 
-	// Get the collector from parent (Email.Preview or render())
-	// Try Svelte context first, fall back to SSR collector
-	let collector: Collector | null = null
-	try {
-		collector = getEmailRoot()
-	} catch {
-		// Context not available (SSR), use module-level fallback
-		collector = getSSRCollector()
-	}
-	
-	if (!collector) {
+	// Check if we're inside Email.Render or render()
+	if (!hasContext(EMAIL_ROOT_CONTEXT_KEY)) {
 		throw new Error(
 			'<Email> must be used inside <Email.Render> or render(). ' +
 			'No collector context found.'
 		)
 	}
+
+	// Get the collector from context (works in both client and SSR)
+	const collector: Collector = getEmailRoot()
 
 	// Extract body-bg-[#...] from attrs
 	const attrKeys = Object.keys(attrs)
@@ -109,7 +105,7 @@ Use `max-w-*` to customize the content container width:
 		filteredAttrs.push(attr)
 	}
 
-	// Create this node
+	// Create the IR node (plain object - no reactivity needed for tree construction)
 	const node: Mail.EmailNode = $state({
 		type: 'email',
 		preview,
@@ -118,7 +114,7 @@ Use `max-w-*` to customize the content container width:
 		attrs: filteredAttrs,
 		children: []
 	})
-
+	
 	// Register with collector
 	collector.registerRoot(node)
 
