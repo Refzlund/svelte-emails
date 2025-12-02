@@ -198,14 +198,25 @@ export const MAX_WIDTHS: Record<string, string> = {
  */
 export const DEFAULT_ROOT_SIZE = 16
 
-/**
- * Default background color for opacity blending calculations.
- */
-export const DEFAULT_BACKGROUND_COLOR = '#ffffff'
-
-/**
- * Default opacity value (fully opaque).
- */
-export const DEFAULT_OPACITY = 1
-
 export const MOBILE_BREAKPOINT = 425
+
+// ============================================================================
+// Derived Scales (px-based)
+// ============================================================================
+
+/**
+ * Spacing scale in px units (derived from SPACING_SCALE at default 16px root).
+ * Used for gap, cell-padding, and other properties that need px values directly.
+ */
+export const SPACING_SCALE_PX: Record<string, string> = {
+	'0': '0',
+	'1': '4px',
+	'2': '8px',
+	'3': '12px',
+	'4': '16px',
+	'5': '20px',
+	'6': '24px',
+	'8': '32px',
+	'10': '40px',
+	'12': '48px'
+}

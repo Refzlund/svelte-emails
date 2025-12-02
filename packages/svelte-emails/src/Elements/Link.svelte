@@ -34,13 +34,13 @@ inline anchor links within text content.
 
 	const parent = getEmailParent()
 
-	const node: Mail.LinkNode = $state({
+	const node: Mail.LinkNode = {
 		type: 'link',
 		href,
-		content,
 		attrs: Object.keys(attrs),
-		children: []
-	})
+		children: [],
+		...(content && { content })
+	}
 
 	onDestroy(addChild(parent, node))
 	setEmailParent(node)

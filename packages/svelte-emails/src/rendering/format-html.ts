@@ -110,7 +110,7 @@ function formatTagWithStyle(tagContent: string, baseIndent: string): string {
 /**
  * Options for HTML formatting.
  */
-export interface FormatHtmlOptions {
+interface FormatHtmlOptions {
 	/** Number of spaces per indent level (default: 2) */
 	indentSize?: number
 	/** Whether to format style attributes and <style> tag contents (default: true) */

@@ -863,12 +863,16 @@ export type DivAttributes =
  * 
  * All typography properties are well-supported in email.
  * Use `justify-*` for text alignment within the text block.
+ * Use `align-*` for positioning when used inside Table.Row or Div cols/rows.
+ * Use `span-*` to span multiple columns in table layouts.
  */
 export type TextAttributes = 
 	& CoreStyleAttributes 
 	& SpacingAttributes 
 	& TypographyAttributes
 	& JustifyAttributes
+	& AlignmentAttributes
+	& SpanAttributes
 
 /**
  * Table component attributes.

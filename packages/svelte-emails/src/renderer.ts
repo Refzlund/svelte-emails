@@ -30,7 +30,7 @@ import {
 	extractInheritable,
 	toInlineCSS,
 	wrapWithMargin,
-	wrapWithResponsive,
+	applyWrappers,
 	parseMarkdown,
 	interpolatePlaceholders,
 	escapeHtml,
@@ -39,11 +39,12 @@ import {
 	presentationTable,
 	remToPx,
 	extractWidthFromAttrs,
-	extractValignFromAttrs,
-	extractTextAlignFromAttrs,
-	extractResponsiveFromAttrs,
-	extractColspanFromAttrs,
-	extractRowspanFromAttrs,
+	extractCellAttrs,
+	buildCssFromConfig,
+	buildCell,
+	buildCellStylesFromRow,
+	extractRowStylesForCells,
+	CONFIG_MAPPINGS,
 	MOBILE_BREAKPOINT
 } from './rendering'
 import { getRootSize, merge, basePreset } from './styles'
@@ -68,6 +69,82 @@ const HTML_OPEN = '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schem
  * 600px is the industry standard for email content width.
  */
 const DEFAULT_CONTENT_WIDTH = 600
+
+// ============================================================================
+// Text Variant Lookup
+// ============================================================================
+
+/**
+ * Text variant metadata for unified rendering.
+ * Replaces multiple switch statements with a single lookup.
+ */
+interface TextVariantInfo {
+	/** HTML tag to render */
+	tag: string
+	/** Key in StyleConfig.Text for variant-specific config */
+	configKey: 'H1' | 'H2' | 'H3' | 'H4' | 'H5' | 'H6' | 'Paragraph' | 'Small' | null
+	/** Markdown prefix for plain text output */
+	markdownPrefix: string
+	/** CSS resets for browser defaults on this element */
+	browserResets: Record<string, string>
+}
+
+const TEXT_VARIANTS: Record<Mail.TextNode['variant'], TextVariantInfo> = {
+	h1: {
+		tag: 'h1',
+		configKey: 'H1',
+		markdownPrefix: '# ',
+		browserResets: { margin: '0', padding: '0', fontSize: 'inherit', fontWeight: 'inherit' }
+	},
+	h2: {
+		tag: 'h2',
+		configKey: 'H2',
+		markdownPrefix: '## ',
+		browserResets: { margin: '0', padding: '0', fontSize: 'inherit', fontWeight: 'inherit' }
+	},
+	h3: {
+		tag: 'h3',
+		configKey: 'H3',
+		markdownPrefix: '### ',
+		browserResets: { margin: '0', padding: '0', fontSize: 'inherit', fontWeight: 'inherit' }
+	},
+	h4: {
+		tag: 'h4',
+		configKey: 'H4',
+		markdownPrefix: '#### ',
+		browserResets: { margin: '0', padding: '0', fontSize: 'inherit', fontWeight: 'inherit' }
+	},
+	h5: {
+		tag: 'h5',
+		configKey: 'H5',
+		markdownPrefix: '##### ',
+		browserResets: { margin: '0', padding: '0', fontSize: 'inherit', fontWeight: 'inherit' }
+	},
+	h6: {
+		tag: 'h6',
+		configKey: 'H6',
+		markdownPrefix: '###### ',
+		browserResets: { margin: '0', padding: '0', fontSize: 'inherit', fontWeight: 'inherit' }
+	},
+	paragraph: {
+		tag: 'p',
+		configKey: 'Paragraph',
+		markdownPrefix: '',
+		browserResets: { margin: '0', padding: '0' }
+	},
+	small: {
+		tag: 'small',
+		configKey: 'Small',
+		markdownPrefix: '',
+		browserResets: { fontSize: 'inherit' }
+	},
+	default: {
+		tag: 'span',
+		configKey: null,
+		markdownPrefix: '',
+		browserResets: {}
+	}
+}
 
 // ============================================================================
 // Main Render Function
@@ -133,6 +210,26 @@ export function renderTree(root: Mail.EmailNode, options: RenderOptions = {}): R
  *   4. Render children recursively
  *   5. Generate HTML with inline styles
  *   6. Wrap with margin table if margin attrs exist
+ * 
+ * TODO(OPTIMIZATION): Most renderers repeat this exact pattern:
+ * ```ts
+ * const parsed = parseAttrs(node.attrs, inherited, rootSize)
+ * const childInherited = extractInheritable(parsed, inherited)
+ * const childrenHtml = renderChildren(node.children, childInherited, context, rootSize)
+ * const inlineStyle = toInlineCSS(parsed.css, inherited)
+ * let html = `<tag style="${inlineStyle}">${childrenHtml}</tag>`
+ * if (parsed.margin) html = wrapWithMargin(html, parsed.margin)
+ * return html
+ * ```
+ * 
+ * Consider extracting a `createBaseRenderer()` factory or `renderWithStandardFlow()`
+ * helper that handles the boilerplate, leaving renderers to only specify:
+ * - The HTML tag(s) to use
+ * - Any special attribute/CSS handling
+ * - Any config lookups (StyleConfig.Button, etc.)
+ * 
+ * This would reduce code in: renderDivNode, renderTextNode, renderButtonNode,
+ * renderImgNode, renderLinkNode, renderUnsubscribeNode, etc.
  */
 function renderNodeToHtml(
 	node: Mail.IRNode,
@@ -369,19 +466,9 @@ function renderDivNode(
 
 	// Build the table cell with inline styles (excluding width)
 	const inlineStyle = toInlineCSS(cssWithoutWidth, inherited)
-	let html = presentationTable(childrenHtml, tableAttrs, { style: inlineStyle })
+	const html = presentationTable(childrenHtml, tableAttrs, { style: inlineStyle })
 
-	// Wrap with margin table if margin attrs exist
-	if (parsed.margin) {
-		html = wrapWithMargin(html, parsed.margin)
-	}
-
-	// Wrap with responsive class if needed
-	if (parsed.responsive) {
-		html = wrapWithResponsive(html, parsed.responsive)
-	}
-
-	return html
+	return applyWrappers(html, parsed)
 }
 
 /**
@@ -394,6 +481,19 @@ function renderDivNode(
  * - Child explicit width takes precedence
  * 
  * Cells can span multiple columns via `span-*` attribute.
+ * 
+ * TODO(REDUNDANCY): Cell rendering logic is duplicated between:
+ * - renderDivAsGrid() - for layout grids
+ * - renderTableRowNode() - for data tables
+ * 
+ * Both do similar work:
+ * 1. Extract width/valign/colspan/rowspan from child attrs
+ * 2. Build <td> with those attributes
+ * 3. Optionally add responsive classes
+ * 4. Handle gap spacing between cells
+ * 
+ * Consider extracting a `renderCell(child, options)` helper that both can use.
+ * Options would include: colWidths, borderColor, responsive, gap, etc.
  */
 function renderDivAsGrid(
 	node: Mail.DivNode,
@@ -469,40 +569,35 @@ function renderDivAsGrid(
 		// Extract width, valign, responsive, and span from each child's attrs to apply to <td>
 		let colIndex = 0
 		const cells = node.children.map((child, index) => {
-			// Extract responsive visibility BEFORE rendering - we'll apply it to <td>, not the child
-			const childResponsive = extractResponsiveFromAttrs(child.attrs)
+			// Extract all cell-related attrs in single pass
+			const cellAttrs = extractCellAttrs(child.attrs, rootSize)
 			
 			// Filter out responsive attrs from child so it doesn't double-wrap
-			const childAttrsFiltered = childResponsive 
+			const childAttrsFiltered = cellAttrs.responsive 
 				? child.attrs.filter((a) => a !== 'mobile-only' && a !== 'desktop-only')
 				: child.attrs
 			const childForRender = { ...child, attrs: childAttrsFiltered }
 			
 			const childHtml = renderNodeToHtml(childForRender, childInherited, context, rootSize)
 			
-			// Extract width, valign, and span from child's attrs for the <td>
-			const childWidth = extractWidthFromAttrs(child.attrs, rootSize)
-			const childValign = extractValignFromAttrs(child.attrs) ?? 'top'
-			const colspan = extractColspanFromAttrs(child.attrs)
-			const rowspan = extractRowspanFromAttrs(child.attrs)
-			
 			// Width priority: explicit child width > effectiveColWidths[index] > none
-			let width = childWidth
+			let width = cellAttrs.width
 			if (!width && effectiveColWidths && effectiveColWidths[colIndex]) {
 				width = effectiveColWidths[colIndex]
 			}
 			
 			const widthAttr = width ? ` width="${width}"` : ''
-			const classAttr = childResponsive ? ` class="${childResponsive}"` : ''
+			const classAttr = cellAttrs.responsive ? ` class="${cellAttrs.responsive}"` : ''
 			// For mobile-only, start hidden; for desktop-only, start visible
-			const styleAttr = childResponsive === 'mobile-only' ? ' style="display: none;"' : ''
-			const colspanAttr = colspan ? ` colspan="${colspan}"` : ''
-			const rowspanAttr = rowspan ? ` rowspan="${rowspan}"` : ''
+			const styleAttr = cellAttrs.responsive === 'mobile-only' ? ' style="display: none;"' : ''
+			const colspanAttr = cellAttrs.colspan ? ` colspan="${cellAttrs.colspan}"` : ''
+			const rowspanAttr = cellAttrs.rowspan ? ` rowspan="${cellAttrs.rowspan}"` : ''
+			const valign = cellAttrs.valign ?? 'top'
 			
 			// Advance column index by colspan
-			colIndex += colspan ?? 1
+			colIndex += cellAttrs.colspan ?? 1
 			
-			const cell = `<td valign="${childValign}"${widthAttr}${colspanAttr}${rowspanAttr}${classAttr}${styleAttr}>${childHtml}</td>`
+			const cell = `<td valign="${valign}"${widthAttr}${colspanAttr}${rowspanAttr}${classAttr}${styleAttr}>${childHtml}</td>`
 			
 			// Insert gap spacer between cells (not before first)
 			if (gap && index > 0) {
@@ -559,17 +654,7 @@ function renderDivAsGrid(
 		html = presentationTable(html, { width: '100%' }, { style: wrapperStyle })
 	}
 
-	// Wrap with margin if needed
-	if (parsed.margin) {
-		html = wrapWithMargin(html, parsed.margin)
-	}
-
-	// Wrap with responsive class if needed
-	if (parsed.responsive) {
-		html = wrapWithResponsive(html, parsed.responsive)
-	}
-
-	return html
+	return applyWrappers(html, parsed)
 }
 
 // ============================================================================
@@ -584,11 +669,7 @@ function renderDivAsGrid(
  * 2. Parse attributes with inherited styles
  * 3. Interpolate variables in content: [[var]] → value
  * 4. Parse markdown syntax: **bold**, *italic*, etc.
- * 5. Output appropriate tag based on variant:
- *    - 'h1'-'h6' → <h1>-<h6>
- *    - 'paragraph' → <p>
- *    - 'small' → <small>
- *    - 'default' → <span>
+ * 5. Output appropriate tag based on variant
  * 
  * @see ARCHITECTURE.md "Content Parsing" for markdown syntax
  * @see ARCHITECTURE.md "Variable Interpolation" for [[var]] syntax
@@ -600,10 +681,11 @@ function renderTextNode(
 	rootSize: number
 ): string {
 	const parsed = parseAttrs(node.attrs, inherited, rootSize)
+	const variantInfo = TEXT_VARIANTS[node.variant]
 	
-	// Apply variant-specific styles from StyleConfig
+	// Apply browser resets + variant-specific styles from StyleConfig
 	const variantStyles = getTextVariantStyles(node.variant, context, rootSize)
-	const mergedCss = { ...variantStyles, ...parsed.css }
+	const mergedCss = { ...variantInfo.browserResets, ...variantStyles, ...parsed.css }
 
 	// Process content: variables first, then markdown
 	let content = interpolatePlaceholders(node.content, context)
@@ -612,43 +694,14 @@ function renderTextNode(
 	const inlineStyle = toInlineCSS(mergedCss, inherited)
 	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
 
-	// Choose tag based on variant
-	const tag = getTextTag(node.variant)
-	let html = `<${tag}${styleAttr}>${content}</${tag}>`
+	const html = `<${variantInfo.tag}${styleAttr}>${content}</${variantInfo.tag}>`
 
-	// Wrap with margin if needed
-	if (parsed.margin) {
-		html = wrapWithMargin(html, parsed.margin)
-	}
-
-	return html
-}
-
-/**
- * Get the HTML tag for a text variant.
- */
-function getTextTag(variant: Mail.TextNode['variant']): string {
-	switch (variant) {
-		case 'h1': return 'h1'
-		case 'h2': return 'h2'
-		case 'h3': return 'h3'
-		case 'h4': return 'h4'
-		case 'h5': return 'h5'
-		case 'h6': return 'h6'
-		case 'paragraph': return 'p'
-		case 'small': return 'small'
-		default: return 'span'
-	}
+	return applyWrappers(html, parsed)
 }
 
 /**
  * Get variant-specific styles from StyleConfig.
  * These are merged with explicit attrs (attrs take precedence).
- * 
- * Resets browser defaults for text elements since we use inline-first approach:
- * - h1-h6: margin, font-size, font-weight (browsers apply defaults)
- * - p: margin
- * - small: font-size (browsers make it smaller)
  */
 function getTextVariantStyles(
 	variant: Mail.TextNode['variant'],
@@ -658,31 +711,6 @@ function getTextVariantStyles(
 	const textConfig = context.style.Text
 	const css: Record<string, string> = {}
 
-	// Reset browser defaults based on element type
-	switch (variant) {
-		case 'h1':
-		case 'h2':
-		case 'h3':
-		case 'h4':
-		case 'h5':
-		case 'h6':
-			// Headings have browser default margin, font-size, font-weight
-			css.margin = '0'
-			css.padding = '0'
-			css.fontSize = 'inherit'
-			css.fontWeight = 'inherit'
-			break
-		case 'paragraph':
-			// Paragraphs have browser default margin
-			css.margin = '0'
-			css.padding = '0'
-			break
-		case 'small':
-			// Small has browser default smaller font-size
-			css.fontSize = 'inherit'
-			break
-	}
-
 	if (!textConfig) return css
 
 	// Apply base text color if set
@@ -690,36 +718,26 @@ function getTextVariantStyles(
 		css.color = textConfig.color
 	}
 
-	// Get variant-specific config
-	let variantConfig: { size?: string; weight?: string | number; lineHeight?: string | number; color?: string } | undefined
+	// Get variant-specific config using TEXT_VARIANTS lookup
+	const variantInfo = TEXT_VARIANTS[variant]
+	if (!variantInfo.configKey) return css
 
-	switch (variant) {
-		case 'h1': variantConfig = textConfig.H1; break
-		case 'h2': variantConfig = textConfig.H2; break
-		case 'h3': variantConfig = textConfig.H3; break
-		case 'h4': variantConfig = textConfig.H4; break
-		case 'h5': variantConfig = textConfig.H5; break
-		case 'h6': variantConfig = textConfig.H6; break
-		case 'paragraph': variantConfig = textConfig.Paragraph; break
-		case 'small': variantConfig = textConfig.Small; break
-		default: break
+	const variantConfig = textConfig[variantInfo.configKey]
+	if (!variantConfig) return css
+
+	if (variantConfig.size) {
+		css.fontSize = remToPx(variantConfig.size, rootSize)
 	}
-
-	if (variantConfig) {
-		if (variantConfig.size) {
-			css.fontSize = remToPx(variantConfig.size, rootSize)
-		}
-		if (variantConfig.weight !== undefined) {
-			css.fontWeight = String(variantConfig.weight)
-		}
-		if (variantConfig.lineHeight !== undefined) {
-			css.lineHeight = typeof variantConfig.lineHeight === 'number'
-				? String(variantConfig.lineHeight)
-				: variantConfig.lineHeight
-		}
-		if (variantConfig.color) {
-			css.color = variantConfig.color
-		}
+	if ('weight' in variantConfig && variantConfig.weight !== undefined) {
+		css.fontWeight = String(variantConfig.weight)
+	}
+	if (variantConfig.lineHeight !== undefined) {
+		css.lineHeight = typeof variantConfig.lineHeight === 'number'
+			? String(variantConfig.lineHeight)
+			: variantConfig.lineHeight
+	}
+	if (variantConfig.color) {
+		css.color = variantConfig.color
 	}
 
 	return css
@@ -737,47 +755,112 @@ function getTextVariantStyles(
  * Note: For VML-based Outlook buttons with rounded corners,
  * we'd need conditional comments. Current impl uses CSS only.
  */
+
+// ============================================================================
+// Anchor Node Helper
+// ============================================================================
+
+interface AnchorRenderOptions {
+	/** Config key to get default styles from context.style */
+	configKey: 'Button' | 'Link' | 'Unsubscribe'
+	/** Config mapping to build CSS object from config */
+	configMapping: Record<string, string>
+	/** Extra default CSS to apply before config and parsed attrs */
+	extraDefaults?: Record<string, string>
+	/** Whether to add target="_blank" rel="noopener noreferrer" */
+	targetBlank?: boolean
+	/** Whether content should be parsed as markdown (vs escaped HTML) */
+	parseMarkdownContent?: boolean
+	/** Whether margin wrapping is supported */
+	supportMargin?: boolean
+	/** Callback for side effects (e.g., setting headers) */
+	onRender?: (href: string, node: AnchorLikeNode, context: RenderContext) => void
+}
+
+type AnchorLikeNode = (Mail.ButtonNode | Mail.LinkNode | Mail.UnsubscribeNode) & {
+	href: string
+	content?: string
+	children: Mail.IRNode[]
+	email?: string // Only on Unsubscribe
+}
+
+/**
+ * Unified anchor renderer for Button, Link, and Unsubscribe nodes.
+ * 
+ * These nodes share the same structure:
+ * 1. Parse attrs and get config defaults
+ * 2. Merge defaults with parsed CSS
+ * 3. Process href with variable interpolation
+ * 4. Process content (markdown or plain) or render children
+ * 5. Build <a> tag with styles
+ * 6. Optionally wrap with margin
+ */
+function renderAnchorLikeNode(
+	node: AnchorLikeNode,
+	inherited: InheritedStyles,
+	context: RenderContext,
+	rootSize: number,
+	options: AnchorRenderOptions
+): string {
+	const parsed = parseAttrs(node.attrs, inherited, rootSize)
+
+	// Build default CSS from config
+	const config = context.style[options.configKey]
+	const configCss = buildCssFromConfig(config, options.configMapping)
+	
+	// Merge: extraDefaults < configCss < parsed.css (attrs win)
+	const defaultCss = { ...options.extraDefaults, ...configCss }
+	const mergedCss = { ...defaultCss, ...parsed.css }
+	const inlineStyle = toInlineCSS(mergedCss, inherited)
+	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
+
+	// Process href with variables
+	const href = interpolatePlaceholders(node.href, context)
+
+	// Build content: use content prop if available, otherwise render children
+	const childInherited = extractInheritable(parsed, inherited)
+	let content: string
+	if (node.content) {
+		const interpolated = interpolatePlaceholders(node.content, context)
+		content = options.parseMarkdownContent
+			? parseMarkdown(interpolated, context)
+			: escapeHtml(interpolated)
+	} else {
+		content = renderChildren(node.children, childInherited, context, rootSize)
+	}
+
+	// Run side effect callback if provided
+	options.onRender?.(href, node, context)
+
+	// Build anchor tag
+	const targetAttr = options.targetBlank ? ' target="_blank" rel="noopener noreferrer"' : ''
+	let html = `<a href="${escapeHtml(href)}"${targetAttr}${styleAttr}>${content}</a>`
+
+	// Wrap with margin if supported and needed
+	if (options.supportMargin && parsed.margin) {
+		html = wrapWithMargin(html, parsed.margin)
+	}
+
+	return html
+}
+
 function renderButtonNode(
 	node: Mail.ButtonNode,
 	inherited: InheritedStyles,
 	context: RenderContext,
 	rootSize: number
 ): string {
-	const parsed = parseAttrs(node.attrs, inherited, rootSize)
-
-	// Get button defaults from StyleConfig
-	const buttonConfig = context.style.Button
-	const defaultCss: Record<string, string> = {
-		display: 'inline-block',
-		textDecoration: 'none'
-	}
-	if (buttonConfig) {
-		if (buttonConfig.color) defaultCss.color = buttonConfig.color
-		if (buttonConfig.background) defaultCss.backgroundColor = buttonConfig.background
-		if (buttonConfig.padding) defaultCss.padding = buttonConfig.padding
-		if (buttonConfig.borderRadius) defaultCss.borderRadius = buttonConfig.borderRadius
-		if (buttonConfig.fontWeight) defaultCss.fontWeight = String(buttonConfig.fontWeight)
-	}
-
-	// Merge: defaults < parsed (attrs win)
-	const mergedCss = { ...defaultCss, ...parsed.css }
-	const inlineStyle = toInlineCSS(mergedCss, inherited)
-
-	// Process href and content with variables
-	const href = interpolatePlaceholders(node.href, context)
-	// Use content prop if available, otherwise render children
-	const childInherited = extractInheritable(parsed, inherited)
-	const content = node.content 
-		? parseMarkdown(interpolatePlaceholders(node.content, context), context)
-		: renderChildren(node.children, childInherited, context, rootSize)
-
-	let html = `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" style="${inlineStyle}">${content}</a>`
-
-	if (parsed.margin) {
-		html = wrapWithMargin(html, parsed.margin)
-	}
-
-	return html
+	return renderAnchorLikeNode(node, inherited, context, rootSize, {
+		configKey: 'Button',
+		configMapping: CONFIG_MAPPINGS.ButtonCss,
+		extraDefaults: {
+			display: 'inline-block',
+			textDecoration: 'none'
+		},
+		targetBlank: true,
+		parseMarkdownContent: true,
+		supportMargin: true
+	})
 }
 
 /**
@@ -834,11 +917,7 @@ function renderImgNode(
 		html = `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${html}</a>`
 	}
 
-	if (parsed.margin) {
-		html = wrapWithMargin(html, parsed.margin)
-	}
-
-	return html
+	return applyWrappers(html, parsed)
 }
 
 // ============================================================================
@@ -953,28 +1032,12 @@ function renderLinkNode(
 	context: RenderContext,
 	rootSize: number
 ): string {
-	const parsed = parseAttrs(node.attrs, inherited, rootSize)
-
-	// Get defaults from StyleConfig.Link
-	const linkConfig = context.style.Link
-	const defaultCss: Record<string, string> = {}
-	if (linkConfig) {
-		if (linkConfig.color) defaultCss.color = linkConfig.color
-		if (linkConfig.textDecoration) defaultCss.textDecoration = linkConfig.textDecoration
-	}
-
-	const mergedCss = { ...defaultCss, ...parsed.css }
-	const inlineStyle = toInlineCSS(mergedCss, inherited)
-	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
-
-	const href = interpolatePlaceholders(node.href, context)
-	// Use content prop if available, otherwise render children
-	const childInherited = extractInheritable(parsed, inherited)
-	const content = node.content
-		? parseMarkdown(interpolatePlaceholders(node.content, context), context)
-		: renderChildren(node.children, childInherited, context, rootSize)
-
-	return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer"${styleAttr}>${content}</a>`
+	return renderAnchorLikeNode(node, inherited, context, rootSize, {
+		configKey: 'Link',
+		configMapping: CONFIG_MAPPINGS.LinkCss,
+		targetBlank: true,
+		parseMarkdownContent: true
+	})
 }
 
 /**
@@ -982,8 +1045,8 @@ function renderLinkNode(
  * 
  * IMPLEMENTATION:
  * - Special styling from StyleConfig.Unsubscribe
- * - May add List-Unsubscribe header for email clients
- * - Typically smaller/muted text in footer
+ * - Adds List-Unsubscribe header for email clients
+ * - Content is escaped (not markdown) for safety
  */
 function renderUnsubscribeNode(
 	node: Mail.UnsubscribeNode,
@@ -991,37 +1054,20 @@ function renderUnsubscribeNode(
 	context: RenderContext,
 	rootSize: number
 ): string {
-	const parsed = parseAttrs(node.attrs, inherited, rootSize)
-
-	// Get defaults from StyleConfig.Unsubscribe
-	const config = context.style.Unsubscribe
-	const defaultCss: Record<string, string> = {}
-	if (config) {
-		if (config.color) defaultCss.color = config.color
-		if (config.size) defaultCss.fontSize = config.size
-	}
-
-	const mergedCss = { ...defaultCss, ...parsed.css }
-	const inlineStyle = toInlineCSS(mergedCss, inherited)
-	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
-
-	const href = interpolatePlaceholders(node.href, context)
-	// Use content prop if available, otherwise render children
-	const childInherited = extractInheritable(parsed, inherited)
-	const content = node.content
-		? escapeHtml(interpolatePlaceholders(node.content, context))
-		: renderChildren(node.children, childInherited, context, rootSize)
-
-	// Add List-Unsubscribe header
-	if (href) {
-		context.headers['List-Unsubscribe'] = `<${href}>`
-		// Also add mailto if email provided
-		if (node.email) {
-			context.headers['List-Unsubscribe'] = `<mailto:${node.email}>, <${href}>`
+	return renderAnchorLikeNode(node, inherited, context, rootSize, {
+		configKey: 'Unsubscribe',
+		configMapping: CONFIG_MAPPINGS.UnsubscribeCss,
+		targetBlank: false,
+		parseMarkdownContent: false,
+		onRender: (href, n) => {
+			if (href) {
+				const unsubNode = n as Mail.UnsubscribeNode
+				context.headers['List-Unsubscribe'] = unsubNode.email
+					? `<mailto:${unsubNode.email}>, <${href}>`
+					: `<${href}>`
+			}
 		}
-	}
-
-	return `<a href="${escapeHtml(href)}"${styleAttr}>${content}</a>`
+	})
 }
 
 // ============================================================================
@@ -1126,13 +1172,9 @@ function renderTableNode(
 		}
 	}
 
-	let html = `<table cellpadding="${cellPadding}" cellspacing="0" border="0"${widthAttr}${heightAttr}${finalStyle}>${rowsHtml}</table>`
+	const html = `<table cellpadding="${cellPadding}" cellspacing="0" border="0"${widthAttr}${heightAttr}${finalStyle}>${rowsHtml}</table>`
 
-	if (parsed.margin) {
-		html = wrapWithMargin(html, parsed.margin)
-	}
-
-	return html
+	return applyWrappers(html, parsed)
 }
 
 /**
@@ -1156,6 +1198,31 @@ interface TableRowRenderOptions {
  * - Cells can span multiple columns via `span-*` attribute
  * - Cells can span multiple rows via `row-span-*` attribute
  * - Border styles on row are applied to cells (<tr> doesn't support borders reliably)
+ * 
+ * TODO(COMPLEXITY): This function is ~150 lines and handles many concerns:
+ * - Row background for striping
+ * - Padding transfer from row to cells
+ * - Border transfer from row to cells (5+ border properties)
+ * - Column width application
+ * - Colspan/rowspan extraction
+ * - Alignment extraction
+ * 
+ * Consider splitting into smaller functions:
+ * - `buildCellStyles(parsed, options)` - handles padding, borders, background
+ * - `buildCellAttrs(child, colWidths, colIndex)` - handles width, colspan, rowspan
+ * - `renderTableCell(child, cellTag, styles, attrs)` - assembles the <td>/<th>
+ * 
+ * This would make the main function a coordinator:
+ * ```ts
+ * function renderTableRowNode(...) {
+ *   const cellStyles = buildCellStyles(parsed, { rowBackground, borderColor })
+ *   const cells = node.children.map((child, i) => {
+ *     const attrs = buildCellAttrs(child, colWidths, colIndex)
+ *     return renderTableCell(child, cellTag, cellStyles, attrs)
+ *   })
+ *   return `<tr>${cells.join('')}</tr>`
+ * }
+ * ```
  */
 function renderTableRowNode(
 	node: Mail.TableRowNode,
@@ -1169,34 +1236,15 @@ function renderTableRowNode(
 	const cellTag = node.header ? 'th' : 'td'
 
 	// Apply row background if provided (for striped tables)
-	const bgStyle = rowBackground ? `background-color: ${rowBackground}` : ''
 	const rowInherited = rowBackground 
 		? { ...inherited, backgroundColor: rowBackground }
 		: inherited
 
 	const childInherited = extractInheritable(parsed, rowInherited)
 
-	// Extract padding from row - padding on <tr> doesn't work, apply to cells
-	const rowPadding = parsed.css.padding
-	const rowPaddingTop = parsed.css.paddingTop
-	const rowPaddingBottom = parsed.css.paddingBottom
-	const rowPaddingLeft = parsed.css.paddingLeft
-	const rowPaddingRight = parsed.css.paddingRight
-
-	// Extract border styles from row - borders on <tr> don't work reliably in email clients
-	// Apply to cells instead (top border on all cells, bottom border on all cells)
-	const rowBorderColor = parsed.css.borderColor
-	const rowBorderTopWidth = parsed.css.borderTopWidth
-	const rowBorderBottomWidth = parsed.css.borderBottomWidth
-	const rowBorderTopStyle = parsed.css.borderTopStyle ?? (rowBorderTopWidth ? 'solid' : undefined)
-	const rowBorderBottomStyle = parsed.css.borderBottomStyle ?? (rowBorderBottomWidth ? 'solid' : undefined)
-	const rowBorderLeftWidth = parsed.css.borderLeftWidth
-	const rowBorderRightWidth = parsed.css.borderRightWidth
-	const rowBorderLeftStyle = parsed.css.borderLeftStyle ?? (rowBorderLeftWidth ? 'solid' : undefined)
-	const rowBorderRightStyle = parsed.css.borderRightStyle ?? (rowBorderRightWidth ? 'solid' : undefined)
-	// Full border shorthand
-	const rowBorderWidth = parsed.css.borderWidth
-	const rowBorderStyle = parsed.css.borderStyle ?? (rowBorderWidth ? 'solid' : undefined)
+	// Extract row styles that need to be transferred to cells
+	// (padding and borders don't work on <tr> in email clients)
+	const { rowStyles, cleanedCss } = extractRowStylesForCells(parsed.css)
 
 	// Track column index for width assignment
 	let colIndex = 0
@@ -1206,112 +1254,32 @@ function renderTableRowNode(
 	const cellsHtml = node.children.map((child, childIndex) => {
 		const cellHtml = renderNodeToHtml(child, childInherited, context, rootSize)
 		
-		// Build cell attributes
-		const cellStyles: string[] = []
-		const cellAttrs: string[] = []
+		// Get row styles transferred to this cell
+		const rowTransferStyles = buildCellStylesFromRow(
+			rowStyles,
+			{ isFirst: childIndex === 0, isLast: childIndex === totalChildren - 1 },
+			{ rowBackground, tableBorderColor: borderColor }
+		)
 
-		// Apply row padding to cells (since <tr> doesn't support padding)
-		if (rowPadding) cellStyles.push(`padding: ${rowPadding}`)
-		if (rowPaddingTop) cellStyles.push(`padding-top: ${rowPaddingTop}`)
-		if (rowPaddingBottom) cellStyles.push(`padding-bottom: ${rowPaddingBottom}`)
-		if (rowPaddingLeft) cellStyles.push(`padding-left: ${rowPaddingLeft}`)
-		if (rowPaddingRight) cellStyles.push(`padding-right: ${rowPaddingRight}`)
-
-		// Background from row
-		if (bgStyle) cellStyles.push(bgStyle)
-
-		// Apply row border styles to cells (since <tr> doesn't support borders)
-		// Full border (border-*) applies to all sides
-		if (rowBorderWidth && rowBorderColor) {
-			cellStyles.push(`border: ${rowBorderWidth} ${rowBorderStyle} ${rowBorderColor}`)
-		} else {
-			// Directional borders (border-y, border-x, etc.)
-			// Top and bottom borders apply to all cells
-			if (rowBorderTopWidth && rowBorderColor) {
-				cellStyles.push(`border-top: ${rowBorderTopWidth} ${rowBorderTopStyle} ${rowBorderColor}`)
-			}
-			if (rowBorderBottomWidth && rowBorderColor) {
-				cellStyles.push(`border-bottom: ${rowBorderBottomWidth} ${rowBorderBottomStyle} ${rowBorderColor}`)
-			}
-			// Left border only on first cell, right border only on last cell
-			if (rowBorderLeftWidth && rowBorderColor && childIndex === 0) {
-				cellStyles.push(`border-left: ${rowBorderLeftWidth} ${rowBorderLeftStyle} ${rowBorderColor}`)
-			}
-			if (rowBorderRightWidth && rowBorderColor && childIndex === totalChildren - 1) {
-				cellStyles.push(`border-right: ${rowBorderRightWidth} ${rowBorderRightStyle} ${rowBorderColor}`)
-			}
-		}
-
-		// Border from parent Table's borderColor option (for cell borders)
-		if (borderColor) {
-			cellStyles.push(`border: 1px solid ${borderColor}`)
-		}
-
-		// Extract colspan and rowspan from child's attrs
-		const colspan = extractColspanFromAttrs(child.attrs)
-		const rowspan = extractRowspanFromAttrs(child.attrs)
+		// Extract cell-related attrs
+		const childCellAttrs = extractCellAttrs(child.attrs, rootSize)
 		
-		if (colspan) cellAttrs.push(`colspan="${colspan}"`)
-		if (rowspan) cellAttrs.push(`rowspan="${rowspan}"`)
-
-		// Extract alignment from child - must be on <td> to work, not on inline content
-		// vertical-align: controls vertical positioning within cell
-		// text-align: controls horizontal alignment of content
-		const childValign = extractValignFromAttrs(child.attrs)
-		const childTextAlign = extractTextAlignFromAttrs(child.attrs)
-		if (childValign) {
-			cellStyles.push(`vertical-align: ${childValign}`)
-		}
-		if (childTextAlign) {
-			cellStyles.push(`text-align: ${childTextAlign}`)
-		}
-
-		// Width: explicit child width takes precedence, otherwise use colWidths[index]
-		// Apply as HTML attribute for Outlook compatibility, and as CSS for modern clients
-		const childWidth = extractWidthFromAttrs(child.attrs, rootSize)
-		let cellWidth: string | undefined
-		if (childWidth) {
-			cellWidth = childWidth
-		} else if (colWidths && colWidths[colIndex]) {
-			cellWidth = colWidths[colIndex]
-		}
+		// Determine cell width
+		const fallbackWidth = colWidths?.[colIndex]
 		
-		if (cellWidth) {
-			cellAttrs.push(`width="${cellWidth}"`)
-			cellStyles.push(`width: ${cellWidth}`)
-		}
-
 		// Advance column index by colspan
-		colIndex += colspan ?? 1
+		colIndex += childCellAttrs.colspan ?? 1
 
-		const styleAttr = cellStyles.length > 0 ? ` style="${cellStyles.join('; ')}"` : ''
-		const attrsStr = cellAttrs.length > 0 ? ' ' + cellAttrs.join(' ') : ''
-		
-		return `<${cellTag}${attrsStr}${styleAttr}>${cellHtml}</${cellTag}>`
+		// Build cell using helper
+		// For <th> cells, default text-align to left (browsers default to center)
+		return buildCell(cellTag, cellHtml, childCellAttrs, {
+			fallbackWidth,
+			extraStyles: rowTransferStyles,
+			defaultTextAlign: cellTag === 'th' ? 'left' : undefined
+		})
 	}).join('')
 
-	// For <tr>, exclude padding and borders (already applied to cells)
-	// <tr> doesn't support padding or borders reliably in email clients
-	const rowCss = { ...parsed.css }
-	delete rowCss.padding
-	delete rowCss.paddingTop
-	delete rowCss.paddingBottom
-	delete rowCss.paddingLeft
-	delete rowCss.paddingRight
-	// Remove border properties - they're applied to cells instead
-	delete rowCss.borderWidth
-	delete rowCss.borderStyle
-	delete rowCss.borderColor
-	delete rowCss.borderTopWidth
-	delete rowCss.borderTopStyle
-	delete rowCss.borderBottomWidth
-	delete rowCss.borderBottomStyle
-	delete rowCss.borderLeftWidth
-	delete rowCss.borderLeftStyle
-	delete rowCss.borderRightWidth
-	delete rowCss.borderRightStyle
-	
-	const inlineStyle = toInlineCSS(rowCss, inherited)
+	const inlineStyle = toInlineCSS(cleanedCss, inherited)
 	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
 
 	return `<tr${styleAttr}>${cellsHtml}</tr>`
@@ -1333,6 +1301,25 @@ function renderTableRowNode(
  * - Variables are interpolated (same as HTML)
  * 
  * @see ARCHITECTURE.md "Plain Text Output" for format details
+ * 
+ * TODO(CONSIDERATION): The HTML and text renderers are parallel but separate.
+ * This means:
+ * - Adding a new node type requires updating BOTH dispatchers
+ * - Similar logic is duplicated (variable interpolation, content processing)
+ * 
+ * Alternative approach: Single renderer with output format parameter:
+ * ```ts
+ * function renderNode(node, inherited, context, options: { format: 'html' | 'text' }) {
+ *   // Shared logic here
+ * }
+ * ```
+ * 
+ * However, the current approach has benefits:
+ * - Clear separation of concerns
+ * - HTML renderer can be complex without affecting text output
+ * - Text output is simpler and doesn't need all the HTML machinery
+ * 
+ * The trade-off is acceptable given the complexity difference between formats.
  */
 function renderNodeToText(node: Mail.IRNode, context: RenderContext): string {
 	switch (node.type) {
@@ -1394,16 +1381,9 @@ function renderTextNodeToText(node: Mail.TextNode, context: RenderContext): stri
 	// Convert literal \n to actual newlines (for plain text)
 	content = content.replace(/\\n/g, '\n')
 	
-	// Add heading markers based on variant
-	switch (node.variant) {
-		case 'h1': return `# ${content}`
-		case 'h2': return `## ${content}`
-		case 'h3': return `### ${content}`
-		case 'h4': return `#### ${content}`
-		case 'h5': return `##### ${content}`
-		case 'h6': return `###### ${content}`
-		default: return content
-	}
+	// Add heading markers based on variant using TEXT_VARIANTS lookup
+	const prefix = TEXT_VARIANTS[node.variant].markdownPrefix
+	return prefix ? `${prefix}${content}` : content
 }
 
 /**
@@ -1439,13 +1419,32 @@ function stripHtmlSpecificMarkdown(content: string): string {
 	return result
 }
 
-function renderButtonNodeToText(node: Mail.ButtonNode, context: RenderContext): string {
+/**
+ * Shared helper for rendering link-like nodes to plain text.
+ * Used by Button, Link, and Unsubscribe nodes.
+ * 
+ * @param node - Node with href, optional content, and children
+ * @param context - Render context for interpolation
+ * @param format - Output format: 'markdown' for [text](url), 'plain' for text: url
+ */
+function renderLinkLikeToText(
+	node: { href: string; content?: string; children: Mail.IRNode[] },
+	context: RenderContext,
+	format: 'markdown' | 'plain' = 'markdown'
+): string {
 	const href = interpolatePlaceholders(node.href, context)
-	let content = node.content 
+	let content = node.content
 		? interpolatePlaceholders(node.content, context)
 		: node.children.map((c) => renderNodeToText(c, context)).join('')
 	content = content.trim() || 'Link'
-	return `[${content}](${href})`
+
+	return format === 'markdown'
+		? `[${content}](${href})`
+		: `${content}: ${href}`
+}
+
+function renderButtonNodeToText(node: Mail.ButtonNode, context: RenderContext): string {
+	return renderLinkLikeToText(node, context, 'markdown')
 }
 
 function renderImgNodeToText(node: Mail.ImgNode, context: RenderContext): string {
@@ -1455,20 +1454,11 @@ function renderImgNodeToText(node: Mail.ImgNode, context: RenderContext): string
 }
 
 function renderLinkNodeToText(node: Mail.LinkNode, context: RenderContext): string {
-	const href = interpolatePlaceholders(node.href, context)
-	let content = node.content 
-		? interpolatePlaceholders(node.content, context)
-		: node.children.map((c) => renderNodeToText(c, context)).join('')
-	content = content.trim() || 'Link'
-	return `[${content}](${href})`
+	return renderLinkLikeToText(node, context, 'markdown')
 }
 
 function renderUnsubscribeNodeToText(node: Mail.UnsubscribeNode, context: RenderContext): string {
-	const href = interpolatePlaceholders(node.href, context)
-	const content = node.content 
-		? interpolatePlaceholders(node.content, context)
-		: node.children.map((c) => renderNodeToText(c, context)).join('')
-	return `${content}: ${href}`
+	return renderLinkLikeToText(node, context, 'plain')
 }
 
 /**

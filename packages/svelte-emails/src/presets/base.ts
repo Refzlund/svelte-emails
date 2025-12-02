@@ -7,6 +7,18 @@
 
 import type { StyleConfig } from '../styles'
 
+/**
+ * Traditional monospace font stack used across font presets.
+ * This prioritizes older, widely-available fonts for maximum compatibility.
+ * - Consolas: Windows (Vista+)
+ * - Monaco: macOS
+ * - "Lucida Console": Windows
+ * - "Courier New": Windows, macOS, Linux
+ * - Courier: Universal fallback
+ * - monospace: Generic fallback
+ */
+export const MONOSPACE_FONT_STACK = 'Consolas, Monaco, "Lucida Console", "Courier New", Courier, monospace'
+
 export const base: StyleConfig = {
 	root: {
 		color: '#1b1b1d',

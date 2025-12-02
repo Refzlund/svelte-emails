@@ -49,7 +49,7 @@ Widths are underscore-separated (e.g., `cols-[40%_30%_30%]`).
 	const rowHeights = parseRowTemplate(attrKeys)
 	const gap = parseGap(attrKeys)
 
-	const node: Mail.DivNode = $state({
+	const node: Mail.DivNode = {
 		type: 'div',
 		direction,
 		responsiveGrid: responsive,
@@ -58,7 +58,7 @@ Widths are underscore-separated (e.g., `cols-[40%_30%_30%]`).
 		...(colWidths && { colWidths }),
 		...(rowHeights && { rowHeights }),
 		...(gap && { gap })
-	})
+	}
 
 	// Add to parent's children and setup cleanup
 	onDestroy(addChild(parent, node))

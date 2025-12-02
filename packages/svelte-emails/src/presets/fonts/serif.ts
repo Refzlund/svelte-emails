@@ -12,15 +12,16 @@
  */
 
 import type { StyleConfig } from '../../styles'
+import { MONOSPACE_FONT_STACK } from '../base'
 
 export const serif: StyleConfig = {
 	root: {
 		fontFamily: 'Georgia, "Times New Roman", Times, serif'
 	},
 	Code: {
-		fontFamily: 'Consolas, Monaco, "Lucida Console", "Courier New", Courier, monospace'
+		fontFamily: MONOSPACE_FONT_STACK
 	},
 	Codeblock: {
-		fontFamily: 'Consolas, Monaco, "Lucida Console", "Courier New", Courier, monospace'
+		fontFamily: MONOSPACE_FONT_STACK
 	}
 }

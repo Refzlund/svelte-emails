@@ -43,20 +43,28 @@ Use `Table.Row` for each row. Row styles are inherited by child elements.
 	// Parse column template from attrs
 	const colWidths = parseColumnTemplate(attrKeys)
 
-	// Check for cell-border attribute
+	// Extract table flags from attrs
+	const border = 'border' in attrs
+	const borderOuter = 'border-outer' in attrs
 	const cellBorder = 'cell-border' in attrs
+	const striped = 'striped' in attrs
+	const compact = 'compact' in attrs
 
 	// Parse cell padding from attrs
 	const cellPadding = parseCellPadding(attrKeys)
 
-	const node: Mail.TableNode = $state({
+	const node: Mail.TableNode = {
 		type: 'table',
 		attrs: attrKeys,
 		children: [],
 		...(colWidths && { colWidths }),
+		...(border && { border }),
+		...(borderOuter && { borderOuter }),
 		...(cellBorder && { cellBorder }),
+		...(striped && { striped }),
+		...(compact && { compact }),
 		...(cellPadding !== undefined && { cellPadding })
-	})
+	}
 
 	onDestroy(addChild(parent, node))
 	setEmailParent(node)

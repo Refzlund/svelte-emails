@@ -105,15 +105,14 @@ Use `max-w-*` to customize the content container width:
 		filteredAttrs.push(attr)
 	}
 
-	// Create the IR node (plain object - no reactivity needed for tree construction)
-	const node: Mail.EmailNode = $state({
+	const node: Mail.EmailNode = {
 		type: 'email',
-		preview,
-		bodyBackground,
-		maxWidth,
 		attrs: filteredAttrs,
-		children: []
-	})
+		children: [],
+		...(preview && { preview }),
+		...(bodyBackground && { bodyBackground }),
+		...(maxWidth && { maxWidth })
+	}
 	
 	// Register with collector
 	collector.registerRoot(node)

@@ -8,10 +8,24 @@
  */
 
 import type { RenderContext } from './types'
+import { buildStyleFromConfig, buildHighlightStyle, CONFIG_MAPPINGS } from './style-helpers'
 
 // ============================================================================
 // Escape Placeholder System
 // ============================================================================
+
+/**
+ * TODO(CONSIDERATION): The escape system uses module-level state (ESCAPE_MAP,
+ * escapeCounter) which makes it non-reentrant. If parseMarkdown() is called
+ * concurrently (e.g., parallel SSR), escapes could be corrupted.
+ * 
+ * Currently safe because rendering is synchronous, but worth noting.
+ * 
+ * Alternative approaches:
+ * 1. Pass escape state through function parameters
+ * 2. Use a unique token per call (e.g., UUID)
+ * 3. Create a class instance per parse operation
+ */
 
 // Placeholder for escaped characters (using Unicode private use area)
 const ESCAPE_PLACEHOLDER = '\uE000'
@@ -154,11 +168,7 @@ function parseInlineFormatting(content: string, context: RenderContext): string 
 	// Highlighted text: [#hex]text[/] — merge with Highlight config
 	result = result.replace(
 		/\[#([0-9a-fA-F]{3,6})\]([^[]+)\[\/\]/g,
-		(_, hex, text) => {
-			const highlightConfig = context.style.Highlight
-			const color = highlightConfig?.color ? `color: ${highlightConfig.color}; ` : ''
-			return `<span style="${color}background-color: #${hex}">${text}</span>`
-		}
+		(_, hex, text) => `<span style="${buildHighlightStyle(context.style.Highlight, hex)}">${text}</span>`
 	)
 
 	// Small text: --text--
@@ -167,52 +177,19 @@ function parseInlineFormatting(content: string, context: RenderContext): string 
 	return result
 }
 
-/**
- * Build inline style string for links from StyleConfig.
- */
+/** Build inline style for links using shared utility */
 function buildLinkStyle(context: RenderContext): string {
-	const linkConfig = context.style.Link
-	if (!linkConfig) return ''
-
-	const styles: string[] = []
-	if (linkConfig.color) styles.push(`color: ${linkConfig.color}`)
-	if (linkConfig.textDecoration) styles.push(`text-decoration: ${linkConfig.textDecoration}`)
-	return styles.join('; ')
+	return buildStyleFromConfig(context.style.Link, CONFIG_MAPPINGS.Link)
 }
 
-/**
- * Build inline style string for inline code from StyleConfig.
- */
+/** Build inline style for inline code using shared utility */
 function buildCodeStyle(context: RenderContext): string {
-	const codeConfig = context.style.Code
-	if (!codeConfig) return ''
-
-	const styles: string[] = []
-	if (codeConfig.color) styles.push(`color: ${codeConfig.color}`)
-	if (codeConfig.background) styles.push(`background-color: ${codeConfig.background}`)
-	if (codeConfig.padding) styles.push(`padding: ${codeConfig.padding}`)
-	if (codeConfig.borderRadius) styles.push(`border-radius: ${codeConfig.borderRadius}`)
-	if (codeConfig.fontFamily) styles.push(`font-family: ${codeConfig.fontFamily}`)
-	if (codeConfig.size) styles.push(`font-size: ${codeConfig.size}`)
-	return styles.join('; ')
+	return buildStyleFromConfig(context.style.Code, CONFIG_MAPPINGS.Code)
 }
 
-/**
- * Build inline style string for codeblocks from StyleConfig.
- */
+/** Build inline style for codeblocks using shared utility */
 function buildCodeblockStyle(context: RenderContext): string {
-	const config = context.style.Codeblock
-	if (!config) return ''
-
-	const styles: string[] = []
-	if (config.color) styles.push(`color: ${config.color}`)
-	if (config.background) styles.push(`background-color: ${config.background}`)
-	if (config.padding) styles.push(`padding: ${config.padding}`)
-	if (config.borderRadius) styles.push(`border-radius: ${config.borderRadius}`)
-	if (config.fontFamily) styles.push(`font-family: ${config.fontFamily}`)
-	if (config.size) styles.push(`font-size: ${config.size}`)
-	if (config.lineHeight) styles.push(`line-height: ${config.lineHeight}`)
-	return styles.join('; ')
+	return buildStyleFromConfig(context.style.Codeblock, CONFIG_MAPPINGS.Codeblock)
 }
 
 // ============================================================================
@@ -510,74 +487,6 @@ export function escapeHtml(str: string): string {
 		.replace(/>/g, '&gt;')
 		.replace(/"/g, '&quot;')
 		.replace(/'/g, '&#39;')
-}
-
-/**
- * Unescape HTML entities back to characters.
- * Useful for plain text output.
- * 
- * @param str - HTML-escaped string
- * @returns Unescaped string
- */
-export function unescapeHtml(str: string): string {
-	return str
-		.replace(/&amp;/g, '&')
-		.replace(/&lt;/g, '<')
-		.replace(/&gt;/g, '>')
-		.replace(/&quot;/g, '"')
-		.replace(/&#39;/g, "'")
-}
-
-// ============================================================================
-// Plain Text Conversion
-// ============================================================================
-
-/**
- * Strip HTML tags from content for plain text output.
- * Preserves link URLs as footnote references.
- * 
- * @param html - HTML content
- * @param context - Render context to track footnotes
- * @returns Plain text content
- * 
- * @example
- * ```ts
- * const context = { placeholders: {}, footnotes: [], headers: {} }
- * stripHtmlToText('Click <a href="https://example.com">here</a>!', context)
- * // → 'Click here[1]!'
- * // context.footnotes = [{ label: '[1]', url: 'https://example.com' }]
- * ```
- */
-export function stripHtmlToText(html: string, context: RenderContext): string {
-	let result = html
-
-	// Convert links to footnote references
-	result = result.replace(/<a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/g, (_, url, text) => {
-		const index = context.footnotes.length + 1
-		context.footnotes.push({ label: `[^${index}]`, url })
-		return `${text}[^${index}]`
-	})
-
-	// Convert common elements to plain text equivalents
-	result = result.replace(/<br\s*\/?>/gi, '\n')
-	result = result.replace(/<\/p>/gi, '\n\n')
-	result = result.replace(/<\/h[1-6]>/gi, '\n\n')
-	result = result.replace(/<\/div>/gi, '\n')
-	result = result.replace(/<\/tr>/gi, '\n')
-	result = result.replace(/<\/li>/gi, '\n')
-	result = result.replace(/<hr\s*\/?>/gi, '\n---\n')
-
-	// Strip remaining tags
-	result = result.replace(/<[^>]+>/g, '')
-
-	// Unescape entities
-	result = unescapeHtml(result)
-
-	// Normalize whitespace
-	result = result.replace(/\n{3,}/g, '\n\n')
-	result = result.trim()
-
-	return result
 }
 
 /**

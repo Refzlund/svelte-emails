@@ -14,6 +14,27 @@ import type { InheritedStyles, ParsedAttrs } from './types'
 // ============================================================================
 
 /**
+ * CSS properties that should be inherited from parent to child elements.
+ * These are applied by toInlineCSS when not explicitly set.
+ */
+const INHERITABLE_PROPERTIES = [
+	'color',
+	'fontFamily',
+	'fontSize',
+	'fontWeight',
+	'fontStyle',
+	'textDecoration',
+	'textTransform',
+	'textAlign',
+	'lineHeight',
+	'letterSpacing',
+	'whiteSpace',
+	'wordBreak',
+	'verticalAlign',
+	'visibility'
+] as const
+
+/**
  * Convert a camelCase CSS property name to kebab-case.
  * 
  * @example
@@ -22,7 +43,7 @@ import type { InheritedStyles, ParsedAttrs } from './types'
  * toKebabCase('borderTopWidth')  // → 'border-top-width'
  * ```
  */
-export function toKebabCase(str: string): string {
+function toKebabCase(str: string): string {
 	return str.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
 }
 
@@ -49,49 +70,12 @@ export function toInlineCSS(
 ): string {
 	const finalCss = { ...css }
 
-	// Apply inherited typography if not explicitly set
+	// Apply inherited typography properties if not explicitly set
 	if (inherited) {
-		if (!finalCss.color && inherited.color) {
-			finalCss.color = inherited.color
-		}
-		if (!finalCss.fontFamily && inherited.fontFamily) {
-			finalCss.fontFamily = inherited.fontFamily
-		}
-		if (!finalCss.fontSize && inherited.fontSize) {
-			finalCss.fontSize = inherited.fontSize
-		}
-		if (!finalCss.fontWeight && inherited.fontWeight) {
-			finalCss.fontWeight = inherited.fontWeight
-		}
-		if (!finalCss.fontStyle && inherited.fontStyle) {
-			finalCss.fontStyle = inherited.fontStyle
-		}
-		if (!finalCss.textDecoration && inherited.textDecoration) {
-			finalCss.textDecoration = inherited.textDecoration
-		}
-		if (!finalCss.textTransform && inherited.textTransform) {
-			finalCss.textTransform = inherited.textTransform
-		}
-		if (!finalCss.textAlign && inherited.textAlign) {
-			finalCss.textAlign = inherited.textAlign
-		}
-		if (!finalCss.lineHeight && inherited.lineHeight) {
-			finalCss.lineHeight = inherited.lineHeight
-		}
-		if (!finalCss.letterSpacing && inherited.letterSpacing) {
-			finalCss.letterSpacing = inherited.letterSpacing
-		}
-		if (!finalCss.whiteSpace && inherited.whiteSpace) {
-			finalCss.whiteSpace = inherited.whiteSpace
-		}
-		if (!finalCss.wordBreak && inherited.wordBreak) {
-			finalCss.wordBreak = inherited.wordBreak
-		}
-		if (!finalCss.verticalAlign && inherited.verticalAlign) {
-			finalCss.verticalAlign = inherited.verticalAlign
-		}
-		if (!finalCss.visibility && inherited.visibility) {
-			finalCss.visibility = inherited.visibility
+		for (const prop of INHERITABLE_PROPERTIES) {
+			if (!finalCss[prop] && inherited[prop]) {
+				finalCss[prop] = inherited[prop]
+			}
 		}
 	}
 
@@ -236,16 +220,16 @@ export function wrapWithMargin(
 // ============================================================================
 
 /**
- * Merge inherited styles with node's parsed attributes.
+ * Compute inherited styles for child nodes from parsed attributes.
  * Explicit attributes override inherited values.
  * 
- * @param inherited - Current inherited styles
- * @param parsed - Parsed attributes from the node
- * @returns Merged inherited styles for child nodes
+ * @param parsed - Parsed attributes from current node
+ * @param inherited - Current inherited styles from parent
+ * @returns InheritedStyles to pass to children
  */
-export function mergeWithInherited(
-	inherited: InheritedStyles,
-	parsed: ParsedAttrs
+export function extractInheritable(
+	parsed: ParsedAttrs,
+	inherited: InheritedStyles
 ): InheritedStyles {
 	// Compute new color value (explicit or inherited)
 	const newColor = parsed.css.color || inherited.color
@@ -302,41 +286,6 @@ export function mergeWithInherited(
 	}
 }
 
-/**
- * Extract inheritable values from parsed attributes.
- * Creates the InheritedStyles object to pass to child nodes.
- * 
- * This is essentially the same as mergeWithInherited but named
- * for clarity at call sites where we're preparing styles for children.
- * 
- * @param parsed - Parsed attributes from current node
- * @param inherited - Current inherited styles
- * @returns InheritedStyles to pass to children
- */
-export function extractInheritable(
-	parsed: ParsedAttrs,
-	inherited: InheritedStyles
-): InheritedStyles {
-	return mergeWithInherited(inherited, parsed)
-}
-
-// ============================================================================
-// Default Inherited Styles
-// ============================================================================
-
-/**
- * Create default inherited styles for the root node.
- * 
- * @param backgroundColor - Optional initial background color (default: #ffffff)
- * @returns Default InheritedStyles object
- */
-export function createDefaultInherited(backgroundColor = '#ffffff'): InheritedStyles {
-	return {
-		backgroundColor,
-		opacity: 1
-	}
-}
-
 // ============================================================================
 // Responsive Wrappers
 // ============================================================================
@@ -362,7 +311,7 @@ export function createDefaultInherited(backgroundColor = '#ffffff'): InheritedSt
  * // → '<div class="desktop-only">...</div>'
  * ```
  */
-export function wrapWithResponsive(
+function wrapWithResponsive(
 	html: string,
 	responsive: 'mobile-only' | 'desktop-only'
 ): string {
@@ -373,4 +322,40 @@ export function wrapWithResponsive(
 		// Shown by default, hidden by media query
 		return `<div class="desktop-only">${html}</div>`
 	}
+}
+
+/**
+ * Apply standard post-processing wrappings to rendered HTML.
+ * Combines margin emulation and responsive wrapping in a consistent order.
+ * 
+ * Order of wrapping (inside → outside):
+ * 1. Base HTML
+ * 2. Margin wrapper (if margin exists)
+ * 3. Responsive wrapper (if responsive mode specified)
+ * 
+ * @param html - The base rendered HTML
+ * @param parsed - Parsed attributes containing margin and responsive info
+ * @returns Wrapped HTML with all applicable layers
+ * 
+ * @example
+ * ```ts
+ * applyWrappers('<p>Content</p>', { margin: { top: '16px' }, responsive: 'mobile-only' })
+ * // → wrapped with margin table, then responsive div
+ * 
+ * applyWrappers('<p>Content</p>', { margin: undefined, responsive: undefined })
+ * // → '<p>Content</p>' (no wrapping)
+ * ```
+ */
+export function applyWrappers(
+	html: string,
+	parsed: Pick<ParsedAttrs, 'margin' | 'responsive'>
+): string {
+	let result = html
+	if (parsed.margin) {
+		result = wrapWithMargin(result, parsed.margin)
+	}
+	if (parsed.responsive) {
+		result = wrapWithResponsive(result, parsed.responsive)
+	}
+	return result
 }

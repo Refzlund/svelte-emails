@@ -42,15 +42,15 @@ Best practices for email images:
 
 	const parent = getEmailParent()
 
-	const node: Mail.ImgNode = $state({
+	const node: Mail.ImgNode = {
 		type: 'img',
 		src,
 		alt,
-		width,
-		height,
-		href,
-		attrs: Object.keys(attrs)
-	})
+		attrs: Object.keys(attrs),
+		...(width !== undefined && { width }),
+		...(height !== undefined && { height }),
+		...(href && { href })
+	}
 
 	onDestroy(addChild(parent, node))
 </script>

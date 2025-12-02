@@ -22,12 +22,12 @@ Heading 2 text component.
 
 	const parent = getEmailParent()
 
-	const node: Mail.TextNode = $state({
+	const node: Mail.TextNode = {
 		type: 'text',
 		content,
 		variant: 'h2',
 		attrs: Object.keys(attrs)
-	})
+	}
 
 	onDestroy(addChild(parent, node))
 </script>

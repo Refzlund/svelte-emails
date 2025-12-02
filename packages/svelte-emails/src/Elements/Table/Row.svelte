@@ -25,11 +25,15 @@ and alignment (`align-*`, `justify-*`). Children can override with their own att
 
 	const parent = getEmailParent()
 
-	const node: Mail.TableRowNode = $state({
+	// Extract header flag
+	const header = 'header' in attrs
+
+	const node: Mail.TableRowNode = {
 		type: 'table-row',
 		attrs: Object.keys(attrs),
-		children: []
-	})
+		children: [],
+		...(header && { header })
+	}
 
 	onDestroy(addChild(parent, node))
 	setEmailParent(node)

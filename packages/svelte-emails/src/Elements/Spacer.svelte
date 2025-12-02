@@ -98,12 +98,12 @@ Use `h-*` or `w-*` attributes to override the default size based on context.
 		return 'vertical'
 	}
 
-	const node: Mail.SpacerNode = $state({
+	const node: Mail.SpacerNode = {
 		type: 'spacer',
-		size,
 		layoutContext: getLayoutContext(),
-		attrs: Object.keys(attrs)
-	})
+		attrs: Object.keys(attrs),
+		...(size && { size })
+	}
 
 	onDestroy(addChild(parent, node))
 </script>

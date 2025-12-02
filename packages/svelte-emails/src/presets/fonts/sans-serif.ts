@@ -12,15 +12,16 @@
  */
 
 import type { StyleConfig } from '../../styles'
+import { MONOSPACE_FONT_STACK } from '../base'
 
 export const sansSerif: StyleConfig = {
 	root: {
 		fontFamily: 'Arial, "Helvetica Neue", Helvetica, sans-serif'
 	},
 	Code: {
-		fontFamily: 'Consolas, Monaco, "Lucida Console", "Courier New", Courier, monospace'
+		fontFamily: MONOSPACE_FONT_STACK
 	},
 	Codeblock: {
-		fontFamily: 'Consolas, Monaco, "Lucida Console", "Courier New", Courier, monospace'
+		fontFamily: MONOSPACE_FONT_STACK
 	}
 }

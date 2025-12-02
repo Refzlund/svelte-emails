@@ -1,15 +1,23 @@
 <!-- @component
 Divider component for horizontal rules/separators.
 
-Renders as an `<hr>` or bordered table cell depending on styling needs.
+Renders as a bordered table cell for email compatibility.
+
+**Styling via attributes:**
+- Color: `border-[#hex]` (e.g., `border-[#e5e7eb]`)
+- Thickness: `border-{0|1|2|4|8}` or `border-[2px]`
+- Style: `border-solid`, `border-dashed`, `border-dotted`, `border-double`
+
+Falls back to `StyleConfig.Divider` defaults if not specified.
 
 @example
 ```svelte
-	<Text content='Section 1' />
-	<Divider />
-	<Text content='Section 2' />
+<Text content='Section 1' />
+<Divider />
+<Text content='Section 2' />
 
-	<Divider border-[#e5e7eb] border-2 />
+<Divider border-[#e5e7eb] border-2 />
+<Divider border-dashed border-[#ccc] />
 ```
 
 @see style presets for divider customization options
@@ -21,27 +29,26 @@ Renders as an `<hr>` or bordered table cell depending on styling needs.
 
 	type DividerBorderWidth = 'border-0' | 'border-1' | 'border-2' | 'border-4' | 'border-8'
 
+	/**
+	 * Divider styling via attributes:
+	 * - Color: `border-[#hex]` (e.g., `border-[#e5e7eb]`)
+	 * - Thickness: `border-{0|1|2|4|8}` or `border-[2px]`
+	 * - Style: `border-solid`, `border-dashed`, `border-dotted`, `border-double`
+	 */
 	interface Props extends Attributes<
 		| DividerBorderWidth
 		| `border-[${string}]`
 		| 'border-solid' | 'border-dashed' | 'border-dotted' | 'border-double'
-	> {
-		/** Divider color (alternative to border-[#...] attribute) */
-		color?: string
-		/** Divider thickness (alternative to border-* attribute) */
-		thickness?: string
-		/** Divider style */
-		style?: 'solid' | 'dashed' | 'dotted' | 'double'
-	}
+	> {}
 
-	const { color, thickness, style, ...attrs }: Props = $props()
+	const { ...attrs }: Props = $props()
 
 	const parent = getEmailParent()
 
-	const node: Mail.DividerNode = $state({
+	const node: Mail.DividerNode = {
 		type: 'divider',
 		attrs: Object.keys(attrs)
-	})
+	}
 
 	onDestroy(addChild(parent, node))
 </script>
