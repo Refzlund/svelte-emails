@@ -45,14 +45,14 @@ will include both: `<mailto:email>, <href>`
 
 	const parent = getEmailParent()
 
-	const node: Mail.UnsubscribeNode = {
+	const node: Mail.UnsubscribeNode = $state({
 		type: 'unsubscribe',
-		href,
 		attrs: normalizeAttrs(attrs),
 		children: [],
-		...(content && { content }),
-		...(email && { email })
-	}
+		get href() { return href },
+		get content() { return content },
+		get email() { return email }
+	})
 
 	onDestroy(addChild(parent, node))
 	setEmailParent(node)

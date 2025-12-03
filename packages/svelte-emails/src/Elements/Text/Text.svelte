@@ -43,12 +43,12 @@ Variable interpolation: `[[variable_name]]` replaced at render time.
 	// Get parent and register this node
 	const parent = getEmailParent()
 
-	const node: Mail.TextNode = {
+	const node: Mail.TextNode = $state({
 		type: 'text',
-		content,
 		variant: 'default',
-		attrs: normalizeAttrs(attrs)
-	}
+		attrs: normalizeAttrs(attrs),
+		get content() { return content }
+	})
 
 	// Add to parent's children and setup cleanup
 	onDestroy(addChild(parent, node))

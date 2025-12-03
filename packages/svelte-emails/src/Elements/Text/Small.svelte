@@ -25,12 +25,12 @@ Renders smaller text, useful for disclaimers, fine print, or secondary informati
 
 	const parent = getEmailParent()
 
-	const node: Mail.TextNode = {
+	const node: Mail.TextNode = $state({
 		type: 'text',
-		content,
 		variant: 'small',
-		attrs: normalizeAttrs(attrs)
-	}
+		attrs: normalizeAttrs(attrs),
+		get content() { return content }
+	})
 
 	onDestroy(addChild(parent, node))
 </script>

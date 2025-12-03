@@ -88,7 +88,7 @@ Use `h-*` or `w-*` attributes to override the default size based on context.
 	 * - div with direction='cols' → horizontal context
 	 * - everything else → vertical context (default)
 	 */
-	function getLayoutContext(): 'vertical' | 'horizontal' | 'table-cell' {
+	const layoutContext = $derived.by((): 'vertical' | 'horizontal' | 'table-cell' => {
 		if (parent.type === 'table-row') {
 			return 'table-cell'
 		}
@@ -96,14 +96,14 @@ Use `h-*` or `w-*` attributes to override the default size based on context.
 			return 'horizontal'
 		}
 		return 'vertical'
-	}
+	})
 
-	const node: Mail.SpacerNode = {
+	const node: Mail.SpacerNode = $state({
 		type: 'spacer',
-		layoutContext: getLayoutContext(),
 		attrs: normalizeAttrs(attrs),
-		...(size && { size })
-	}
+		get layoutContext() { return layoutContext },
+		get size() { return size }
+	})
 
 	onDestroy(addChild(parent, node))
 </script>

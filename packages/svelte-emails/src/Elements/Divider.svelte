@@ -50,15 +50,18 @@ Falls back to `StyleConfig.Divider` defaults if not specified.
 	const parent = getEmailParent()
 
 	// Convert border prop to attribute syntax if provided
-	const normalizedAttrs = normalizeAttrs(attrs)
-	if (border) {
-		normalizedAttrs.push(`border-[${border}]`)
-	}
+	const attrs_ = $derived.by(() => {
+		const normalizedAttrs = normalizeAttrs(attrs)
+		if (border) {
+			normalizedAttrs.push(`border-[${border}]`)
+		}
+		return normalizedAttrs
+	})
 
-	const node: Mail.DividerNode = {
+	const node: Mail.DividerNode = $state({
 		type: 'divider',
-		attrs: normalizedAttrs
-	}
+		get attrs() { return attrs_ }
+	})
 
 	onDestroy(addChild(parent, node))
 </script>

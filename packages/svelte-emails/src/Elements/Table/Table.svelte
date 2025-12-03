@@ -42,30 +42,30 @@ Use `Table.Row` for each row. Row styles are inherited by child elements.
 	const attrKeys = normalizeAttrs(attrs)
 
 	// Parse column template from attrs
-	const colWidths = parseColumnTemplate(attrKeys)
+	const colWidths = $derived(parseColumnTemplate(attrKeys))
 
 	// Extract table flags from attrs
-	const border = 'border' in attrs
-	const borderOuter = 'border-outer' in attrs
-	const cellBorder = 'cell-border' in attrs
-	const striped = 'striped' in attrs
-	const compact = 'compact' in attrs
+	const border = $derived(attrs.border === true)
+	const borderOuter = $derived(attrs['border-outer'] === true)
+	const cellBorder = $derived(attrs['cell-border'] === true)
+	const striped = $derived(attrs.striped === true)
+	const compact = $derived(attrs.compact === true)
 
 	// Parse cell padding from attrs
-	const cellPadding = parseCellPadding(attrKeys)
+	const cellPadding = $derived(parseCellPadding(attrKeys))
 
-	const node: Mail.TableNode = {
+	const node: Mail.TableNode = $state({
 		type: 'table',
 		attrs: attrKeys,
 		children: [],
-		...(colWidths && { colWidths }),
-		...(border && { border }),
-		...(borderOuter && { borderOuter }),
-		...(cellBorder && { cellBorder }),
-		...(striped && { striped }),
-		...(compact && { compact }),
-		...(cellPadding !== undefined && { cellPadding })
-	}
+		get colWidths() { return colWidths },
+		get border() { return border },
+		get borderOuter() { return borderOuter },
+		get cellBorder() { return cellBorder },
+		get striped() { return striped },
+		get compact() { return compact },
+		get cellPadding() { return cellPadding }
+	})
 
 	onDestroy(addChild(parent, node))
 	setEmailParent(node)

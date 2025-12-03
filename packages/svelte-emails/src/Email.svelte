@@ -105,14 +105,14 @@ Use `max-w-*` to customize the content container width:
 		filteredAttrs.push(attr)
 	}
 
-	const node: Mail.EmailNode = {
+	const node: Mail.EmailNode = $state({
 		type: 'email',
 		attrs: filteredAttrs,
 		children: [],
-		...(preview && { preview }),
-		...(bodyBackground && { bodyBackground }),
-		...(maxWidth && { maxWidth })
-	}
+		get preview() { return preview },
+		get bodyBackground() { return bodyBackground },
+		get maxWidth() { return maxWidth }
+	})
 	
 	// Register with collector
 	collector.registerRoot(node)

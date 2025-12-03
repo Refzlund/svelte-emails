@@ -45,13 +45,13 @@ Link = inline), but the component code is 95% identical.
 
 	const parent = getEmailParent()
 
-	const node: Mail.ButtonNode = {
+	const node: Mail.ButtonNode = $state({
 		type: 'button',
-		href,
 		attrs: normalizeAttrs(attrs),
 		children: [],
-		...(content && { content })
-	}
+		get href() { return href },
+		get content() { return content }
+	})
 
 	onDestroy(addChild(parent, node))
 	setEmailParent(node)

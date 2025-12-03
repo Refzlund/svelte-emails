@@ -38,7 +38,7 @@ Widths are underscore-separated (e.g., `cols-[40%_30%_30%]`).
 	const parent = getEmailParent()
 
 	// Determine direction from boolean attrs
-	const direction: 'cols' | 'rows' | undefined = cols ? 'cols' : rows ? 'rows' : undefined
+	const direction: 'cols' | 'rows' | undefined = $derived(cols ? 'cols' : rows ? 'rows' : undefined)
 
 	// Don't auto-add w-full - let the renderer handle default widths
 	// This allows parent grids to control child widths via auto-calculation
@@ -46,20 +46,20 @@ Widths are underscore-separated (e.g., `cols-[40%_30%_30%]`).
 	const attrKeys = normalizeAttrs(attrs)
 
 	// Parse column/row templates from attrs
-	const colWidths = parseColumnTemplate(attrKeys)
-	const rowHeights = parseRowTemplate(attrKeys)
-	const gap = parseGap(attrKeys)
+	const colWidths = $derived(parseColumnTemplate(attrKeys))
+	const rowHeights = $derived(parseRowTemplate(attrKeys))
+	const gap = $derived(parseGap(attrKeys))
 
-	const node: Mail.DivNode = {
+	const node: Mail.DivNode = $state({
 		type: 'div',
-		direction,
-		responsiveGrid: responsive,
 		attrs: attrKeys,
 		children: [],
-		...(colWidths && { colWidths }),
-		...(rowHeights && { rowHeights }),
-		...(gap && { gap })
-	}
+		get direction() { return direction },
+		get responsiveGrid() { return responsive },
+		get colWidths() { return colWidths },
+		get rowHeights() { return rowHeights },
+		get gap() { return gap }
+	})
 
 	// Add to parent's children and setup cleanup
 	onDestroy(addChild(parent, node))

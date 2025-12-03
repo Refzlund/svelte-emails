@@ -25,12 +25,12 @@ Uses preset styling for H1 headings with optional horizontal rule.
 
 	const parent = getEmailParent()
 
-	const node: Mail.TextNode = {
+	const node: Mail.TextNode = $state({
 		type: 'text',
-		content,
 		variant: 'h1',
-		attrs: normalizeAttrs(attrs)
-	}
+		attrs: normalizeAttrs(attrs),
+		get content() { return content }
+	})
 
 	onDestroy(addChild(parent, node))
 </script>

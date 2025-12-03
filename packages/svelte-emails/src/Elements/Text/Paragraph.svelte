@@ -32,12 +32,12 @@ Ideal for body copy and longer text blocks.
 
 	const parent = getEmailParent()
 
-	const node: Mail.TextNode = {
+	const node: Mail.TextNode = $state({
 		type: 'text',
-		content,
 		variant: 'paragraph',
-		attrs: normalizeAttrs(attrs)
-	}
+		attrs: normalizeAttrs(attrs),
+		get content() { return content }
+	})
 
 	onDestroy(addChild(parent, node))
 </script>

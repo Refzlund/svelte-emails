@@ -18,10 +18,10 @@ Note: For line breaks within text content, use `\n` in the content string instea
 
 	const parent = getEmailParent()
 
-	const node: Mail.BrNode = {
+	const node: Mail.BrNode = $state({
 		type: 'br',
 		attrs: []
-	}
+	})
 
 	onDestroy(addChild(parent, node))
 </script>
