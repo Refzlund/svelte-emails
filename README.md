@@ -320,4 +320,4 @@ Name components `*.email.svelte`, then run:
 bunx svelte-emails
 ```
 
-Starts a dev server on port `33411` that discovers all `*.email.svelte` files.
+Starts a dev server on port `33411` that discovers all `*.email.svelte` files from CWD. It ignores patterns based on `.gitignore` and ignores `node_modules` as well.

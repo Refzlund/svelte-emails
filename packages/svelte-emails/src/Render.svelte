@@ -98,7 +98,7 @@ Sets up the IR tree collector context and provides bindable output.
 		<iframe
 			title="Email Preview"
 			srcdoc={rendered.html}
-			sandbox="allow-popups allow-popups-to-escape-sandbox"
+			sandbox="allow-popups allow-popups-to-escape-sandbox allow-scripts"
 			style="width: 100%; height: 100%; border: none;"
 		></iframe>
 	{:else if mode === 'text'}

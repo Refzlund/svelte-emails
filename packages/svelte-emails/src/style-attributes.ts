@@ -797,6 +797,9 @@ export type EmailAttributes =
 	& ColorAttributes
 	& TypographyAttributes
 	& AlignmentAttributes
+	& SafeBorderAttributes
+	& BorderRadiusAttributes
+	& EffectsAttributes
 
 // ============================================================================
 // COMPONENT-SPECIFIC ATTRIBUTE TYPES
@@ -911,8 +914,10 @@ export type TableAttributes =
 	& SafeBorderAttributes
 	& BorderRadiusAttributes
 	& AlignmentAttributes
+	& TypographyAttributes
 	& EffectsAttributes
 	& ColumnTemplateAttributes
+	& GapAttributes
 	& Attributes<
 		// Table-specific display options
 		| 'striped'       // Alternating row backgrounds
@@ -986,7 +991,7 @@ export type ImgAttributes =
 	& CoreStyleAttributes 
 	& LimitedWidthAttributes
 	& LimitedHeightAttributes
-	& PaddingAttributes 
+	& SpacingAttributes 
 	& SafeBorderAttributes 
 	& BorderRadiusAttributes
 
@@ -1019,4 +1024,6 @@ export type ButtonAttributes =
  */
 export type LinkAttributes = 
 	& CoreStyleAttributes
+	& PaddingAttributes
 	& TypographyAttributes
+	& EffectsAttributes

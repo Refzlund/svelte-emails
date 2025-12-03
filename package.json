@@ -1,12 +1,17 @@
 {
-	"name": "svelte-emaily-repository",
+	"name": "svelte-emails-repository",
+	"bin": {
+		"svelte-emails": "./run-emails.ts"
+	},
 	"scripts": {
-		"dev": "cd apps/dev && bun run dev"
+		"dev": "cd apps/dev && bun run dev",
+		"emails": "bun run run-emails.ts",
+		"build": "bun run scripts/build.ts"
 	},
 	"workspaces": {
 		"packages": [
 			"packages/*",
-			"apps/*"
+			"emails"
 		],
 		"catalog": {
 			"@sveltejs/kit": "^2.48.5",
@@ -15,5 +20,8 @@
 			"typescript": "^5.9.3",
 			"vite": "^7.2.2"
 		}
+	},
+	"devDependencies": {
+		"rolldown": "^1.0.0-beta.52"
 	}
 }

@@ -9,11 +9,15 @@
 	"sideEffects": [
 		"**/*.css"
 	],
-	"svelte": "./dist/index.js",
+	"svelte": "./src/index.ts",
 	"types": "./dist/index.d.ts",
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts"
+		".": {
+			"types": "./dist/index.d.ts",
+			"svelte": "./src/index.ts",
+			"default": "./src/index.ts"
+		}
 	},
 	"peerDependencies": {
 		"svelte": "^5.0.0"
