@@ -37,7 +37,7 @@ Build email templates using Svelte components with Tailwind-like styling attribu
     </Table>
 
     <Spacer />
-    <Unsubscribe href='...'>Unsubscribe</Unsubscribe>
+    <Unsubscribe href='...' content='Unsubscribe' />
 </Email>
 ```
 

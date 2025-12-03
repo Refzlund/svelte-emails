@@ -13,9 +13,7 @@ will include both: `<mailto:email>, <href>`
 
 @example
 ```svelte
-<Unsubscribe href='https://example.com/unsubscribe?token=abc123'>
-	Press here to unsubscribe
-</Unsubscribe>
+<Unsubscribe href='https://example.com/unsubscribe?token=abc123' content='Press here to unsubscribe' />
 
 <Unsubscribe 
 	href='https://example.com/unsubscribe' 

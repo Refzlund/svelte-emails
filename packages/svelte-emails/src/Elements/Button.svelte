@@ -19,11 +19,9 @@ Link = inline), but the component code is 95% identical.
 
 @example
 ```svelte
-	<Button href='https://example.com'>Click Me</Button>
+	<Button href='https://example.com' content='Click Me' />
 	<Button href='https://example.com' content='Get Started' bg-[#2563eb] text-[#ffffff] />
-	<Button href='https://example.com' bg-[#2563eb] text-[#ffffff] rounded-lg>
-		Get Started
-	</Button>
+	<Button href='https://example.com' content='Sign Up' bg-[#2563eb] text-[#ffffff] rounded-lg />
 ```
 
 @see EMAIL_CLIENT_SUPPORT.md for border-radius limitations in Outlook

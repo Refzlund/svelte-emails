@@ -448,13 +448,13 @@ All text components support the `content` prop with markdown syntax (see [Conten
 
 | Component | Purpose | Example |
 |-----------|---------|---------|
-| `<Button>` | CTA button | `<Button href='...'>Click</Button>` |
-| `<Link>` | Inline link | `<Link href='...'>Link text</Link>` |
+| `<Button>` | CTA button | `<Button href='...' content='Click' />` |
+| `<Link>` | Inline link | `<Link href='...' content='Link text' />` |
 | `<Img>` | Images | `<Img src='...' width={600} height={400} alt='...' />` |
 | `<Spacer>` | Vertical/horizontal space | `<Spacer h-6 />` |
 | `<Divider>` | Horizontal rule | `<Divider />` |
 | `<Br>` | Line break | `<Br />` |
-| `<Unsubscribe>` | Footer unsubscribe | `<Unsubscribe href='...'>Unsubscribe</Unsubscribe>` |
+| `<Unsubscribe>` | Footer unsubscribe | `<Unsubscribe href='...' content='Unsubscribe' />` |
 
 **Spacer context-aware behavior:**
 | Parent Context | Primary Dimension | Default Size |

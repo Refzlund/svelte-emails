@@ -295,6 +295,176 @@ const normalizedPath = filePath.replace(/\\/g, '/')
 
 ---
 
+## SSR Module Resolution & `ssr.noExternal`
+
+This section documents a critical piece of the CLI architecture: how Svelte components are loaded during SSR rendering.
+
+### The Problem
+
+When users run `bunx svelte-emails` (or install from npm), the CLI dev server needs to:
+1. Import user's `*.email.svelte` files
+2. Import `svelte-emails` components for rendering
+
+During SSR, Vite must decide for each dependency: should it **externalize** (let Node.js load it) or **process** (transform through Vite's pipeline)?
+
+```
+User Email Template (*.email.svelte)
+        │
+        ├── imports → svelte-emails (Email, Div, Text, etc.)
+        │                    │
+        │                    └── contains .svelte files
+        │
+        └── imports → User's other dependencies
+```
+
+**The failure mode:**
+
+By default, Vite externalizes npm packages during SSR for performance. When `svelte-emails` is externalized, Node.js tries to load `.svelte` files directly:
+
+```
+Error [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".svelte"
+```
+
+Node.js ESM doesn't understand `.svelte` files - they must be compiled to JavaScript first.
+
+### The Solution: `ssr.noExternal`
+
+The `vite.config.ts` includes:
+
+```typescript
+ssr: {
+  noExternal: ['svelte-emails']
+}
+```
+
+This tells Vite: "Don't externalize `svelte-emails` - process it through the Vite transform pipeline instead."
+
+When Vite processes the package:
+1. `vite-plugin-svelte` compiles `.svelte` → JavaScript
+2. Other Vite transforms run (TypeScript, etc.)
+3. The compiled code works in Node.js
+
+### Is This a Hack?
+
+**No, it's the intended solution.** The `vite-plugin-svelte` is *supposed* to auto-detect Svelte libraries and add them to `ssr.noExternal`. However, auto-detection can fail when:
+
+1. **Package installed in temp directory** - `bunx` creates ephemeral installs that may not be fully resolved at config time
+2. **Non-standard package manager resolution** - bun/pnpm/npm resolve dependencies differently
+3. **Timing issues** - The dependency graph isn't fully known when Vite config runs
+
+Explicitly setting `ssr.noExternal` is the documented workaround, used by many Svelte component libraries.
+
+### Caveats & Potential Issues
+
+#### 1. User Imports in Email Templates
+
+Users may import their own components/helpers into `*.email.svelte` files:
+
+```svelte
+<!-- MyEmail.email.svelte -->
+<script>
+  import { Email, Text } from 'svelte-emails'
+  import Header from './components/Header.svelte'        // ✅ Works (local file)
+  import { formatDate } from './utils/format.ts'         // ✅ Works (local file)
+  import { SomeComponent } from 'some-svelte-library'    // ⚠️ May fail
+</script>
+```
+
+| Import Type | Status | Notes |
+|-------------|--------|-------|
+| Local `.svelte` files | ✅ Works | Processed by Vite automatically |
+| Local `.ts`/`.js` files | ✅ Works | Processed by Vite automatically |
+| `svelte-emails` | ✅ Works | Explicitly in `noExternal` |
+| Other Svelte libraries | ⚠️ May fail | Depends on library's packaging |
+| Plain JS/TS npm packages | ✅ Works | Node.js loads directly |
+
+#### 2. When Other Svelte Libraries Fail
+
+If a user imports a third-party Svelte library and gets the `.svelte` extension error:
+
+**Workaround 1:** The user can create a `vite.config.ts` in their project:
+
+```typescript
+// In user's project root
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  ssr: {
+    noExternal: ['problematic-svelte-library']
+  }
+})
+```
+
+However, **this won't work** because the CLI runs its own Vite instance with its own config.
+
+**Workaround 2:** We could extend `noExternal` to include more patterns:
+
+```typescript
+ssr: {
+  noExternal: [
+    'svelte-emails',
+    /^svelte-/,  // Any package starting with "svelte-"
+    // Or even broader: all packages containing .svelte files
+  ]
+}
+```
+
+**Trade-off:** Broader patterns mean more packages processed through Vite, which is slower. But it prevents confusing errors for users.
+
+#### 3. The `ssrLoadModule` Chain
+
+When rendering an email:
+
+```typescript
+const mod = await server.ssrLoadModule(email.path)
+const { render } = await server.ssrLoadModule('svelte-emails')
+```
+
+The `ssrLoadModule` call triggers Vite's SSR module resolution for the entire import tree:
+
+```
+MyEmail.email.svelte
+  → svelte-emails (noExternal → Vite processes)
+    → svelte (framework, externalized)
+  → ./Header.svelte (local → Vite processes)
+  → some-svelte-lib (NOT in noExternal → externalized → MAY FAIL)
+```
+
+#### 4. Framework Dependencies
+
+Packages like `svelte` itself are intentionally externalized because:
+- They're pure JavaScript (no `.svelte` files at runtime)
+- They should match the version used by the compiled components
+- Externalizing prevents duplicate copies
+
+The `noExternal` should only include packages that contain uncompiled `.svelte` files.
+
+#### 5. Svelte Version Mismatches
+
+If the user's project uses Svelte 5 but a third-party library was compiled with Svelte 4:
+- The compiled output may be incompatible
+- This manifests as runtime errors, not module resolution errors
+- **This is unrelated to `noExternal`** - it's a general Svelte compatibility issue
+
+### Future Improvements
+
+1. **Auto-detect Svelte packages:** Scan `node_modules` for packages containing `.svelte` files and add them to `noExternal` automatically
+2. **User config merging:** Support reading the user's `vite.config.ts` and merging `ssr.noExternal` arrays
+3. **Better error messages:** Catch the `ERR_UNKNOWN_FILE_EXTENSION` error and provide actionable guidance
+4. **Package pre-check:** Validate imports before rendering and warn about potentially problematic packages
+
+### Summary
+
+| Scenario | Outcome |
+|----------|---------|
+| Import `svelte-emails` components | ✅ Works (explicit `noExternal`) |
+| Import local `.svelte` files | ✅ Works (Vite auto-processes) |
+| Import local `.ts`/`.js` utilities | ✅ Works |
+| Import compiled npm packages | ✅ Works (externalized to Node.js) |
+| Import other Svelte component libraries | ⚠️ May fail unless added to `noExternal` |
+
+---
+
 ## Configuration
 
 The plugin accepts options via environment variable:

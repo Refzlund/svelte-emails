@@ -51,7 +51,7 @@ Email templates use `*.email.svelte` naming:
   <Div p={spacing.section} bg={colors.bg}>
     <Text.H1 content='Welcome!' />
     <Text.Paragraph content='Thanks for signing up, [[first_name]]!' />
-    <Button href='https://example.com' bg={colors.brand}>Get Started</Button>
+    <Button href='https://example.com' content='Get Started' bg={colors.brand} />
   </Div>
 </Email>
 ```
@@ -231,22 +231,20 @@ render(MyEmail, {
 **Attributes:** Spacing, borders, border-radius, typography, colors
 
 ```svelte
-<Button href='https://...' bg-[#2563eb] text-[#fff] rounded-lg>
-  Click Me
-</Button>
+<Button href='https://...' content='Click Me' bg-[#2563eb] text-[#fff] rounded-lg />
 ```
 
-**Note:** Button is the only component that accepts text as children (for the button label).
+**Note:** Use the `content` prop for button labels. Markdown is supported in content.
 
 ### Link
 
 **Attributes:** Typography, colors, padding
 
 ```svelte
-<Link href='https://...'>website</Link>
+<Link href='https://...' content='website' />
 ```
 
-**Note:** Link accepts text as children (for the link label). For inline links within text, use markdown: `<Text content='Visit [our website](https://...)' />`
+**Note:** Use `content` prop for link text. For inline links within text, prefer markdown: `<Text content='Visit [our website](https://...)' />`
 
 ### Img
 
@@ -289,10 +287,10 @@ Context-aware: Height in rows/standalone, width in cols.
 ### Unsubscribe
 
 ```svelte
-<Unsubscribe href='https://...'>Unsubscribe</Unsubscribe>
+<Unsubscribe href='https://...' content='Unsubscribe' />
 ```
 
-**Note:** Unsubscribe accepts text as children (for the link label).
+**Note:** Use `content` prop for link text.
 
 ---
 
@@ -441,7 +439,7 @@ responsive    <!-- On Div cols: stack on mobile -->
 
 <Div bg={colors.bg} p={spacing.lg}>
   <Text text={colors.text} content='...' />
-  <Button bg={colors.brand}>Action</Button>
+  <Button content='Action' bg={colors.brand} />
 </Div>
 ```
 
@@ -479,7 +477,7 @@ responsive    <!-- On Div cols: stack on mobile -->
   
   <!-- Footer -->
   <Div p-4 bg-[#f5f5f5] text-[#666] text-sm align-center>
-    <Unsubscribe href='...'>Unsubscribe</Unsubscribe>
+    <Unsubscribe href='...' content='Unsubscribe' />
   </Div>
 </Email>
 ```
@@ -502,7 +500,7 @@ responsive    <!-- On Div cols: stack on mobile -->
 
 <!-- ❌ Repeating hex codes (hard to maintain) -->
 <Div bg-[#2563eb]>
-  <Button bg-[#2563eb]>Click</Button>
+  <Button content='Click' bg-[#2563eb] />
   <Text text-[#2563eb] content='...' />
 </Div>
 
@@ -519,7 +517,7 @@ responsive    <!-- On Div cols: stack on mobile -->
 </script>
 <Div bg={colors.brand} p-4>
   <Text content='Some text here' />
-  <Button bg={colors.brand}>Click</Button>
+    <Button content='Click' bg={colors.brand} />
 </Div>
 
 <!-- ✅ Use Div cols/rows -->
