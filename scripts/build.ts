@@ -232,7 +232,8 @@ export default defineConfig({
 		files: [
 			'dist',
 			'cli-app',
-			'bin'
+			'bin',
+			'LLM.md'
 		],
 		peerDependencies: {
 			svelte: '^5.0.0'
@@ -268,9 +269,12 @@ export default defineConfig({
 	// =========================================================================
 	// 5. Copy README and LICENSE
 	// =========================================================================
-	console.log('\n📝 Copying README...')
+	console.log('\n📝 Copying README, LLM.md...')
 	if (existsSync(resolve(rootDir, 'README.md'))) {
 		await cp(resolve(rootDir, 'README.md'), resolve(distDir, 'README.md'))
+	}
+	if (existsSync(resolve(rootDir, 'LLM.md'))) {
+		await cp(resolve(rootDir, 'LLM.md'), resolve(distDir, 'LLM.md'))
 	}
 	if (existsSync(resolve(rootDir, 'LICENSE'))) {
 		await cp(resolve(rootDir, 'LICENSE'), resolve(distDir, 'LICENSE'))
