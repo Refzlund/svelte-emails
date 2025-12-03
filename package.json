@@ -6,7 +6,9 @@
 	"scripts": {
 		"dev": "cd apps/dev && bun run dev",
 		"emails": "bun run run-emails.ts",
-		"build": "bun run scripts/build.ts"
+		"build": "bun run scripts/build.ts",
+		"link": "cd _dist && bun link && cd ..",
+		"unlink": "cd _dist && bun unlink && cd .."
 	},
 	"workspaces": {
 		"packages": [

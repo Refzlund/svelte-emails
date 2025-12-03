@@ -9,21 +9,25 @@
 	"sideEffects": [
 		"**/*.css"
 	],
-	"svelte": "./src/index.ts",
+	"svelte": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"type": "module",
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
-			"svelte": "./src/index.ts",
-			"default": "./src/index.ts"
+			"svelte": "./dist/index.js",
+			"default": "./dist/index.js"
 		}
+	},
+	"scripts": {
+		"build": "svelte-package -i src -o dist"
 	},
 	"peerDependencies": {
 		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
 		"@sveltejs/kit": "catalog:",
+		"@sveltejs/package": "^2.3.11",
 		"@sveltejs/vite-plugin-svelte": "catalog:",
 		"svelte": "catalog:",
 		"typescript": "catalog:"

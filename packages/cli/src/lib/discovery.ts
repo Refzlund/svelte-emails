@@ -48,10 +48,9 @@ function extractPreviewText(content: string): string {
 }
 
 /**
- * Parse .gitignore file and return patterns
+ * Parse .gitignore file and return patterns suitable for fast-glob ignore
  */
-function parseGitignore(cwd: string): string[] {
-	const gitignorePath = join(cwd, '.gitignore')
+function parseGitignore(gitignorePath: string): string[] {
 	if (!existsSync(gitignorePath)) return []
 
 	const content = readFileSync(gitignorePath, 'utf-8')
@@ -59,26 +58,87 @@ function parseGitignore(cwd: string): string[] {
 		.split('\n')
 		.map((line) => line.trim())
 		.filter((line) => line && !line.startsWith('#'))
+		.map((pattern) => {
+			// Convert gitignore patterns to glob patterns
+			// Remove leading slash (gitignore uses / for root-relative, but we want relative patterns)
+			if (pattern.startsWith('/')) {
+				pattern = pattern.slice(1)
+			}
+			// Ensure directory patterns match all contents
+			if (pattern.endsWith('/')) {
+				return `**/${pattern}**`
+			}
+			// If pattern doesn't have a slash, it should match anywhere
+			if (!pattern.includes('/')) {
+				return `**/${pattern}`
+			}
+			return pattern
+		})
+}
+
+/**
+ * Collect all .gitignore patterns from root and nested directories
+ */
+function collectGitignorePatterns(cwd: string): string[] {
+	const patterns: string[] = []
+	
+	// Read root .gitignore
+	const rootGitignore = join(cwd, '.gitignore')
+	patterns.push(...parseGitignore(rootGitignore))
+	
+	return patterns
+}
+
+/**
+ * Get comprehensive ignore patterns for file discovery
+ */
+export function getIgnorePatterns(cwd: string): string[] {
+	const gitignorePatterns = collectGitignorePatterns(cwd)
+
+	return [
+		// Always ignore these directories regardless of .gitignore
+		'**/node_modules/**',
+		'**/node_modules',
+		'**/.git/**',
+		'**/.git',
+		'**/.svelte-kit/**',
+		'**/.svelte-kit',
+		'**/dist/**',
+		'**/dist',
+		'**/build/**',
+		'**/build',
+		'**/.next/**',
+		'**/.nuxt/**',
+		'**/.output/**',
+		'**/.vercel/**',
+		'**/.netlify/**',
+		'**/coverage/**',
+		'**/.cache/**',
+		'**/tmp/**',
+		'**/temp/**',
+		'**/.turbo/**',
+		'**/.nx/**',
+		// Gitignore patterns from the project
+		...gitignorePatterns
+	]
 }
 
 /**
  * Discover all *.email.svelte files in a directory
+ * @param cwd - Working directory to scan
+ * @param skipPreview - Skip reading file contents for preview text (faster)
  */
-export async function discoverEmails(cwd: string): Promise<EmailFile[]> {
-	const gitignorePatterns = parseGitignore(cwd)
-
-	const ignorePatterns = [
-		'**/node_modules/**',
-		'**/.svelte-kit/**',
-		'**/dist/**',
-		'**/build/**',
-		...gitignorePatterns
-	]
+export async function discoverEmails(cwd: string, skipPreview = false): Promise<EmailFile[]> {
+	const ignorePatterns = getIgnorePatterns(cwd)
 
 	const files = await fg('**/*.email.svelte', {
 		cwd,
 		absolute: true,
-		ignore: ignorePatterns
+		ignore: ignorePatterns,
+		followSymbolicLinks: false,
+		suppressErrors: true,
+		concurrency: 4, // Limit concurrent fs operations
+		deep: 15 // Reasonable depth limit
 	})
 
 	const emails: EmailFile[] = []
@@ -87,11 +147,13 @@ export async function discoverEmails(cwd: string): Promise<EmailFile[]> {
 		const relativePath = relative(cwd, absolutePath)
 		let previewText = ''
 
-		try {
-			const content = readFileSync(absolutePath, 'utf-8')
-			previewText = extractPreviewText(content)
-		} catch {
-			// Ignore read errors
+		if (!skipPreview) {
+			try {
+				const content = readFileSync(absolutePath, 'utf-8')
+				previewText = extractPreviewText(content)
+			} catch {
+				// Ignore read errors
+			}
 		}
 
 		emails.push({

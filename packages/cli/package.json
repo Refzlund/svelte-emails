@@ -10,7 +10,7 @@
 	},
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build && bun run build:cli",
+		"build": "vite build",
 		"build:cli": "bun build src/cli.ts --outdir dist --target node",
 		"prepublishOnly": "bun run build"
 	},

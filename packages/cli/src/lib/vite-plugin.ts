@@ -22,6 +22,7 @@ export interface EmailListPluginOptions {
 export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 	let emails: EmailFile[] = []
 	let watcher: FSWatcher | null = null
+	let discoveryInterval: ReturnType<typeof setInterval> | null = null
 	const sseClients: Set<ServerResponse> = new Set()
 
 	/**
@@ -66,20 +67,53 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 				emails = await discoverEmails(options.cwd)
 			}
 
-			const watchDir = normalizePath(options.cwd)
 			console.log(`   [svelte-emails] Found ${emails.length} email(s)`)
 
-			// Setup file watcher with native FS events (low CPU)
-			watcher = watch(watchDir, {
+			// Track watched directories to add new ones dynamically
+			const watchedDirs = new Set<string>()
+
+			// Get unique directories containing email files
+			function getEmailDirs(): string[] {
+				const dirs = new Set<string>()
+				for (const email of emails) {
+					const dir = normalizePath(email.path.substring(0, email.path.lastIndexOf('/')))
+					dirs.add(dir)
+				}
+				return Array.from(dirs)
+			}
+
+			// Add directories to the watcher
+			function updateWatchedDirs() {
+				const currentDirs = getEmailDirs()
+				for (const dir of currentDirs) {
+					if (!watchedDirs.has(dir)) {
+						watchedDirs.add(dir)
+						watcher?.add(dir)
+						console.log(`   [svelte-emails] Now watching: ${dir}`)
+					}
+				}
+			}
+
+			// Initial directories to watch
+			const initialDirs = getEmailDirs()
+			initialDirs.forEach((dir) => watchedDirs.add(dir))
+
+			// If no emails found, watch the project root
+			const watchPaths = initialDirs.length > 0 
+				? initialDirs
+				: [normalizePath(options.cwd)]
+
+			// Setup file watcher - only watch specific directories for performance
+			watcher = watch(watchPaths, {
 				ignored: [
 					'**/node_modules/**',
-					'**/.svelte-kit/**',
-					'**/dist/**',
-					'**/build/**'
+					'**/.git/**',
+					'**/.svelte-kit/**'
 				],
 				ignoreInitial: true,
 				persistent: true,
 				usePolling: false,
+				depth: initialDirs.length > 0 ? 0 : 10,
 				awaitWriteFinish: {
 					stabilityThreshold: 50,
 					pollInterval: 20
@@ -94,13 +128,63 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 				console.error(`   [svelte-emails] Watcher error:`, error)
 			})
 
+			// Periodic discovery to find new email files in new directories
+			// This runs every 3 seconds and is very fast due to ignore patterns
+			let lastEmailCount = emails.length
+			let lastEmailPaths = new Set(emails.map((e) => e.path))
+
+			discoveryInterval = setInterval(async () => {
+				try {
+					// Use fast discovery (skip file reads) for periodic checks
+					const newEmails = await discoverEmails(options.cwd, true)
+					const newPaths = new Set(newEmails.map((e) => e.path))
+					
+					// Check if there are any new or removed files
+					const hasNewFiles = newEmails.some((e) => !lastEmailPaths.has(e.path))
+					const hasRemovedFiles = emails.some((e) => !newPaths.has(e.path))
+					
+					if (hasNewFiles || hasRemovedFiles) {
+						// Do a full discovery with preview text for the UI
+						const fullEmails = await discoverEmails(options.cwd, false)
+						console.log(`   [svelte-emails] Discovered ${fullEmails.length} email(s) (was ${lastEmailCount})`)
+						emails = fullEmails
+						lastEmailCount = fullEmails.length
+						lastEmailPaths = new Set(fullEmails.map((e) => e.path))
+						
+						// Add any new directories to the watcher
+						updateWatchedDirs()
+						
+						// Broadcast to clients
+						broadcastUpdate('emails', {
+							emails: toSafeEmails(emails),
+							event: 'discovery',
+							path: ''
+						})
+						
+						// Invalidate virtual module
+						invalidateModule(server, RESOLVED_VIRTUAL_MODULE_ID)
+					}
+				} catch {
+					// Ignore discovery errors
+				}
+			}, 3000)
+
 			// Debounced handler to coalesce rapid file events
 			const handleFileChange = debounce(async (event: string, filePath: string) => {
 				const normalizedPath = normalizePath(filePath)
 				console.log(`   [svelte-emails] [${event}] ${normalizedPath}`)
 
-				// Re-discover emails to get updated list
-				emails = await discoverEmails(options.cwd)
+				if (event === 'add' || event === 'unlink') {
+					// File added or removed - do full re-discovery
+					emails = await discoverEmails(options.cwd, false)
+					lastEmailPaths = new Set(emails.map((e) => e.path))
+					lastEmailCount = emails.length
+					
+					// Update watched dirs for new files
+					if (event === 'add') {
+						updateWatchedDirs()
+					}
+				}
 
 				// Broadcast updated list to all SSE clients
 				broadcastUpdate('emails', {
@@ -176,6 +260,9 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 		},
 
 		async closeBundle() {
+			if (discoveryInterval) {
+				clearInterval(discoveryInterval)
+			}
 			if (watcher) {
 				await watcher.close()
 			}

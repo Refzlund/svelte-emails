@@ -5,98 +5,75 @@
 ```
 svelte-emails/
 ├── packages/
-│   ├── svelte-emails/     # Core library for rendering email templates
-│   └── cli/               # Dev server CLI for previewing emails
-├── emails/                # Example email templates for testing
-├── run-emails.ts          # CLI wrapper for development
-└── package.json           # Monorepo root with workspace config
+│   ├── svelte-emails/     # Core library
+│   └── cli/               # Dev server CLI
+├── emails/                # Example templates
+├── scripts/build.ts       # Build script
+├── _dist/                 # Built output (git-ignored)
+└── run-emails.ts          # Dev CLI wrapper
 ```
 
 ## Prerequisites
 
 - [Bun](https://bun.sh/) v1.0+
 
-## Setup
+## Quick Start
 
-1. **Install dependencies**
-
-   ```bash
-   bun install
-   ```
-
-2. **Link the CLI for development**
-
-   This makes the `svelte-emails` command available globally, pointing to your local code:
-
-   ```bash
-   bun link
-   ```
+```bash
+bun install
+bun link          # Links source CLI globally
+svelte-emails     # Run from any directory
+```
 
 ## Development
 
-### Running the Email Dev Server
-
-After linking, you can run the dev server from anywhere in the monorepo:
+### Dev Server
 
 ```bash
-# Scans current directory for *.email.svelte files
-svelte-emails
-
-# With options
-svelte-emails --port 3000 --open
-
-# Scan a specific directory
-svelte-emails --cwd ./emails/src
+svelte-emails                      # Scan current directory
+svelte-emails --port 3000 --open   # Custom port + auto-open
+svelte-emails --cwd ./emails       # Scan specific directory
+bun run emails                     # Alternative via npm script
 ```
-
-Or use the npm script:
-
-```bash
-bun run emails
-```
-
-### Running the Example App
-
-```bash
-bun run dev
-```
-
-This runs the dev app from `apps/dev`.
 
 ### Testing Changes
 
-1. **Core library changes** (`packages/svelte-emails/`)
-   - Run the dev server and verify email rendering
-   - Check that styles are applied correctly
+- **Core library** (`packages/svelte-emails/`) — Run dev server, verify rendering
+- **CLI** (`packages/cli/`) — Test file discovery, live reload, SSE updates
+- **Type check**: `cd packages/cli && bunx svelte-check`
 
-2. **CLI changes** (`packages/cli/`)
-   - Run `svelte-emails` and test:
-     - File discovery (adding/removing `*.email.svelte` files)
-     - Live reload on file changes
-     - SSE updates in the browser
+## Build & Link for Testing
 
-3. **Type checking**
+To test the built package (as it would be published):
 
-   ```bash
-   cd packages/cli
-   bunx svelte-check
-   ```
+```bash
+bun run build     # Creates _dist/
+bun run link      # Registers svelte-emails globally
+```
+
+### Use in Another Project
+
+```bash
+bun link svelte-emails
+```
+
+Or in `package.json`:
+
+```json
+{ "dependencies": { "svelte-emails": "link:svelte-emails" } }
+```
+
+Then `bunx svelte-emails` to test.
+
+> **Note:** Re-run `bun run build` after changes.
 
 ## Unlinking
 
-To remove the global `svelte-emails` command:
-
 ```bash
-bun unlink svelte-emails-repository
+bun unlink svelte-emails
 ```
-
-Or manually remove it from your global bin directory:
-
-- **macOS/Linux**: `~/.bun/bin/svelte-emails`
-- **Windows**: `%USERPROFILE%\.bun\bin\svelte-emails`
 
 ## Architecture
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for details on the core library.
-
-See [ARCHITECTURE_CLI.md](ARCHITECTURE_CLI.md) for details on the CLI dev server.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Core library
+- [ARCHITECTURE_CLI.md](ARCHITECTURE_CLI.md) — CLI dev server
