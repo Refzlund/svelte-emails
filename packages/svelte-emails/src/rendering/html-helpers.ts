@@ -48,8 +48,24 @@ function toKebabCase(str: string): string {
 }
 
 /**
+ * Escape double quotes in CSS values for safe inclusion in HTML style attributes.
+ * Converts double quotes to single quotes in CSS values like font-family.
+ * 
+ * CSS allows both single and double quotes, so 'font-family: "Segoe UI"' becomes
+ * 'font-family: 'Segoe UI'' which is valid CSS and doesn't conflict with 
+ * double-quoted HTML attributes.
+ * 
+ * @param value - CSS property value
+ * @returns Value with double quotes converted to single quotes
+ */
+function escapeQuotesForStyleAttr(value: string): string {
+	return value.replace(/"/g, "'")
+}
+
+/**
  * Convert parsed attributes to inline CSS string.
  * Applies inherited values where needed for typography properties.
+ * Escapes double quotes to single quotes for HTML attribute safety.
  * 
  * @param css - CSS property-value record
  * @param inherited - Optional inherited styles to apply as defaults
@@ -62,6 +78,9 @@ function toKebabCase(str: string): string {
  * 
  * toInlineCSS({ padding: '16px' }, { color: '#333', fontSize: '14px' })
  * // → 'padding: 16px; color: #333; font-size: 14px'
+ * 
+ * toInlineCSS({ fontFamily: '"Segoe UI", Arial' })
+ * // → "font-family: 'Segoe UI', Arial" (quotes escaped for HTML safety)
  * ```
  */
 export function toInlineCSS(
@@ -81,7 +100,7 @@ export function toInlineCSS(
 
 	return Object.entries(finalCss)
 		.filter(([_, value]) => value !== undefined && value !== '')
-		.map(([property, value]) => `${toKebabCase(property)}: ${value}`)
+		.map(([property, value]) => `${toKebabCase(property)}: ${escapeQuotesForStyleAttr(value)}`)
 		.join('; ')
 }
 

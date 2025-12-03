@@ -10,16 +10,43 @@
 	interface Props {
 		code: string
 		highlightedHtml: string | null
+		/** Show toggle between formatted and raw view */
+		showToggle?: boolean
+		/** Raw (non-prettified) code to show when toggle is off */
+		rawCode?: string
 	}
 
-	const { code, highlightedHtml }: Props = $props()
+	const { code, highlightedHtml, showToggle = false, rawCode }: Props = $props()
+
+	let showFormatted = $state(true)
+
+	const displayCode = $derived(showFormatted ? code : (rawCode ?? code))
 </script>
 
 <div class="code-panel">
-	{#if highlightedHtml}
+	{#if showToggle}
+		<div class="toggle-bar">
+			<button
+				class="toggle-btn"
+				class:active={showFormatted}
+				onclick={() => (showFormatted = true)}
+			>
+				Formatted
+			</button>
+			<button
+				class="toggle-btn"
+				class:active={!showFormatted}
+				onclick={() => (showFormatted = false)}
+			>
+				Raw
+			</button>
+		</div>
+	{/if}
+
+	{#if showFormatted && highlightedHtml}
 		{@html highlightedHtml}
 	{:else}
-		<pre><code>{code}</code></pre>
+		<pre><code>{displayCode}</code></pre>
 	{/if}
 </div>
 
@@ -28,6 +55,40 @@
 		height: 100%;
 		overflow: auto;
 		background: #0d1117;
+		position: relative;
+	}
+
+	.toggle-bar {
+		display: flex;
+		gap: 4px;
+		padding: 12px;
+		position: absolute;
+		top: 0;
+		right: 0;
+		z-index: 1;
+	}
+
+	.toggle-btn {
+		padding: 6px 12px;
+		font-size: 12px;
+		font-family: inherit;
+		border: 1px solid #30363d;
+		border-radius: 6px;
+		background: transparent;
+		color: #8b949e;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.toggle-btn:hover {
+		background: #21262d;
+		color: #e6edf3;
+	}
+
+	.toggle-btn.active {
+		background: #21262d;
+		color: #e6edf3;
+		border-color: #8b949e;
 	}
 
 	.code-panel :global(pre) {

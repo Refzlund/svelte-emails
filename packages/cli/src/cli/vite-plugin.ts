@@ -313,16 +313,24 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 
 			const mod = await ssrEnv.runner.import(email.path)
 			const EmailComponent = mod.default
-			const { render } = await ssrEnv.runner.import('svelte-emails')
+			const { render, formatHtml } = await ssrEnv.runner.import('svelte-emails')
 
 			const rendered = await render(EmailComponent, { placeholders: {} })
 			const source = readFileSync(email.path, 'utf-8')
+
+			// Format HTML for display (better syntax highlighting, readability)
+			// Keep original minified HTML for actual email sending
+			const formattedRendered = {
+				...rendered,
+				html: formatHtml(rendered.html),
+				htmlRaw: rendered.html
+			}
 
 			res.setHeader('Content-Type', 'application/json')
 			res.end(JSON.stringify({
 				email: toSafeEmail(email),
 				source,
-				rendered,
+				rendered: formattedRendered,
 				renderError: null
 			}))
 		} catch (err) {

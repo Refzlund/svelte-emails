@@ -140,8 +140,12 @@ export {
 	Br,
 	Unsubscribe,
 	Table,
-	renderTree
+	renderTree,
+	formatHtml
 }
+
+// Re-export formatHtml from rendering
+import { formatHtml } from './rendering'
 
 // Re-export render types
 export type { RenderOutput, RenderOptions }

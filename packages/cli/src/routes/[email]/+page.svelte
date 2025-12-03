@@ -162,7 +162,9 @@
 			{#if effectiveData.rendered}
 				<CodeView
 					code={effectiveData.rendered.html}
+					rawCode={effectiveData.rendered.htmlRaw}
 					highlightedHtml={highlighter.state.html}
+					showToggle
 				/>
 			{/if}
 		{:else if mode === 'text'}

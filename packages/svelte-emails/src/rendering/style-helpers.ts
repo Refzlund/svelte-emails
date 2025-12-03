@@ -9,6 +9,25 @@ import type { StyleConfig } from './types'
 import type { CellAttrs } from './parse-attrs'
 
 // ============================================================================
+// Quote Escaping
+// ============================================================================
+
+/**
+ * Escape double quotes in CSS values for safe inclusion in HTML style attributes.
+ * Converts double quotes to single quotes in CSS values like font-family.
+ * 
+ * CSS allows both single and double quotes, so 'font-family: "Segoe UI"' becomes
+ * 'font-family: 'Segoe UI'' which is valid CSS and doesn't conflict with 
+ * double-quoted HTML attributes.
+ * 
+ * @param value - CSS property value
+ * @returns Value with double quotes converted to single quotes
+ */
+function escapeQuotesForStyleAttr(value: unknown): string {
+	return String(value).replace(/"/g, "'")
+}
+
+// ============================================================================
 // Config to Style Mapping
 // ============================================================================
 
@@ -58,7 +77,7 @@ export function buildStyleFromConfig<T extends object>(
 	for (const [configKey, cssProperty] of Object.entries(mapping)) {
 		const value = (config as Record<string, unknown>)[configKey]
 		if (value !== undefined && value !== null && value !== '') {
-			styles.push(`${cssProperty}: ${value}`)
+			styles.push(`${cssProperty}: ${escapeQuotesForStyleAttr(value)}`)
 		}
 	}
 

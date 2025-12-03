@@ -7,6 +7,7 @@ import type { SafeEmail } from '$cli/types.js'
 
 export interface RenderedEmail {
 	html: string
+	htmlRaw: string
 	text: string
 }
 
