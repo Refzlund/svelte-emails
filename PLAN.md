@@ -245,11 +245,6 @@ chokidar.watch('**/*.email.svelte', {
 - Vite for HMR and fast refresh
 - Can use `svelte-emails` components directly
 
-### Why not extend existing `apps/dev`?
-- CLI needs to be standalone, publishable package
-- Must work in any project directory
-- Different routing structure (dynamic emails)
-
 ### Virtual modules vs. API routes
 - Virtual modules: Good for static data, fast
 - API routes: Better for dynamic imports, SSR

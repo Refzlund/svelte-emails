@@ -6,10 +6,10 @@ inline anchor links within text content.
 
 @example
 ```svelte
-	<!-- Prefer inline markdown links within Text -->
+	// Prefer inline markdown links within Text
 	<Text content='Visit [our website](https://example.com) for more info.' />
 
-	<!-- Or use Link component with content prop -->
+	// Or use Link component with content prop
 	<Link href='https://example.com' content='Click here' text-[#2563eb] />
 ```
 

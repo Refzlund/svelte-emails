@@ -15,9 +15,9 @@
 		"prepublishOnly": "bun run build"
 	},
 	"dependencies": {
-		"svelte-emails": "workspace:*",
+		"chokidar": "^4.0.3",
 		"fast-glob": "^3.3.3",
-		"chokidar": "^4.0.3"
+		"svelte-emails": "workspace:*"
 	},
 	"devDependencies": {
 		"@sveltejs/kit": "^2.48.5",
@@ -25,6 +25,7 @@
 		"@types/node": "^22.15.29",
 		"svelte": "^5.43.8",
 		"typescript": "^5.9.3",
-		"vite": "^7.2.2"
+		"vite": "^7.2.2",
+		"vite-plugin-devtools-json": "^1.0.0"
 	}
 }

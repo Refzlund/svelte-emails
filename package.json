@@ -4,8 +4,7 @@
 		"svelte-emails": "./run-emails.ts"
 	},
 	"scripts": {
-		"dev": "cd apps/dev && bun run dev",
-		"emails": "bun run run-emails.ts",
+		"dev": "bun run packages/cli/src/cli.ts",
 		"build": "bun run scripts/build.ts",
 		"link": "cd _dist && bun link && cd ..",
 		"unlink": "cd _dist && bun unlink && cd .."
@@ -24,6 +23,8 @@
 		}
 	},
 	"devDependencies": {
-		"rolldown": "^1.0.0-beta.52"
+		"@types/bun": "^1.3.3",
+		"rolldown": "^1.0.0-beta.52",
+		"svelte-emails": "workspace:*"
 	}
 }

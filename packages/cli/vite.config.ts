@@ -1,38 +1,51 @@
-import { sveltekit } from '@sveltejs/kit/vite'
-import { defineConfig } from 'vite'
-import { emailListPlugin } from './src/lib/vite-plugin.js'
-import { resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import devtoolsJson from 'vite-plugin-devtools-json';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { defineConfig } from 'vite';
+import { emailListPlugin } from './src/lib/vite-plugin.js';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Determine the CWD for email discovery
 // - When run via CLI: SVELTE_EMAILS_CWD is set by cli.ts
 // - When run via npm/bun dev: fall back to apps/dev for development
 function getEmailsCwd(): string {
 	if (process.env.SVELTE_EMAILS_CWD) {
-		return resolve(process.env.SVELTE_EMAILS_CWD)
+		return resolve(process.env.SVELTE_EMAILS_CWD);
 	}
+
 	// Default to apps/dev for local development
-	return resolve(__dirname, '../../apps/dev')
+	return resolve(__dirname, '../../apps/dev');
 }
 
 // Find the root of the installed package (handles bunx temp directories)
 function getPackageRoot(): string {
 	// Go up from cli-app to the package root
-	return resolve(__dirname, '..')
+	return resolve(__dirname, '..');
+}
+
+// Resolve svelte-emails to its source for development
+// This allows email templates to import 'svelte-emails' without building the package
+function getSvelteEmailsPath(): string {
+	// In monorepo development, point to the source
+	return resolve(__dirname, '../svelte-emails/src/index.ts');
 }
 
 export default defineConfig({
 	plugins: [
 		// emailListPlugin MUST come before sveltekit so its middleware runs first
-		emailListPlugin({
-			cwd: getEmailsCwd()
-		}),
-		sveltekit()
+		emailListPlugin({ cwd: getEmailsCwd() }),
+		sveltekit(),
+		devtoolsJson()
 	],
 	// Optimize startup time when running in user's project
 	cacheDir: resolve(__dirname, 'node_modules/.vite'),
+	resolve: {
+		alias: { // Resolve 'svelte-emails' to the source for development
+		// This ensures the module runner can find it regardless of where emails are located
+		'svelte-emails': getSvelteEmailsPath() }
+	},
 	optimizeDeps: {
 		// Don't scan the user's project for dependencies
 		// The CLI only needs its own dependencies
@@ -42,9 +55,7 @@ export default defineConfig({
 		// Force cache to be in CLI directory
 		force: false
 	},
-	ssr: {
-		noExternal: ['svelte-emails']
-	},
+	ssr: { noExternal: ['svelte-emails'] },
 	server: {
 		// Allow serving files from the user's email directory
 		fs: {
@@ -72,4 +83,4 @@ export default defineConfig({
 			]
 		}
 	}
-})
+});

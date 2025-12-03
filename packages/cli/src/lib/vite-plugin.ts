@@ -1,4 +1,4 @@
-import type { Plugin, ViteDevServer } from 'vite'
+import { isRunnableDevEnvironment, type Plugin, type ViteDevServer } from 'vite'
 import { watch, type FSWatcher } from 'chokidar'
 import { discoverEmails } from './discovery.js'
 import { readFileSync } from 'node:fs'
@@ -294,12 +294,20 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 			return
 		}
 
+		// Verify we have a runnable SSR environment
+		const ssrEnv = server.environments.ssr
+		if (!isRunnableDevEnvironment(ssrEnv)) {
+			res.statusCode = 500
+			res.end(JSON.stringify({ error: 'SSR environment is not runnable' }))
+			return
+		}
+
 		try {
 			invalidateModule(server, email.path)
 
-			const mod = await server.ssrLoadModule(email.path)
+			const mod = await ssrEnv.runner.import(email.path)
 			const EmailComponent = mod.default
-			const { render } = await server.ssrLoadModule('svelte-emails')
+			const { render } = await ssrEnv.runner.import('svelte-emails')
 
 			const rendered = await render(EmailComponent, { placeholders: {} })
 			const source = readFileSync(email.path, 'utf-8')
@@ -312,6 +320,8 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 				renderError: null
 			}))
 		} catch (err) {
+			console.error(`[svelte-emails] Error when handling request for ${emailId}`, err)
+
 			let source = ''
 			try {
 				source = readFileSync(email.path, 'utf-8')

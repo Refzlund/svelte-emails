@@ -27,13 +27,10 @@ svelte-emails     # Run from any directory
 
 ## Development
 
-### Dev Server
+### Dev Server in Monorepo
 
 ```bash
-svelte-emails                      # Scan current directory
-svelte-emails --port 3000 --open   # Custom port + auto-open
-svelte-emails --cwd ./emails       # Scan specific directory
-bun run emails                     # Alternative via npm script
+bun run dev
 ```
 
 ### Testing Changes
