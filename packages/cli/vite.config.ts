@@ -42,6 +42,9 @@ export default defineConfig({
 		// Force cache to be in CLI directory
 		force: false
 	},
+	ssr: {
+		noExternal: ['svelte-emails']
+	},
 	server: {
 		// Allow serving files from the user's email directory
 		fs: {

@@ -117,6 +117,10 @@ export default defineConfig({
 		// Don't force re-optimization
 		force: false
 	},
+	// SSR config - svelte-emails must be processed by Vite, not loaded by Node directly
+	ssr: {
+		noExternal: ['svelte-emails']
+	},
 	server: {
 		fs: {
 			allow: [
