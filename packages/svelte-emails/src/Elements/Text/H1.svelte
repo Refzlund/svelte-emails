@@ -14,7 +14,7 @@ Uses preset styling for H1 headings with optional horizontal rule.
 <script lang='ts'>
 	import { onDestroy } from 'svelte'
 	import type { TextAttributes } from '../../style-attributes'
-	import { getEmailParent, addChild, type Mail } from '../../context'
+	import { getEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 
 	interface Props extends TextAttributes {
 		/** Text content with markdown-like syntax support */
@@ -29,7 +29,7 @@ Uses preset styling for H1 headings with optional horizontal rule.
 		type: 'text',
 		content,
 		variant: 'h1',
-		attrs: Object.keys(attrs)
+		attrs: normalizeAttrs(attrs)
 	}
 
 	onDestroy(addChild(parent, node))

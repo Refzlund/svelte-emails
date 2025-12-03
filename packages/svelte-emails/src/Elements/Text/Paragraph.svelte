@@ -21,7 +21,7 @@ Ideal for body copy and longer text blocks.
 <script lang='ts'>
 	import { onDestroy } from 'svelte'
 	import type { TextAttributes } from '../../style-attributes'
-	import { getEmailParent, addChild, type Mail } from '../../context'
+	import { getEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 
 	interface Props extends TextAttributes {
 		/** Text content with markdown-like syntax support */
@@ -36,7 +36,7 @@ Ideal for body copy and longer text blocks.
 		type: 'text',
 		content,
 		variant: 'paragraph',
-		attrs: Object.keys(attrs)
+		attrs: normalizeAttrs(attrs)
 	}
 
 	onDestroy(addChild(parent, node))

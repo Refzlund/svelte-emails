@@ -14,7 +14,7 @@ and alignment (`align-*`, `justify-*`). Children can override with their own att
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { TableRowAttributes } from '../../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, type Mail } from '../../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 
 	interface Props extends TableRowAttributes {
 		/** Row cells (Text or other components) */
@@ -30,7 +30,7 @@ and alignment (`align-*`, `justify-*`). Children can override with their own att
 
 	const node: Mail.TableRowNode = {
 		type: 'table-row',
-		attrs: Object.keys(attrs),
+		attrs: normalizeAttrs(attrs),
 		children: [],
 		...(header && { header })
 	}

@@ -32,7 +32,7 @@ Link = inline), but the component code is 95% identical.
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { ButtonAttributes } from '../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, type Mail } from '../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../context'
 
 	interface Props extends ButtonAttributes {
 		/** URL the button links to */
@@ -50,7 +50,7 @@ Link = inline), but the component code is 95% identical.
 	const node: Mail.ButtonNode = {
 		type: 'button',
 		href,
-		attrs: Object.keys(attrs),
+		attrs: normalizeAttrs(attrs),
 		children: [],
 		...(content && { content })
 	}

@@ -363,6 +363,13 @@ Generic container supporting grid layouts via `cols` or `rows`:
   <Div>30%</Div>
 </Div>
 
+<!-- Value syntax with spaces (equivalent to above) -->
+<Div cols cols="40% 30% 30%">
+  <Div>40%</Div>
+  <Div>30%</Div>
+  <Div>30%</Div>
+</Div>
+
 <!-- Gap between children -->
 <Div cols gap-4>...</Div>
 
@@ -384,8 +391,8 @@ Generic container supporting grid layouts via `cols` or `rows`:
 | `cols` | Horizontal layout (single `<tr>` with multiple `<td>`) |
 | `rows` | Vertical layout (multiple `<tr>`) |
 | `responsive` | Stack columns on mobile (only with `cols`) |
-| `cols-[40%_30%_30%]` | Column widths (underscore-separated) |
-| `rows-[100px_auto]` | Row heights (underscore-separated) |
+| `cols-[40%_30%_30%]` or `cols="40% 30% 30%"` | Column widths (underscore-separated in bracket syntax, space-separated in value syntax) |
+| `rows-[100px_auto]` or `rows="100px auto"` | Row heights (underscore-separated in bracket syntax, space-separated in value syntax) |
 | `gap-4` / `gap-[20px]` | Space between children |
 | `span-2` through `span-12` | Column span |
 | `row-span-2` through `row-span-12` | Row span |
@@ -419,7 +426,7 @@ For tabular data with proper semantics:
 | `cell-border` | Cell borders only |
 | `striped` | Alternating row backgrounds |
 | `compact` | Reduced cell padding |
-| `cols-[...]` | Column widths |
+| `cols-[...]` or `cols="..."` | Column widths (e.g., `cols-[40%_20%_20%_20%]` or `cols="40% 20% 20% 20%"`) |
 | `cell-padding-4` | Override cell padding |
 
 **Table.Row attributes:**
@@ -479,6 +486,57 @@ Parsed at render time to:
 }
 ```
 
+### Two Syntax Options
+
+All bracket-style attributes support two equivalent syntaxes:
+
+| Syntax | Example | Use Case |
+|--------|---------|----------|
+| **Boolean (Tailwind-like)** | `bg-[#f3f4f6]` | Static values |
+| **Value (for variables)** | `bg="#f3f4f6"` or `bg={color}` | Dynamic values from Svelte |
+
+```svelte
+<!-- Boolean syntax -->
+<Div bg-[#f3f4f6] p-[1rem] w-[500px] />
+
+<!-- Value syntax (identical result) -->
+<Div bg="#f3f4f6" p="1rem" w="500px" />
+
+<!-- Value syntax with Svelte variables -->
+<script>
+  let brandColor = '#ff6600'
+  let spacing = '2rem'
+  let columnWidth = '50%'
+</script>
+<Div bg={brandColor} p={spacing} w={columnWidth}>
+  Dynamic styling!
+</Div>
+```
+
+**Supported value attributes:**
+- **Sizing:** `w`, `h`, `min-w`, `max-w`, `min-h`
+- **Spacing:** `p`, `pt`, `pr`, `pb`, `pl`, `px`, `py`, `m`, `mt`, `mr`, `mb`, `ml`, `mx`, `my`
+- **Colors:** `text`, `bg`, `text-opacity`, `bg-opacity`, `border-opacity`
+- **Typography:** `leading`, `tracking`
+- **Borders:** `border`, `border-t`, `border-r`, `border-b`, `border-l`, `border-x`, `border-y`, `rounded`, `rounded-*`
+- **Layout:** `cols`, `rows`, `gap`, `span`, `row-span`, `cell-padding`
+- **Effects:** `opacity`
+- **Email:** `body-bg`
+
+**Note for `cols` and `rows`:** The value syntax uses **spaces** instead of underscores to separate widths/heights:
+
+```svelte
+<!-- Bracket syntax uses underscores -->
+<Div cols cols-[40%_30%_30%]>...</Div>
+<Table cols-[40%_20%_20%_20%]>...</Table>
+
+<!-- Value syntax uses spaces -->
+<Div cols cols="40% 30% 30%">...</Div>
+<Table cols="40% 20% 20% 20%">...</Table>
+```
+
+**Implementation:** The `normalizeAttrs()` helper in `context.ts` converts value attributes to bracket syntax before parsing (converting spaces to underscores for `cols`/`rows`). Both syntaxes are normalized to the same internal representation.
+
 ### Attribute Reference
 
 #### Spacing
@@ -486,6 +544,7 @@ Parsed at render time to:
 ```svelte
 <Div p-4 px-8 py-2 />           <!-- padding -->
 <Div m-4 mx-auto mt-2 />        <!-- margin (emulated via wrapper) -->
+<Div p="1rem" m="16px" />       <!-- value syntax -->
 ```
 
 Scale: `0`, `0.5`, `1`, `1.5`, `2`, `2.5`, `3`, `3.5`, `4`, `5`, `6`, `7`, `8`, `9`, `10`, `11`, `12`, `14`, `16`, `20`, `24`, `28`, `32`, `36`, `40`, `44`, `48`, `52`, `56`, `60`, `64`, `72`, `80`, `96`
@@ -501,6 +560,7 @@ Scale: `0`, `0.5`, `1`, `1.5`, `2`, `2.5`, `3`, `3.5`, `4`, `5`, `6`, `7`, `8`, 
 ```svelte
 <Div w-full h-auto />
 <Div w-[500px] h-[200px] />
+<Div w="500px" h="200px" />     <!-- value syntax -->
 <Div w-screen h-screen />       <!-- Alias for 100% -->
 <Div max-w-xl min-h-[100px] />
 ```
@@ -511,6 +571,7 @@ Max-width presets: `sm` (384px), `md` (448px), `lg` (512px), `xl` (576px), `2xl`
 
 ```svelte
 <Div bg-[#f3f4f6] text-[#333333] />
+<Div bg="#f3f4f6" text="#333333" />  <!-- value syntax -->
 <Div bg-[#000000]/50 />         <!-- 50% opacity (blended) -->
 <Div bg-opacity-50 bg-[#000000] />  <!-- Same result -->
 <Div text-inherit />            <!-- Use inherited color -->
@@ -555,6 +616,7 @@ Max-width presets: `sm` (384px), `md` (448px), `lg` (512px), `xl` (576px), `2xl`
 ```svelte
 <Div border border-[#e5e7eb] />
 <Div border-2 border-dashed rounded-lg />
+<Div border="2px" rounded="8px" />  <!-- value syntax -->
 <Div border-opacity-50 />       <!-- Border color opacity -->
 ```
 
@@ -625,16 +687,18 @@ The `opacity-*` attribute acts as a multiplier on all color opacities within tha
 
 ### Utilities Summary
 
+All bracket attributes (`*-[value]`) also support value syntax (`*="value"` or `*={variable}`).
+
 | Category | ✅ Safe | ⚠️ Caution | ❌ Avoid |
 |----------|---------|------------|----------|
-| **Width** | `w-[px/%]`, `w-full`, `w-screen` | `max-w-*`, `min-w-*` | `w-[fr]`, `w-[vw]` |
-| **Height** | `h-[px]`, `h-auto`, `h-full` | `min-h-*` | `max-h-*`, `h-[vh]` |
-| **Spacing** | `p-*`, `m-*` (emulated) | — | — |
+| **Width** | `w-[px/%]`, `w="..."`, `w-full` | `max-w-*`, `min-w-*` | `w-[fr]`, `w-[vw]` |
+| **Height** | `h-[px]`, `h="..."`, `h-auto` | `min-h-*` | `max-h-*`, `h-[vh]` |
+| **Spacing** | `p-*`, `p="..."`, `m-*` (emulated) | — | — |
 | **Typography** | All `text-*`, `font-*` | — | — |
-| **Colors** | `text-[#]`, `bg-[#]`, `/opacity` | — | — |
-| **Borders** | `border-*` | `rounded-*` (Outlook) | `shadow-*` |
+| **Colors** | `text-[#]`, `bg-[#]`, `bg="..."` | — | — |
+| **Borders** | `border-*`, `border="..."` | `rounded-*` (Outlook) | `shadow-*` |
 | **Layout** | `align-*`, `justify-*` | — | `flex`, `grid` |
-| **Effects** | `opacity-*` (emulated) | — | `transform`, `filter`, `transition` |
+| **Effects** | `opacity-*`, `opacity="..."` | — | `transform`, `filter`, `transition` |
 | **Responsive** | `mobile-only`, `desktop-only` | — | `sm:`, `md:`, `lg:` |
 
 ---

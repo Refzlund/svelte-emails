@@ -14,7 +14,7 @@ Renders smaller text, useful for disclaimers, fine print, or secondary informati
 <script lang='ts'>
 	import { onDestroy } from 'svelte'
 	import type { TextAttributes } from '../../style-attributes'
-	import { getEmailParent, addChild, type Mail } from '../../context'
+	import { getEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 
 	interface Props extends TextAttributes {
 		/** Text content with markdown-like syntax support */
@@ -29,7 +29,7 @@ Renders smaller text, useful for disclaimers, fine print, or secondary informati
 		type: 'text',
 		content,
 		variant: 'small',
-		attrs: Object.keys(attrs)
+		attrs: normalizeAttrs(attrs)
 	}
 
 	onDestroy(addChild(parent, node))

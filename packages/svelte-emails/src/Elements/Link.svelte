@@ -19,7 +19,7 @@ inline anchor links within text content.
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { LinkAttributes } from '../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, type Mail } from '../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../context'
 
 	interface Props extends LinkAttributes {
 		/** Link destination URL */
@@ -37,7 +37,7 @@ inline anchor links within text content.
 	const node: Mail.LinkNode = {
 		type: 'link',
 		href,
-		attrs: Object.keys(attrs),
+		attrs: normalizeAttrs(attrs),
 		children: [],
 		...(content && { content })
 	}

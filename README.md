@@ -98,6 +98,13 @@ Use `cols` or `rows` on `<Div>` to arrange children in a grid:
     <Div>30%</Div>
 </Div>
 
+<!-- Value syntax with spaces (equivalent to above) -->
+<Div cols cols="40% 30% 30%">
+    <Div>40%</Div>
+    <Div>30%</Div>
+    <Div>30%</Div>
+</Div>
+
 <!-- Gap between children -->
 <Div cols gap-4>...</Div>
 <Div rows gap-[20px]>...</Div>
@@ -133,7 +140,7 @@ For tabular data with proper semantics:
 ```
 
 **Table Attributes:**
-- `cols-[...]` — Column widths (e.g., `cols-[40%_30%_30%]`)
+- `cols-[...]` or `cols="..."` — Column widths (e.g., `cols-[40%_30%_30%]` or `cols="40% 30% 30%"`)
 - `border` — Full borders (outer + cells)
 - `border-outer` — Outer border only
 - `cell-border` — Cell borders only
@@ -179,15 +186,23 @@ The root `<Email>` component supports separate body and content backgrounds:
 >
   ...
 </Email>
+
+<!-- Or with value syntax for variables -->
+<script>
+    let bodyBg = '#f0f4f8'
+</script>
+<Email subject='Welcome!' body-bg={bodyBg} bg="#ffffff">
+  ...
+</Email>
 ```
 
 | Attribute | Purpose | Default |
 |-----------|---------|---------|
 | `subject` | Email subject line | (required) |
 | `preview` | Preheader text | `''` |
-| `body-bg-[#hex]` | Outer body background (full width) | `#ffffff` |
-| `bg-[#hex]` | Content container background | `#ffffff` |
-| `max-w-[Npx]` | Content container max-width | `600px` |
+| `body-bg-[#hex]` or `body-bg="#hex"` | Outer body background (full width) | `#ffffff` |
+| `bg-[#hex]` or `bg="#hex"` | Content container background | `#ffffff` |
+| `max-w-[Npx]` or `max-w="Npx"` | Content container max-width | `600px` |
 
 The body background (`body-bg-*`) is the root color for opacity blending throughout the email.
 
@@ -195,12 +210,50 @@ The body background (`body-bg-*`) is the root color for opacity blending through
 
 ## Styling Attributes
 
-Tailwind-like attributes on any component:
+Tailwind-like attributes on any component.
+
+### Two Syntax Options
+
+All bracket-style attributes support two syntax options:
+
+```svelte
+<!-- Boolean syntax (Tailwind-like) -->
+<Div bg-[#f3f4f6] p-[1rem] />
+
+<!-- Value syntax (for Svelte variables) -->
+<Div bg="#f3f4f6" p="1rem" />
+```
+
+The value syntax enables using Svelte variables:
+
+```svelte
+<script>
+    let brandColor = '#ff6600'
+    let spacing = '2rem'
+</script>
+
+<Div bg={brandColor} p={spacing}>
+    Dynamic styling!
+</Div>
+```
+
+Both syntaxes work identically — use whichever fits your needs.
+
+**Note for `cols` and `rows`:** The value syntax uses spaces instead of underscores:
+
+```svelte
+<!-- Bracket syntax uses underscores -->
+<Div cols cols-[40%_30%_30%]>...</Div>
+
+<!-- Value syntax uses spaces -->
+<Div cols cols="40% 30% 30%">...</Div>
+```
 
 ### Sizing
 ```svelte
 <Div w-full h-auto />
 <Div w-[500px] h-[200px] />
+<Div w="500px" h="200px" />   <!-- value syntax -->
 <Div max-w-xl min-h-[100px] />
 ```
 
@@ -208,12 +261,14 @@ Tailwind-like attributes on any component:
 ```svelte
 <Div p-4 px-8 />           <!-- padding -->
 <Div m-4 mx-auto />        <!-- margin (emulated via wrapper) -->
+<Div p="1rem" m="16px" />  <!-- value syntax -->
 ```
 
 ### Colors
 ```svelte
 <Div bg-[#f3f4f6] text-[#333333] />
-<Div bg-opacity-50 bg-[#000000] />  <!-- 50% opacity -->
+<Div bg="#f3f4f6" text="#333333" />  <!-- value syntax -->
+<Div bg-opacity-50 bg-[#000000] />   <!-- 50% opacity -->
 ```
 
 ### Typography
@@ -233,6 +288,7 @@ Tailwind-like attributes on any component:
 ```svelte
 <Div border border-[#e5e7eb] />
 <Div border-2 border-dashed rounded-lg />
+<Div border="2px" rounded="8px" />  <!-- value syntax -->
 ```
 
 ### Responsive
@@ -248,6 +304,7 @@ Tailwind-like attributes on any component:
 ### Opacity
 ```svelte
 <Div opacity-75>75% opacity (all colors blended)</Div>
+<Div opacity="0.75">Same result with value syntax</Div>
 ```
 
 ---
@@ -300,7 +357,7 @@ import MyEmail from './MyEmail.email.svelte'
 
 const result = await render(MyEmail, {
     placeholders: { first_name: 'John' }, // replaces [[first_name]] in content
-    style: merge(presets.serif, { ... }),
+    style: merge(presets.dark, presets.serif, { ... }),
     props: {...} // props passed onto the component
 })
 

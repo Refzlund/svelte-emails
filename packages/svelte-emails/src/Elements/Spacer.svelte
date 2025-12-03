@@ -49,7 +49,7 @@ Use `h-*` or `w-*` attributes to override the default size based on context.
 <script lang='ts'>
 	import { onDestroy } from 'svelte'
 	import type { Attributes, SpanAttributes, SafeWidthAttributes, ResponsiveAttributes } from '../style-attributes'
-	import { getEmailParent, addChild, type Mail } from '../context'
+	import { getEmailParent, addChild, normalizeAttrs, type Mail } from '../context'
 
 	type SpacerScales = 
 		| 'h-0' | 'h-0.25' | 'h-0.5' | 'h-0.75' | 'h-1' | 'h-1.5' 
@@ -101,7 +101,7 @@ Use `h-*` or `w-*` attributes to override the default size based on context.
 	const node: Mail.SpacerNode = {
 		type: 'spacer',
 		layoutContext: getLayoutContext(),
-		attrs: Object.keys(attrs),
+		attrs: normalizeAttrs(attrs),
 		...(size && { size })
 	}
 

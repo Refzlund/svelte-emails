@@ -30,7 +30,7 @@ will include both: `<mailto:email>, <href>`
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { TextAttributes } from '../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, type Mail } from '../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../context'
 
 	interface Props extends TextAttributes {
 		/** Unsubscribe URL */
@@ -50,7 +50,7 @@ will include both: `<mailto:email>, <href>`
 	const node: Mail.UnsubscribeNode = {
 		type: 'unsubscribe',
 		href,
-		attrs: Object.keys(attrs),
+		attrs: normalizeAttrs(attrs),
 		children: [],
 		...(content && { content }),
 		...(email && { email })

@@ -24,7 +24,7 @@ Widths are underscore-separated (e.g., `cols-[40%_30%_30%]`).
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { DivAttributes } from '../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, type Mail } from '../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../context'
 	import { parseColumnTemplate, parseRowTemplate, parseGap } from '../rendering/parse-attrs'
 
 	interface Props extends DivAttributes {
@@ -42,7 +42,8 @@ Widths are underscore-separated (e.g., `cols-[40%_30%_30%]`).
 
 	// Don't auto-add w-full - let the renderer handle default widths
 	// This allows parent grids to control child widths via auto-calculation
-	const attrKeys = Object.keys(attrs)
+	// normalizeAttrs converts value-attributes (bg="#fff") to bracket syntax (bg-[#fff])
+	const attrKeys = normalizeAttrs(attrs)
 
 	// Parse column/row templates from attrs
 	const colWidths = parseColumnTemplate(attrKeys)

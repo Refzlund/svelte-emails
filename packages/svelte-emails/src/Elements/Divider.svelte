@@ -25,7 +25,7 @@ Falls back to `StyleConfig.Divider` defaults if not specified.
 <script lang='ts'>
 	import { onDestroy } from 'svelte'
 	import type { Attributes } from '../style-attributes'
-	import { getEmailParent, addChild, type Mail } from '../context'
+	import { getEmailParent, addChild, normalizeAttrs, type Mail } from '../context'
 
 	type DividerBorderWidth = 'border-0' | 'border-1' | 'border-2' | 'border-4' | 'border-8'
 
@@ -47,7 +47,7 @@ Falls back to `StyleConfig.Divider` defaults if not specified.
 
 	const node: Mail.DividerNode = {
 		type: 'divider',
-		attrs: Object.keys(attrs)
+		attrs: normalizeAttrs(attrs)
 	}
 
 	onDestroy(addChild(parent, node))

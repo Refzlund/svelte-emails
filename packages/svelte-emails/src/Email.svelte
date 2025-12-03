@@ -37,7 +37,7 @@ Use `max-w-*` to customize the content container width:
 <script lang='ts'>
 	import type { Snippet } from 'svelte'
 	import type { EmailAttributes } from './style-attributes'
-	import { getEmailRoot, setEmailParent, type Mail, type Collector } from './context'
+	import { getEmailRoot, setEmailParent, normalizeAttrs, type Mail, type Collector } from './context'
 	import { hasContext } from 'svelte'
 	import { EMAIL_ROOT_CONTEXT_KEY } from './context'
 
@@ -61,8 +61,8 @@ Use `max-w-*` to customize the content container width:
 	// Get the collector from context (works in both client and SSR)
 	const collector: Collector = getEmailRoot()
 
-	// Extract body-bg-[#...] from attrs
-	const attrKeys = Object.keys(attrs)
+	// normalizeAttrs converts value-attributes (body-bg="#f5f5f5") to bracket syntax (body-bg-[#f5f5f5])
+	const attrKeys = normalizeAttrs(attrs)
 	let bodyBackground: string | undefined
 	let maxWidth: number | undefined
 	const filteredAttrs: string[] = []

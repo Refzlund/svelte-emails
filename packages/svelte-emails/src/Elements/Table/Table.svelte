@@ -27,7 +27,7 @@ Use `Table.Row` for each row. Row styles are inherited by child elements.
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { TableAttributes } from '../../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, type Mail } from '../../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 	import { parseColumnTemplate, parseCellPadding } from '../../rendering/parse-attrs'
 
 	interface Props extends TableAttributes {
@@ -38,7 +38,8 @@ Use `Table.Row` for each row. Row styles are inherited by child elements.
 	const { children, ...attrs }: Props = $props()
 
 	const parent = getEmailParent()
-	const attrKeys = Object.keys(attrs)
+	// normalizeAttrs converts value-attributes (bg="#fff") to bracket syntax (bg-[#fff])
+	const attrKeys = normalizeAttrs(attrs)
 
 	// Parse column template from attrs
 	const colWidths = parseColumnTemplate(attrKeys)

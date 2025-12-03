@@ -4,6 +4,21 @@
  * This module defines Tailwind-like style attributes that are compatible with
  * email clients. Each category is documented with support levels.
  * 
+ * ## Attribute Syntax Options
+ * 
+ * All bracket-style attributes support two syntax options:
+ * 
+ * 1. **Boolean syntax** (Tailwind-like): `<Div bg-[#ffffff] />`
+ * 2. **Value syntax** (for variables): `<Div bg="#ffffff" />` or `<Div bg={myColor} />`
+ * 
+ * The value syntax enables using Svelte variables:
+ * ```svelte
+ * <script>
+ *   let brandColor = '#ff6600'
+ * </script>
+ * <Div bg={brandColor}>Dynamic background!</Div>
+ * ```
+ * 
  * Support Legend:
  * - ✅ Safe (~95-100%) - Works in virtually all email clients
  * - ⚠️ Partial (~70-85%) - Works in most clients, but Outlook may ignore
@@ -13,7 +28,11 @@
  * @see CSS_UTILITIES_REFERENCE.md for utility-specific support matrices
  */
 
+/** Boolean attributes: `{ 'attr-name': true }` */
 export type Attributes<T extends string> = { [K in T]?: true }
+
+/** Value attributes: `{ 'attr': 'value' }` for use with Svelte variables */
+export type ValueAttributes<T extends string> = { [K in T]?: string | number }
 
 /** Numeric scales for spacing, sizing, etc. */
 type Scales<T extends string> = 
@@ -28,6 +47,92 @@ type Scales<T extends string> =
 
 
 // ============================================================================
+// VALUE ATTRIBUTE TYPES (for Svelte variable support)
+// ============================================================================
+
+/**
+ * Value-based sizing attributes.
+ * Use these with Svelte variables: `<Div w={myWidth} />`
+ */
+export type SizingValueAttributes = ValueAttributes<
+	| 'w' | 'h' | 'min-w' | 'max-w' | 'min-h'
+>
+
+/**
+ * Value-based spacing attributes.
+ * Use these with Svelte variables: `<Div p={myPadding} m={myMargin} />`
+ */
+export type SpacingValueAttributes = ValueAttributes<
+	| 'p' | 'pt' | 'pr' | 'pb' | 'pl' | 'px' | 'py'
+	| 'm' | 'mt' | 'mr' | 'mb' | 'ml' | 'mx' | 'my'
+>
+
+/**
+ * Value-based color attributes.
+ * Use these with Svelte variables: `<Div bg={myColor} text={textColor} />`
+ */
+export type ColorValueAttributes = ValueAttributes<
+	| 'text' | 'bg'
+	| 'text-opacity' | 'bg-opacity' | 'border-opacity'
+>
+
+/**
+ * Value-based typography attributes.
+ * Use these with Svelte variables: `<Text leading={myLineHeight} />`
+ */
+export type TypographyValueAttributes = ValueAttributes<
+	| 'leading' | 'tracking'
+>
+
+/**
+ * Value-based border attributes.
+ * Use these with Svelte variables: `<Div border={myBorderWidth} rounded={myRadius} />`
+ */
+export type BorderValueAttributes = ValueAttributes<
+	| 'border' | 'border-t' | 'border-r' | 'border-b' | 'border-l' | 'border-x' | 'border-y'
+	| 'rounded' | 'rounded-t' | 'rounded-r' | 'rounded-b' | 'rounded-l'
+	| 'rounded-tl' | 'rounded-tr' | 'rounded-br' | 'rounded-bl'
+>
+
+/**
+ * Value-based layout attributes.
+ * Use these with Svelte variables: `<Div cols={myCols} gap={myGap} />`
+ */
+export type LayoutValueAttributes = ValueAttributes<
+	| 'cols' | 'rows' | 'gap' | 'span' | 'row-span' | 'cell-padding'
+>
+
+/**
+ * Value-based effect attributes.
+ * Use these with Svelte variables: `<Div opacity={myOpacity} />`
+ */
+export type EffectValueAttributes = ValueAttributes<
+	| 'opacity'
+>
+
+/**
+ * Value-based email-specific attributes.
+ * Use these with Svelte variables: `<Email body-bg={myBg} />`
+ */
+export type EmailValueAttributes = ValueAttributes<
+	| 'body-bg'
+>
+
+/**
+ * All value-based attributes combined.
+ * These attributes accept string/number values for use with Svelte variables.
+ */
+export type AllValueAttributes = 
+	& SizingValueAttributes
+	& SpacingValueAttributes
+	& ColorValueAttributes
+	& TypographyValueAttributes
+	& BorderValueAttributes
+	& LayoutValueAttributes
+	& EffectValueAttributes
+
+
+// ============================================================================
 // SIZING ATTRIBUTES
 // ============================================================================
 
@@ -39,6 +144,8 @@ type Scales<T extends string> =
  * 
  * **Note:** `w-screen` is supported as an alias for `w-full` (100%).
  * Actual viewport units (`100vw`) are not supported in email.
+ * 
+ * **Value syntax:** `<Div w="500px" />` or `<Div w={myWidth} />`
  */
 export type SafeWidthAttributes = Attributes<
 	| Scales<'w'> 
@@ -800,6 +907,7 @@ export type EmailAttributes =
 	& SafeBorderAttributes
 	& BorderRadiusAttributes
 	& EffectsAttributes
+	& EmailValueAttributes  // Value syntax support
 
 // ============================================================================
 // COMPONENT-SPECIFIC ATTRIBUTE TYPES
@@ -841,6 +949,15 @@ export type EmailAttributes =
  *   <Div w-[50%]>Column 2</Div>
  * </Div>
  * ```
+ * 
+ * **Value syntax:** All bracket attributes support value syntax for Svelte variables:
+ * ```svelte
+ * <script>
+ *   let bgColor = '#f0f0f0'
+ *   let padding = '1rem'
+ * </script>
+ * <Div bg={bgColor} p={padding}>Dynamic styling!</Div>
+ * ```
  */
 export type DivAttributes = 
 	& CoreStyleAttributes 
@@ -856,6 +973,7 @@ export type DivAttributes =
 	& SpanAttributes
 	& ColumnTemplateAttributes
 	& GapAttributes
+	& AllValueAttributes  // Value syntax support
 	& Attributes<
 		| 'cols' | 'rows'
 		| 'responsive'  // Collapse columns to single-column on mobile (only with cols)
@@ -868,6 +986,14 @@ export type DivAttributes =
  * Use `justify-*` for text alignment within the text block.
  * Use `align-*` for positioning when used inside Table.Row or Div cols/rows.
  * Use `span-*` to span multiple columns in table layouts.
+ * 
+ * **Value syntax:** Supports value syntax for Svelte variables:
+ * ```svelte
+ * <script>
+ *   let textColor = '#333333'
+ * </script>
+ * <Text text={textColor} content='Dynamic color!' />
+ * ```
  */
 export type TextAttributes = 
 	& CoreStyleAttributes 
@@ -876,6 +1002,7 @@ export type TextAttributes =
 	& JustifyAttributes
 	& AlignmentAttributes
 	& SpanAttributes
+	& AllValueAttributes  // Value syntax support
 
 /**
  * Table component attributes.
@@ -918,6 +1045,7 @@ export type TableAttributes =
 	& EffectsAttributes
 	& ColumnTemplateAttributes
 	& GapAttributes
+	& AllValueAttributes  // Value syntax support
 	& Attributes<
 		// Table-specific display options
 		| 'striped'       // Alternating row backgrounds
@@ -970,6 +1098,7 @@ export type TableRowAttributes =
 	& JustifyAttributes
 	& EffectsAttributes
 	& ColorAttributes
+	& AllValueAttributes  // Value syntax support
 	& Attributes<
 		| 'header'  // Marks this row as a header row (renders as <th> cells)
 	>
@@ -994,6 +1123,9 @@ export type ImgAttributes =
 	& SpacingAttributes 
 	& SafeBorderAttributes 
 	& BorderRadiusAttributes
+	& SizingValueAttributes  // Value syntax for w, h
+	& SpacingValueAttributes  // Value syntax for p, m
+	& BorderValueAttributes  // Value syntax for border, rounded
 
 /**
  * Button component attributes.
@@ -1008,6 +1140,7 @@ export type ButtonAttributes =
 	& BorderRadiusAttributes 
 	& TypographyAttributes
 	& JustifyAttributes
+	& AllValueAttributes  // Value syntax support
 
 /**
  * Link component attributes.
@@ -1027,3 +1160,6 @@ export type LinkAttributes =
 	& PaddingAttributes
 	& TypographyAttributes
 	& EffectsAttributes
+	& ColorValueAttributes  // Value syntax for text, bg
+	& SpacingValueAttributes  // Value syntax for p
+	& EffectValueAttributes  // Value syntax for opacity

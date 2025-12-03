@@ -255,6 +255,125 @@ export function setEmailParent(node: Mail.IRParentNode): Mail.IRParentNode {
  */
 const isSSR = typeof window === 'undefined'
 
+// ============================================================================
+// Attribute Normalization
+// ============================================================================
+
+/**
+ * Attribute prefixes that support value syntax.
+ * These are the prefixes that can be used with either:
+ * - Bracket syntax: `bg-[#ffffff]` (works as boolean attribute)
+ * - Value syntax: `bg="#ffffff"` (works with Svelte variables)
+ * 
+ * The value syntax is converted to bracket syntax during normalization.
+ */
+const VALUE_ATTR_PREFIXES = [
+	// Sizing
+	'w', 'h', 'min-w', 'max-w', 'min-h',
+	// Spacing
+	'p', 'pt', 'pr', 'pb', 'pl', 'px', 'py',
+	'm', 'mt', 'mr', 'mb', 'ml', 'mx', 'my',
+	// Colors
+	'text', 'bg', 'text-opacity', 'bg-opacity', 'border-opacity',
+	// Typography
+	'leading', 'tracking',
+	// Borders
+	'border', 'border-t', 'border-r', 'border-b', 'border-l', 'border-x', 'border-y',
+	'rounded', 'rounded-t', 'rounded-r', 'rounded-b', 'rounded-l',
+	'rounded-tl', 'rounded-tr', 'rounded-br', 'rounded-bl',
+	// Layout
+	'span', 'row-span', 'cols', 'rows', 'gap', 'cell-padding',
+	// Email
+	'body-bg',
+	// Effects
+	'opacity'
+] as const
+
+/**
+ * Normalize attributes from component props to consistent string format.
+ * 
+ * Converts value-style attributes (e.g., `bg="#ffffff"`) to bracket syntax
+ * (e.g., `bg-[#ffffff]`) while preserving boolean attributes as-is.
+ * 
+ * This allows using Svelte variables with style attributes:
+ * ```svelte
+ * <script>
+ *   let color = '#ff0000'
+ * </script>
+ * <Div bg={color}>  <!-- Works! Converted to bg-[#ff0000] -->
+ * ```
+ * 
+ * Special handling for `cols` and `rows`: spaces are converted to underscores
+ * to match the bracket syntax format (e.g., `cols="20% 50% 30%"` → `cols-[20%_50%_30%]`).
+ * 
+ * @param attrs - The attrs object from $props() spread
+ * @returns Array of normalized attribute strings
+ * 
+ * @example
+ * ```ts
+ * // Boolean attributes (existing Tailwind-like syntax)
+ * normalizeAttrs({ 'bg-[#fff]': true, 'p-4': true })
+ * // → ['bg-[#fff]', 'p-4']
+ * 
+ * // Value attributes (new syntax for variables)
+ * normalizeAttrs({ bg: '#fff', p: '1rem' })
+ * // → ['bg-[#fff]', 'p-[1rem]']
+ * 
+ * // cols/rows with spaces (converted to underscores)
+ * normalizeAttrs({ cols: '20% 50% 30%' })
+ * // → ['cols-[20%_50%_30%]']
+ * 
+ * // Mixed
+ * normalizeAttrs({ 'p-4': true, bg: '#fff' })
+ * // → ['p-4', 'bg-[#fff]']
+ * ```
+ */
+export function normalizeAttrs(attrs: Record<string, unknown>): string[] {
+	const result: string[] = []
+
+	for (const [key, value] of Object.entries(attrs)) {
+		// Boolean attribute (existing syntax): { 'bg-[#fff]': true }
+		if (value === true) {
+			result.push(key)
+			continue
+		}
+
+		// Skip false/null/undefined values
+		if (value === false || value === null || value === undefined) {
+			continue
+		}
+
+		// Value attribute: { bg: '#fff' } → 'bg-[#fff]'
+		// Check if the key is a valid value-attribute prefix
+		if (typeof value === 'string' || typeof value === 'number') {
+			// Check for exact match against known value attribute prefixes
+			const isValueAttr = (VALUE_ATTR_PREFIXES as readonly string[]).includes(key)
+
+			if (isValueAttr) {
+				// For numeric values, convert to string
+				let strValue = String(value)
+				
+				// Special handling for cols/rows: convert spaces to underscores
+				// This allows `cols="20% 50% 30%"` to work like `cols-[20%_50%_30%]`
+				if (key === 'cols' || key === 'rows') {
+					strValue = strValue.replace(/\s+/g, '_')
+				}
+				
+				// Check if value is already wrapped in brackets
+				if (strValue.startsWith('[') && strValue.endsWith(']')) {
+					result.push(`${key}-${strValue}`)
+				} else {
+					result.push(`${key}-[${strValue}]`)
+				}
+			}
+			// Unknown attributes with values are silently ignored
+			// (they're not style attributes we recognize)
+		}
+	}
+
+	return result
+}
+
 /**
  * Add a child node to a parent node.
  * Handles the type narrowing for different parent types.

@@ -31,7 +31,7 @@ Variable interpolation: `[[variable_name]]` replaced at render time.
 <script lang='ts'>
 	import { onDestroy } from 'svelte'
 	import type { TextAttributes } from '../../style-attributes'
-	import { getEmailParent, addChild, type Mail } from '../../context'
+	import { getEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 
 	interface Props extends TextAttributes {
 		/** Text content with markdown-like syntax support */
@@ -47,7 +47,7 @@ Variable interpolation: `[[variable_name]]` replaced at render time.
 		type: 'text',
 		content,
 		variant: 'default',
-		attrs: Object.keys(attrs)
+		attrs: normalizeAttrs(attrs)
 	}
 
 	// Add to parent's children and setup cleanup
