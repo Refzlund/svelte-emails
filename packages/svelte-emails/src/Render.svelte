@@ -32,7 +32,7 @@ Sets up the IR tree collector context and provides bindable output.
 	import { formatHtml } from './rendering'
 	import type { StyleConfig } from './styles'
 
-	interface Props {
+	export interface Props {
 		/** Render mode: 'preview' shows in iframe, 'text' shows plain text, 'html' shows HTML source */
 		mode?: 'preview' | 'text' | 'html'
 		/** 

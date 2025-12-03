@@ -26,7 +26,7 @@ Build email templates using Svelte components with Tailwind-like styling attribu
   import { Email, Div, Text, Table, Spacer, Button } from 'svelte-emails'
 </script>
 
-<Email subject='Example' preview='Email preview text'>
+<Email preview='Email preview text'>
   <Text.Paragraph content='Hi [[first_name]], check out our updates!' />
   
   <Div cols gap-4 responsive>
@@ -114,7 +114,7 @@ Produces this IR:
 ```ts
 {
   type: 'email',
-  subject: '...',
+  preview: '...',
   bodyBackground: '#f8fafc',
   maxWidth: 600,
   attrs: [],
@@ -316,7 +316,6 @@ Components register via Svelte context using stable `Symbol.for()` keys (require
 
 ```svelte
 <Email
-  subject='Welcome!'
   preview='Your account is ready'
   body-bg-[#f0f4f8]
   bg-[#ffffff]
@@ -328,8 +327,7 @@ Components register via Svelte context using stable `Symbol.for()` keys (require
 
 | Attribute | Purpose | Default |
 |-----------|---------|---------|
-| `subject` | Email subject line | (required) |
-| `preview` | Preheader text shown in inbox | `''` |
+| `preview` | Preheader text (shown in inbox list) | `''` |
 | `body-bg-[#hex]` | Outer body background (full width) | `#ffffff` |
 | `bg-[#hex]` | Content container background | `#ffffff` |
 | `max-w-[Npx]` | Content container max-width | `600px` |
@@ -1029,7 +1027,7 @@ Name email templates `*.email.svelte` for auto-discovery.
 - [ ] All images have `alt`, `width`, `height`
 - [ ] All links use `https://`
 - [ ] Readable with images disabled
-- [ ] Subject and preview text set
+- [ ] Preview text set
 - [ ] Unsubscribe link present
 
 ### Testing Tools

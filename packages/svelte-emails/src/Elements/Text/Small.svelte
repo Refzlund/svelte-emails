@@ -16,7 +16,7 @@ Renders smaller text, useful for disclaimers, fine print, or secondary informati
 	import type { TextAttributes } from '../../style-attributes'
 	import { getEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 
-	interface Props extends TextAttributes {
+	export interface Props extends TextAttributes {
 		/** Text content with markdown-like syntax support */
 		content: string
 	}

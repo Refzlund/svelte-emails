@@ -30,7 +30,7 @@ Use `Table.Row` for each row. Row styles are inherited by child elements.
 	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 	import { parseColumnTemplate, parseCellPadding } from '../../rendering/parse-attrs'
 
-	interface Props extends TableAttributes {
+	export interface Props extends TableAttributes {
 		/** Table rows (Table.Row components) */
 		children?: Snippet
 	}

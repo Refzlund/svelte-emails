@@ -9,7 +9,7 @@ Build email templates using Svelte components with Tailwind-like styling attribu
     import { Email, Div, Text, Table, Spacer, Unsubscribe } from 'svelte-emails'
 </script>
 
-<Email subject='Example' preview='Email preview text'>
+<Email preview='Email preview text'>
     <Text.Paragraph content='Hi [[first_name]], check out our updates!' />
     
     <Div cols gap-4 responsive>
@@ -178,7 +178,6 @@ The root `<Email>` component supports separate body and content backgrounds:
 
 ```svelte
 <Email
-  subject='Welcome!'
   preview='Your account is ready'
   body-bg-[#f0f4f8]
   bg-[#ffffff]
@@ -191,15 +190,14 @@ The root `<Email>` component supports separate body and content backgrounds:
 <script>
     let bodyBg = '#f0f4f8'
 </script>
-<Email subject='Welcome!' body-bg={bodyBg} bg="#ffffff">
+<Email preview='Your account is ready' body-bg={bodyBg} bg="#ffffff">
   ...
 </Email>
 ```
 
 | Attribute | Purpose | Default |
 |-----------|---------|---------|
-| `subject` | Email subject line | (required) |
-| `preview` | Preheader text | `''` |
+| `preview` | Preheader text (shown in inbox list) | `''` |
 | `body-bg-[#hex]` or `body-bg="#hex"` | Outer body background (full width) | `#ffffff` |
 | `bg-[#hex]` or `bg="#hex"` | Content container background | `#ffffff` |
 | `max-w-[Npx]` or `max-w="Npx"` | Content container max-width | `600px` |

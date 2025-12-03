@@ -13,7 +13,7 @@ Heading 5 text component.
 	import type { TextAttributes } from '../../style-attributes'
 	import { getEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 
-	interface Props extends TextAttributes {
+	export interface Props extends TextAttributes {
 		/** Text content with markdown-like syntax support */
 		content: string
 	}

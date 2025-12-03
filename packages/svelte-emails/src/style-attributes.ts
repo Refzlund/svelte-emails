@@ -28,8 +28,8 @@
  * @see CSS_UTILITIES_REFERENCE.md for utility-specific support matrices
  */
 
-/** Boolean attributes: `{ 'attr-name': true }` */
-export type Attributes<T extends string> = { [K in T]?: true }
+/** Boolean attributes: `{ 'attr-name': true }` - These are optional and accept true or boolean */
+export type Attributes<T extends string> = { [K in T]?: boolean }
 
 /** Value attributes: `{ 'attr': 'value' }` for use with Svelte variables */
 export type ValueAttributes<T extends string> = { [K in T]?: string | number }
@@ -85,22 +85,64 @@ export type TypographyValueAttributes = ValueAttributes<
 >
 
 /**
- * Value-based border attributes.
- * Use these with Svelte variables: `<Div border={myBorderWidth} rounded={myRadius} />`
+ * Value-based border attributes (excluding properties that have dual-purpose types).
+ * Note: rounded and border properties are handled in dual-purpose types below.
  */
-export type BorderValueAttributes = ValueAttributes<
-	| 'border' | 'border-t' | 'border-r' | 'border-b' | 'border-l' | 'border-x' | 'border-y'
-	| 'rounded' | 'rounded-t' | 'rounded-r' | 'rounded-b' | 'rounded-l'
-	| 'rounded-tl' | 'rounded-tr' | 'rounded-br' | 'rounded-bl'
->
+export type BorderValueAttributes = ValueAttributes<never>
+
+/**
+ * Dual-purpose border attributes.
+ * These can be either boolean (enable border) or string (set border color/width).
+ * - Boolean: `<Div border>` - enables default border
+ * - String: `<Div border={colors.border}>` - sets border color
+ */
+export type BorderDualAttributes = {
+	border?: boolean | string
+	'border-t'?: boolean | string
+	'border-r'?: boolean | string
+	'border-b'?: boolean | string
+	'border-l'?: boolean | string
+	'border-x'?: boolean | string
+	'border-y'?: boolean | string
+}
+
+/**
+ * Dual-purpose rounded attributes.
+ * These can be either boolean (enable rounding) or string/number (set radius).
+ * - Boolean: `<Div rounded>` - enables default border radius
+ * - String: `<Div rounded={radius}>` - sets custom radius
+ */
+export type RoundedDualAttributes = {
+	rounded?: boolean | string | number
+	'rounded-t'?: boolean | string | number
+	'rounded-r'?: boolean | string | number
+	'rounded-b'?: boolean | string | number
+	'rounded-l'?: boolean | string | number
+	'rounded-tl'?: boolean | string | number
+	'rounded-tr'?: boolean | string | number
+	'rounded-br'?: boolean | string | number
+	'rounded-bl'?: boolean | string | number
+}
 
 /**
  * Value-based layout attributes.
- * Use these with Svelte variables: `<Div cols={myCols} gap={myGap} />`
+ * Use these with Svelte variables: `<Div gap={myGap} />`
+ * Note: cols and rows are handled separately as they accept both boolean and string values.
  */
 export type LayoutValueAttributes = ValueAttributes<
-	| 'cols' | 'rows' | 'gap' | 'span' | 'row-span' | 'cell-padding'
+	| 'gap' | 'span' | 'row-span' | 'cell-padding'
 >
+
+/**
+ * Dual-purpose cols/rows attributes.
+ * These can be either boolean (enable layout) or string (set template).
+ * - Boolean: `<Div cols>` - enables column layout with auto-sizing
+ * - String: `<Div cols="25% 75%">` - sets column widths
+ */
+export type ColsRowsAttributes = {
+	cols?: boolean | string
+	rows?: boolean | string
+}
 
 /**
  * Value-based effect attributes.
@@ -525,16 +567,19 @@ type BorderWidthScale = '0' | '1' | '2' | '4' | '8'
  * 
  * Border colors support the `/opacity` modifier syntax (see ColorAttributes).
  * Example: `border-[#000000]/20` → renders as blended solid color
+ * 
+ * Note: Plain `border`, `border-t`, etc. are handled in BorderDualAttributes
+ * to support both boolean and value syntax.
  */
 export type SafeBorderAttributes = Attributes<
-	// Border width
-	| 'border' | `border-${BorderWidthScale}` | `border-[${string}]`
-	| `border-t` | `border-t-${BorderWidthScale}` | `border-t-[${string}]`
-	| `border-r` | `border-r-${BorderWidthScale}` | `border-r-[${string}]`
-	| `border-b` | `border-b-${BorderWidthScale}` | `border-b-[${string}]`
-	| `border-l` | `border-l-${BorderWidthScale}` | `border-l-[${string}]`
-	| `border-x` | `border-x-${BorderWidthScale}` | `border-x-[${string}]`
-	| `border-y` | `border-y-${BorderWidthScale}` | `border-y-[${string}]`
+	// Border width (scaled and arbitrary - plain versions are in BorderDualAttributes)
+	| `border-${BorderWidthScale}` | `border-[${string}]`
+	| `border-t-${BorderWidthScale}` | `border-t-[${string}]`
+	| `border-r-${BorderWidthScale}` | `border-r-[${string}]`
+	| `border-b-${BorderWidthScale}` | `border-b-[${string}]`
+	| `border-l-${BorderWidthScale}` | `border-l-[${string}]`
+	| `border-x-${BorderWidthScale}` | `border-x-[${string}]`
+	| `border-y-${BorderWidthScale}` | `border-y-[${string}]`
 	// Border color (with optional opacity modifier)
 	| `border-[#${string}]` | `border-[#${string}]/${string}`
 	| 'border-transparent' | 'border-inherit' | 'border-current'
@@ -556,11 +601,9 @@ export type SafeBorderAttributes = Attributes<
  * Design should look acceptable with square corners as fallback.
  */
 export type BorderRadiusAttributes = Attributes<
-	| Scales<'rounded'> | 'rounded' | 'rounded-full' | 'rounded-none'
+	| Scales<'rounded'> | 'rounded-full' | 'rounded-none'
 	| 'rounded-sm' | 'rounded-md' | 'rounded-lg' | 'rounded-xl' | 'rounded-2xl' | 'rounded-3xl'
 	| `rounded-[${string}]`
-	| `rounded-t-${string}` | `rounded-r-${string}` | `rounded-b-${string}` | `rounded-l-${string}`
-	| `rounded-tl-${string}` | `rounded-tr-${string}` | `rounded-br-${string}` | `rounded-bl-${string}`
 >
 
 /**
@@ -907,7 +950,9 @@ export type EmailAttributes =
 	& SafeBorderAttributes
 	& BorderRadiusAttributes
 	& EffectsAttributes
-	& EmailValueAttributes  // Value syntax support
+	& EmailValueAttributes  // Value syntax support (body-bg)
+	& ColorValueAttributes  // Value syntax support (bg, text)
+	& RoundedDualAttributes  // rounded properties can be boolean or string
 
 // ============================================================================
 // COMPONENT-SPECIFIC ATTRIBUTE TYPES
@@ -974,8 +1019,10 @@ export type DivAttributes =
 	& ColumnTemplateAttributes
 	& GapAttributes
 	& AllValueAttributes  // Value syntax support
+	& ColsRowsAttributes  // cols/rows can be boolean or string
+	& BorderDualAttributes  // border properties can be boolean or string
+	& RoundedDualAttributes  // rounded properties can be boolean or string
 	& Attributes<
-		| 'cols' | 'rows'
 		| 'responsive'  // Collapse columns to single-column on mobile (only with cols)
 	>
 
@@ -1046,10 +1093,12 @@ export type TableAttributes =
 	& ColumnTemplateAttributes
 	& GapAttributes
 	& AllValueAttributes  // Value syntax support
+	& ColsRowsAttributes  // cols can specify column widths
+	& BorderDualAttributes  // border properties can be boolean or string (includes 'border' for "show all borders")
+	& RoundedDualAttributes  // rounded properties can be boolean or string
 	& Attributes<
 		// Table-specific display options
 		| 'striped'       // Alternating row backgrounds
-		| 'border'        // Show all borders (table + cells)
 		| 'border-outer'  // Only outer border on table (no cell borders)
 		| 'cell-border'   // Show cell borders only
 		| 'compact'       // Reduced cell padding
@@ -1099,6 +1148,7 @@ export type TableRowAttributes =
 	& EffectsAttributes
 	& ColorAttributes
 	& AllValueAttributes  // Value syntax support
+	& BorderDualAttributes  // border properties can be boolean or string
 	& Attributes<
 		| 'header'  // Marks this row as a header row (renders as <th> cells)
 	>
@@ -1125,7 +1175,9 @@ export type ImgAttributes =
 	& BorderRadiusAttributes
 	& SizingValueAttributes  // Value syntax for w, h
 	& SpacingValueAttributes  // Value syntax for p, m
-	& BorderValueAttributes  // Value syntax for border, rounded
+	& BorderValueAttributes  // (currently empty, kept for future)
+	& BorderDualAttributes  // border properties can be boolean or string
+	& RoundedDualAttributes  // rounded properties can be boolean or string
 
 /**
  * Button component attributes.
@@ -1141,6 +1193,8 @@ export type ButtonAttributes =
 	& TypographyAttributes
 	& JustifyAttributes
 	& AllValueAttributes  // Value syntax support
+	& BorderDualAttributes  // border properties can be boolean or string
+	& RoundedDualAttributes  // rounded properties can be boolean or string
 
 /**
  * Link component attributes.

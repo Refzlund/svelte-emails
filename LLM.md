@@ -47,7 +47,7 @@ Email templates use `*.email.svelte` naming:
   const spacing = { section: '2rem', content: '1rem' }
 </script>
 
-<Email subject='Welcome!' preview='Your account is ready'>
+<Email preview='Your account is ready'>
   <Div p={spacing.section} bg={colors.bg}>
     <Text.H1 content='Welcome!' />
     <Text.Paragraph content='Thanks for signing up, [[first_name]]!' />
@@ -95,7 +95,6 @@ render(MyEmail, {
 
 ```svelte
 <Email
-  subject='Subject line'
   preview='Inbox preview text'
   body-bg-[#f5f5f5]
   bg-[#ffffff]
@@ -107,8 +106,7 @@ render(MyEmail, {
 
 | Prop/Attr | Purpose | Default |
 |-----------|---------|---------|
-| `subject` | Email subject (required) | — |
-| `preview` | Preheader text | `''` |
+| `preview` | Preheader text (shown in inbox list) | `''` |
 | `body-bg` / `body-bg-[#hex]` | Full-width background | `#ffffff` |
 | `bg` / `bg-[#hex]` | Content container background | `#ffffff` |
 | `max-w` / `max-w-[Npx]` | Content max-width | `600px` |
@@ -162,6 +160,8 @@ render(MyEmail, {
 | `gap-N` / `gap-[Npx]` | Gap between children |
 | `span-N` | Span N columns (2-12) |
 | `row-span-N` | Span N rows (2-12) |
+
+> Gaps might be important to achieve correct look. No gap, no padding, no margin = no spacing = might look bad.
 
 ### Text (& Variants)
 
@@ -462,7 +462,7 @@ responsive    <!-- On Div cols: stack on mobile -->
 ### ✅ Semantic Structure
 
 ```svelte
-<Email subject='Order Confirmation' preview='Order #12345 confirmed'>
+<Email preview='Order #12345 confirmed'>
   <!-- Header -->
   <Div bg={colors.brand} p-6 align-center>
     <Img src={logo} width={150} height={50} alt='Company' />
@@ -506,20 +506,43 @@ responsive    <!-- On Div cols: stack on mobile -->
   <Text text-[#2563eb] content='...' />
 </Div>
 
+<!-- ✅ Use content="..." attribute -->
+<Button content="Press me" href="..." />
+<Text content="This is some text" />
+
 <!-- ✅ Use components + content attribute + variables -->
 <script>
-  const brand = '#2563eb'
+  const colors = {
+    brand: '#2563eb',
+    ...
+  }
 </script>
-<Div bg={brand} p-4>
+<Div bg={colors.brand} p-4>
   <Text content='Some text here' />
-  <Button bg={brand}>Click</Button>
+  <Button bg={colors.brand}>Click</Button>
 </Div>
-
-<!-- ❌ Flexbox/Grid (poor email support) -->
-<div style="display: flex">...</div>
 
 <!-- ✅ Use Div cols/rows -->
 <Div cols gap-4>...</Div>
+
+<!-- ❌ Text touch/colliding horizontally (`cols`) -->
+<Div cols>
+    <Text content='This text is touc'/>
+    <Text content='hing each other.'/>
+</Div>
+
+<!-- ✅ Text separation horizontally (`cols`) / vertically (`rows`) -->
+<Div cols gap-2>
+    <Text content='This text'/>
+    <Text content='is separated with a gap.'/>
+</Div>
+<Div rows>
+    <Text content='This text'/>
+    <Text content='is on two lines.'/>
+</Div>
+<Div cols gap-2>
+    <Text.Paragrapjh content='This text'/>
+</Div>
 ```
 
 ---
@@ -575,13 +598,19 @@ Discovers all `*.email.svelte` files and provides live preview.
 
 | Feature | Outlook Win | Gmail | Apple Mail |
 |---------|-------------|-------|------------|
-| Flexbox/Grid | ❌ | ⚠️ | ✅ |
 | `border-radius` | ❌ | ✅ | ✅ |
 | `box-shadow` | ❌ | ⚠️ | ✅ |
-| `opacity` | ❌ | ⚠️ | ✅ |
+| Emulated `opacity` | ✅ | ✅ | ✅ |
 | Media queries | ❌ | ❌ | ✅ |
 | `max-width` | ❌ | ✅ | ✅ |
-| `margin` | ⚠️ | ✅ | ⚠️ |
+| Emulated `margin` | ✅ | ✅ | ✅ |
+
+`opacity` is supported, since we handle blending colors during rendering.
+`margin` is supported, since we smartly use padding to achieve same functionality as margin.
+
+> Note: Media queries only needs support on mobile devices.
+> Fallback is that desktop-viewable content is shown — so it can be used quite safely.
+> So responsiveness via `responsive`, `desktop-only`, `mobile-only` is a recommended pattern.
 
 **svelte-emails handles:**
 - ✅ Margins → emulated via wrapper tables

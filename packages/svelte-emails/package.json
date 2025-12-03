@@ -1,6 +1,6 @@
 {
 	"name": "svelte-emails",
-	"version": "0.0.1",
+	"version": "0.0.4",
 	"files": [
 		"dist",
 		"!dist/**/*.test.*",
@@ -20,7 +20,7 @@
 		}
 	},
 	"scripts": {
-		"build": "svelte-package -i src -o dist"
+		"build": "svelte-package -i src -o dist && bun scripts/fix-esm-imports.ts"
 	},
 	"peerDependencies": {
 		"svelte": "^5.0.0"

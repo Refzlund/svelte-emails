@@ -41,7 +41,7 @@ Use `max-w-*` to customize the content container width:
 	import { hasContext } from 'svelte'
 	import { EMAIL_ROOT_CONTEXT_KEY } from './context'
 
-	interface Props extends EmailAttributes {
+	export interface Props extends EmailAttributes {
 		/** Preview text shown in email client inbox (before opening) */
 		preview?: string
 		/** Email content */

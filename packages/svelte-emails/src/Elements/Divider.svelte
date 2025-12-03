@@ -4,7 +4,7 @@ Divider component for horizontal rules/separators.
 Renders as a bordered table cell for email compatibility.
 
 **Styling via attributes:**
-- Color: `border-[#hex]` (e.g., `border-[#e5e7eb]`)
+- Color: `border={color}` or `border-[#hex]` (e.g., `border-[#e5e7eb]`)
 - Thickness: `border-{0|1|2|4|8}` or `border-[2px]`
 - Style: `border-solid`, `border-dashed`, `border-dotted`, `border-double`
 
@@ -16,6 +16,7 @@ Falls back to `StyleConfig.Divider` defaults if not specified.
 <Divider />
 <Text content='Section 2' />
 
+<Divider border={colors.border} />
 <Divider border-[#e5e7eb] border-2 />
 <Divider border-dashed border-[#ccc] />
 ```
@@ -31,23 +32,32 @@ Falls back to `StyleConfig.Divider` defaults if not specified.
 
 	/**
 	 * Divider styling via attributes:
-	 * - Color: `border-[#hex]` (e.g., `border-[#e5e7eb]`)
+	 * - Color: `border={color}` or `border-[#hex]` (e.g., `border-[#e5e7eb]`)
 	 * - Thickness: `border-{0|1|2|4|8}` or `border-[2px]`
 	 * - Style: `border-solid`, `border-dashed`, `border-dotted`, `border-double`
 	 */
-	interface Props extends Attributes<
+	export interface Props extends Attributes<
 		| DividerBorderWidth
 		| `border-[${string}]`
 		| 'border-solid' | 'border-dashed' | 'border-dotted' | 'border-double'
-	> {}
+	> {
+		/** Border color as a hex string (e.g., '#e5e7eb') */
+		border?: string
+	}
 
-	const { ...attrs }: Props = $props()
+	const { border, ...attrs }: Props = $props()
 
 	const parent = getEmailParent()
 
+	// Convert border prop to attribute syntax if provided
+	const normalizedAttrs = normalizeAttrs(attrs)
+	if (border) {
+		normalizedAttrs.push(`border-[${border}]`)
+	}
+
 	const node: Mail.DividerNode = {
 		type: 'divider',
-		attrs: normalizeAttrs(attrs)
+		attrs: normalizedAttrs
 	}
 
 	onDestroy(addChild(parent, node))

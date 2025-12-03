@@ -16,7 +16,7 @@ and alignment (`align-*`, `justify-*`). Children can override with their own att
 	import type { TableRowAttributes } from '../../style-attributes'
 	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 
-	interface Props extends TableRowAttributes {
+	export interface Props extends TableRowAttributes {
 		/** Row cells (Text or other components) */
 		children?: Snippet
 	}

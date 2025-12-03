@@ -17,6 +17,12 @@ function getEmailsCwd(): string {
 	return resolve(__dirname, '../../apps/dev')
 }
 
+// Find the root of the installed package (handles bunx temp directories)
+function getPackageRoot(): string {
+	// Go up from cli-app to the package root
+	return resolve(__dirname, '..')
+}
+
 export default defineConfig({
 	plugins: [
 		// emailListPlugin MUST come before sveltekit so its middleware runs first
@@ -39,15 +45,16 @@ export default defineConfig({
 	server: {
 		// Allow serving files from the user's email directory
 		fs: {
+			// Allow serving files from anywhere - necessary for bunx temp directories
+			// and various package manager layouts (npm, pnpm, bun, yarn)
+			strict: false,
 			allow: [
 				// CLI package directory
 				__dirname,
 				// User's email directory (will be set via env)
 				getEmailsCwd(),
-				// Node modules for dependencies
-				resolve(__dirname, 'node_modules'),
-				resolve(__dirname, '..', 'node_modules'),
-				resolve(__dirname, '..', '..', 'node_modules')
+				// Package root (includes node_modules)
+				getPackageRoot()
 			]
 		},
 		// Reduce file system watching overhead
