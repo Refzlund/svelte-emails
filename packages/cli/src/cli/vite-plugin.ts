@@ -254,6 +254,12 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 						return
 					}
 
+					// API: Proxy image (bypasses CORS)
+					if (req.url?.startsWith('/__svelte-emails/proxy-image')) {
+						handleImageProxy(req.url, res)
+						return
+					}
+
 					next()
 				})
 			}
@@ -334,6 +340,45 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 				rendered: null,
 				renderError: err instanceof Error ? err.message : String(err)
 			}))
+		}
+	}
+
+	/**
+	 * Handle image proxy requests (bypasses CORS)
+	 */
+	async function handleImageProxy(
+		url: string,
+		res: ServerResponse
+	): Promise<void> {
+		const parsedUrl = new URL(url, 'http://localhost')
+		const imageUrl = parsedUrl.searchParams.get('url')
+
+		if (!imageUrl) {
+			res.statusCode = 400
+			res.end(JSON.stringify({ error: 'Missing url parameter' }))
+			return
+		}
+
+		try {
+			const response = await fetch(imageUrl)
+			
+			if (!response.ok) {
+				res.statusCode = response.status
+				res.end(JSON.stringify({ error: `Failed to fetch: ${response.status}` }))
+				return
+			}
+
+			const contentType = response.headers.get('content-type') || 'application/octet-stream'
+			const buffer = await response.arrayBuffer()
+
+			res.setHeader('Content-Type', contentType)
+			res.setHeader('Cache-Control', 'public, max-age=31536000') // 1 year
+			res.setHeader('Access-Control-Allow-Origin', '*')
+			res.end(Buffer.from(buffer))
+		} catch (err) {
+			console.error(`[svelte-emails] Image proxy error for ${imageUrl}:`, err)
+			res.statusCode = 500
+			res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }))
 		}
 	}
 }

@@ -17,6 +17,7 @@
 	"dependencies": {
 		"chokidar": "^4.0.3",
 		"fast-glob": "^3.3.3",
+		"shiki": "^3.19.0",
 		"svelte-emails": "workspace:*"
 	},
 	"devDependencies": {

@@ -12,6 +12,15 @@
 	const selectedId = $derived(page.params.email ?? emails[0]?.id)
 
 	onMount(() => {
+		// Unregister any old service workers
+		if ('serviceWorker' in navigator) {
+			navigator.serviceWorker.getRegistrations().then((registrations) => {
+				for (const registration of registrations) {
+					registration.unregister()
+				}
+			})
+		}
+
 		// Subscribe to store updates
 		const unsubscribe = emailStore.subscribe(() => {
 			// Always update from store when it has data
@@ -49,7 +58,7 @@
 			<span class="title">*.email.svelte</span>
 		</header>
 
-		<nav class="email-list">
+		<nav class="email-list" data-sveltekit-preload-data="hover">
 			{#each emails as email}
 				<a
 					href="/{email.id}"

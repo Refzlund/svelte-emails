@@ -1,7 +1,17 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation'
+	import { page } from '$app/state'
 	import { onMount } from 'svelte'
 	import { emailStore } from '$lib/email-store'
+	import { createHighlightManager } from '$lib/highlight.svelte'
+	import { EmailPreview, CodeView } from '$lib/components'
+	import {
+		cacheEmailData,
+		prefetchAdjacentEmails,
+		invalidateEmailCache,
+		getCachedEmailData,
+		type EmailData
+	} from '$lib/email-prefetch'
 	import type { PageData } from './$types'
 
 	interface Props {
@@ -11,6 +21,50 @@
 	const { data }: Props = $props()
 
 	let mode: 'preview' | 'source' | 'html' | 'text' = $state('preview')
+
+	// Use cached data if available for instant display, fall back to server data
+	const effectiveData = $derived.by(() => {
+		const emailId = page.params.email
+		if (!emailId) return data
+		
+		const cached = getCachedEmailData(emailId)
+		// Use server data if it's for the current email, otherwise use cache
+		if (data.email.id === emailId) {
+			return data
+		}
+		return cached || data
+	})
+
+	// Highlight manager for off-thread syntax highlighting
+	const highlighter = createHighlightManager()
+
+	// Cache the loaded data and prefetch adjacent emails
+	$effect(() => {
+		// Cache current email data
+		cacheEmailData({
+			email: data.email,
+			source: data.source,
+			rendered: data.rendered,
+			renderError: data.renderError,
+			timestamp: Date.now()
+		})
+
+		// Prefetch adjacent emails for instant navigation
+		const emailIds = emailStore.emails.map((e) => e.id)
+		if (emailIds.length > 0) {
+			prefetchAdjacentEmails(data.email.id, emailIds, 2)
+		}
+	})
+
+	// Trigger highlighting when data changes
+	$effect(() => {
+		highlighter.highlight(
+			effectiveData.email.id,
+			effectiveData.source,
+			effectiveData.rendered?.html ?? null,
+			effectiveData.rendered?.text ?? null
+		)
+	})
 
 	// Listen for content changes via shared store
 	onMount(() => {
@@ -24,6 +78,8 @@
 			) {
 				console.log('[svelte-emails] Reloading due to content change')
 				lastSeenTime = emailStore.lastContentChangeTime
+				// Invalidate cache before reloading
+				invalidateEmailCache(data.email.id)
 				invalidateAll()
 			}
 		})
@@ -48,61 +104,73 @@
 				class:active={mode === 'source'}
 				onclick={() => mode = 'source'}
 			>
-				<span class="icon">&lt;/&gt;</span> Source
+				{#if highlighter.loading.source}
+					<span class="spinner"></span>
+				{:else}
+					<span class="icon">&lt;/&gt;</span>
+				{/if}
+				Source
 			</button>
 			<button
 				class="tab"
 				class:active={mode === 'html'}
 				onclick={() => mode = 'html'}
 			>
-				<span class="icon">📄</span> HTML
+				{#if highlighter.loading.html}
+					<span class="spinner"></span>
+				{:else}
+					<span class="icon">📄</span>
+				{/if}
+				HTML
 			</button>
 			<button
 				class="tab"
 				class:active={mode === 'text'}
 				onclick={() => mode = 'text'}
 			>
-				<span class="icon">≡</span> Text
+				{#if highlighter.loading.text}
+					<span class="spinner"></span>
+				{:else}
+					<span class="icon">≡</span>
+				{/if}
+				Text
 			</button>
 		</nav>
 
 		<div class="file-path">
-			{data.email.relativePath}
+			{effectiveData.email.relativePath}
 		</div>
 	</header>
 
 	<!-- Content area -->
 	<div class="viewer-content">
-		{#if data.renderError}
+		{#if effectiveData.renderError}
 			<div class="error-panel">
 				<h3>⚠️ Render Error</h3>
-				<pre>{data.renderError}</pre>
+				<pre>{effectiveData.renderError}</pre>
 			</div>
 		{:else if mode === 'preview'}
-			{#if data.rendered}
-				<div class="preview-container">
-					<iframe
-						srcdoc={data.rendered.html}
-						title="Email Preview"
-						sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
-					></iframe>
-				</div>
+			{#if effectiveData.rendered}
+				<EmailPreview html={effectiveData.rendered.html} />
 			{/if}
 		{:else if mode === 'source'}
-			<div class="code-panel">
-				<pre><code>{data.source}</code></pre>
-			</div>
+			<CodeView
+				code={effectiveData.source}
+				highlightedHtml={highlighter.state.source}
+			/>
 		{:else if mode === 'html'}
-			{#if data.rendered}
-				<div class="code-panel">
-					<pre><code>{data.rendered.html}</code></pre>
-				</div>
+			{#if effectiveData.rendered}
+				<CodeView
+					code={effectiveData.rendered.html}
+					highlightedHtml={highlighter.state.html}
+				/>
 			{/if}
 		{:else if mode === 'text'}
-			{#if data.rendered}
-				<div class="code-panel">
-					<pre><code>{data.rendered.text}</code></pre>
-				</div>
+			{#if effectiveData.rendered}
+				<CodeView
+					code={effectiveData.rendered.text}
+					highlightedHtml={highlighter.state.text}
+				/>
 			{/if}
 		{/if}
 	</div>
@@ -159,6 +227,21 @@
 		font-size: 12px;
 	}
 
+	.spinner {
+		width: 12px;
+		height: 12px;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top-color: rgba(255, 255, 255, 0.8);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
 	.file-path {
 		font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
 		font-size: 12px;
@@ -168,44 +251,6 @@
 	.viewer-content {
 		flex: 1;
 		overflow: hidden;
-	}
-
-	.preview-container {
-		position: relative;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		height: 100%;
-		background: #e5e5e5;
-		overflow: auto;
-		overflow: hidden;
-	}
-
-	.preview-container iframe {
-		width: 80%;
-		height: 100%;
-		border: none;
-	}
-
-	.code-panel {
-		height: 100%;
-		overflow: auto;
-		background: #0d1117;
-	}
-
-	.code-panel pre {
-		margin: 0;
-		padding: 20px;
-		font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-		font-size: 13px;
-		line-height: 1.5;
-		color: #e6edf3;
-		white-space: pre-wrap;
-		word-wrap: break-word;
-	}
-
-	.code-panel code {
-		font-family: inherit;
 	}
 
 	.error-panel {

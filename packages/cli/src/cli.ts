@@ -3,7 +3,7 @@
 import { spawn } from 'node:child_process'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { discoverEmails } from './lib/discovery.js'
+import { discoverEmails } from './cli/discovery.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 

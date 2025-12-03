@@ -1,7 +1,7 @@
 import devtoolsJson from 'vite-plugin-devtools-json';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
-import { emailListPlugin } from './src/lib/vite-plugin.js';
+import { emailListPlugin } from './src/cli/vite-plugin.js';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,9 +42,13 @@ export default defineConfig({
 	// Optimize startup time when running in user's project
 	cacheDir: resolve(__dirname, 'node_modules/.vite'),
 	resolve: {
-		alias: { // Resolve 'svelte-emails' to the source for development
-		// This ensures the module runner can find it regardless of where emails are located
-		'svelte-emails': getSvelteEmailsPath() }
+		alias: {
+			// Resolve 'svelte-emails' to the source for development
+			// This ensures the module runner can find it regardless of where emails are located
+			'svelte-emails': getSvelteEmailsPath(),
+			// Alias for CLI/plugin code (server-side)
+			'$cli': resolve(__dirname, 'src/cli')
+		}
 	},
 	optimizeDeps: {
 		// Don't scan the user's project for dependencies
