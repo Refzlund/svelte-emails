@@ -20,31 +20,121 @@
 
 	const imageCache = createImageCache()
 
-	// Process HTML whenever it changes
 	$effect(() => {
 		imageCache.processHtml(html)
 	})
 
 	let iframeWidth = $state(80) // percentage
-	let iframeWrapper: HTMLDivElement | undefined = $state()
+	let iframeHeight = $state(0)
 	let containerElement: HTMLDivElement | undefined = $state()
+	let iframeWrapperElement: HTMLDivElement | undefined = $state()
+	let iframeElement: HTMLIFrameElement | undefined = $state()
 	let resizeEdge: 'left' | 'right' | null = $state(null)
 	let isDragging = $state(false)
+
+	// Sync iframe height to its content and setup mouse event forwarding
+	$effect(() => {
+		// Track html changes to re-setup observer when content changes
+		const _ = imageCache.processedHtml || html
+
+		const iframe = iframeElement
+		if (!iframe) return
+
+		let observer: ResizeObserver | null = null
+
+		const updateHeight = () => {
+			const doc = iframe.contentDocument
+			if (doc?.documentElement) {
+				const height = doc.documentElement.scrollHeight
+				if (height > 0) {
+					iframeHeight = height
+				}
+			}
+		}
+
+		const setupObserver = () => {
+			const doc = iframe.contentDocument
+			if (!doc?.body) return
+
+			updateHeight()
+
+			observer = new ResizeObserver(updateHeight)
+			observer.observe(doc.body)
+			if (doc.documentElement) {
+				observer.observe(doc.documentElement)
+			}
+
+			// Forward mouse events from iframe to detect edge proximity
+			doc.addEventListener('mousemove', handleIframeMouseMove)
+		}
+
+		const onLoad = () => {
+			setupObserver()
+		}
+
+		iframe.addEventListener('load', onLoad)
+
+		if (iframe.contentDocument?.readyState === 'complete') {
+			setupObserver()
+		}
+
+		return () => {
+			iframe.removeEventListener('load', onLoad)
+			iframe.contentDocument?.removeEventListener('mousemove', handleIframeMouseMove)
+			observer?.disconnect()
+		}
+	})
+
+	// Handle mouse move from inside iframe
+	function handleIframeMouseMove(e: MouseEvent) {
+		if (!iframeWrapperElement || !iframeElement || isDragging) return
+
+		// Get iframe's position in viewport
+		const iframeRect = iframeElement.getBoundingClientRect()
+		// Convert iframe-relative coords to viewport coords
+		const viewportX = iframeRect.left + e.clientX
+
+		const wrapperRect = iframeWrapperElement.getBoundingClientRect()
+		const edgeThreshold = 8
+
+		if (Math.abs(viewportX - wrapperRect.left) < edgeThreshold) {
+			resizeEdge = 'left'
+		} else if (Math.abs(viewportX - wrapperRect.right) < edgeThreshold) {
+			resizeEdge = 'right'
+		} else {
+			resizeEdge = null
+		}
+	}
 
 	// Cursor glow effect
 	let mouseX = $state(0)
 	let mouseY = $state(0)
 
 	function handleMouseMove(e: MouseEvent) {
-		if (!containerElement) return
+		if (!containerElement || !iframeWrapperElement) return
 		const rect = containerElement.getBoundingClientRect()
 		mouseX = e.clientX - rect.left
 		mouseY = e.clientY - rect.top
+
+		// Detect edge proximity using iframe wrapper bounds (always current)
+		if (!isDragging) {
+			const wrapperRect = iframeWrapperElement.getBoundingClientRect()
+			const edgeThreshold = 8
+
+			if (Math.abs(e.clientX - wrapperRect.left) < edgeThreshold) {
+				resizeEdge = 'left'
+			} else if (Math.abs(e.clientX - wrapperRect.right) < edgeThreshold) {
+				resizeEdge = 'right'
+			} else {
+				resizeEdge = null
+			}
+		}
 	}
 
 	function handleMouseDown(e: MouseEvent) {
 		if (!resizeEdge || !containerElement) return
 
+		e.preventDefault()
 		isDragging = true
 		const startX = e.clientX
 		const startWidth = iframeWidth
@@ -52,10 +142,9 @@
 		const edge = resizeEdge
 
 		function onMouseMove(e: MouseEvent) {
+			e.preventDefault()
 			const deltaX = e.clientX - startX
 			// Since iframe is centered, dragging either edge should change width symmetrically
-			// Dragging right edge outward (positive deltaX) increases width
-			// Dragging left edge outward (negative deltaX) increases width
 			const deltaPercent = (deltaX / containerWidth) * 100
 			const widthChange = edge === 'right' ? deltaPercent * 2 : -deltaPercent * 2
 
@@ -63,7 +152,8 @@
 			iframeWidth = newWidth
 		}
 
-		function onMouseUp() {
+		function onMouseUp(e: MouseEvent) {
+			e.preventDefault()
 			isDragging = false
 			resizeEdge = null
 			window.removeEventListener('mousemove', onMouseMove)
@@ -83,36 +173,29 @@
 	style:--mouse-x="{mouseX}px"
 	style:--mouse-y="{mouseY}px"
 	class:resizing={isDragging}
+	class:resize-active={resizeEdge !== null}
 	onmousemove={handleMouseMove}
+	onmousedown={handleMouseDown}
+	onmouseleave={() => { if (!isDragging) resizeEdge = null }}
 >
-	<div class="iframe-wrapper" bind:this={iframeWrapper}>
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class="resize-handle left"
-			class:active={resizeEdge === 'left'}
-			onmouseenter={() => resizeEdge = 'left'}
-			onmouseleave={() => { if (!isDragging) resizeEdge = null }}
-			onmousedown={handleMouseDown}
-		></div>
+	<div
+		class="iframe-wrapper"
+		bind:this={iframeWrapperElement}
+		class:resize-left={resizeEdge === 'left'}
+		class:resize-right={resizeEdge === 'right'}
+	>
 		{#if imageCache.isLoading}
 			<div class="loading-indicator" title="Caching images...">
 				<div class="spinner-small"></div>
 			</div>
 		{/if}
 		<iframe
-			class:resize-left={resizeEdge === 'left'}
-			class:resize-right={resizeEdge === 'right'}
+			bind:this={iframeElement}
 			srcdoc={imageCache.processedHtml || html}
 			title="Email Preview"
+			style:height={iframeHeight > 0 ? `${iframeHeight}px` : '100%'}
+			scrolling="no"
 		></iframe>
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class="resize-handle right"
-			class:active={resizeEdge === 'right'}
-			onmouseenter={() => resizeEdge = 'right'}
-			onmouseleave={() => { if (!isDragging) resizeEdge = null }}
-			onmousedown={handleMouseDown}
-		></div>
 	</div>
 </div>
 
@@ -120,10 +203,10 @@
 	.preview-container {
 		position: relative;
 		display: flex;
-		align-items: center;
 		justify-content: center;
 		height: 100%;
-		overflow: hidden;
+		overflow-y: auto;
+		overflow-x: hidden;
 		
 		/* Wireframe grid background */
 		--grid-color: rgba(119, 123, 219, 0.12);
@@ -168,45 +251,35 @@
 	.iframe-wrapper {
 		position: relative;
 		width: var(--iframe-width, 100%);
-		height: 100%;
 		z-index: 2;
+		overflow: visible;
 	}
 
-	.resize-handle {
-		position: absolute;
-		top: 0;
-		width: 8px;
-		height: 100%;
+	.iframe-wrapper > iframe {
+		box-shadow: 0px 0 0 0 #777BDB;
+		transition: .2s;
+	}
+
+	/* Visual resize indicators via box-shadow on wrapper */
+	.iframe-wrapper.resize-left > iframe {
+		box-shadow: -6px 0 0 0 #777BDB;
+	}
+
+	.iframe-wrapper.resize-right > iframe {
+		box-shadow: 6px 0 0 0 #777BDB;
+	}
+
+	.preview-container.resize-active {
 		cursor: ew-resize;
-		z-index: 10;
-	}
-
-	.resize-handle.left {
-		left: -4px;
-	}
-
-	.resize-handle.right {
-		right: -4px;
-	}
-
-	.resize-handle.active {
-		background: #777BDB;
-		opacity: 0.5;
 	}
 
 	.preview-container iframe {
+		position: relative;
 		width: 100%;
-		height: 100%;
+		min-height: 100%;
 		border: none;
-		transition: box-shadow 0.15s ease;
-	}
-
-	.preview-container iframe.resize-left {
-		box-shadow: -2px 0 0 0 #777BDB;
-	}
-
-	.preview-container iframe.resize-right {
-		box-shadow: 2px 0 0 0 #777BDB;
+		pointer-events: auto;
+		z-index: 1;
 	}
 
 	.preview-container.resizing {
