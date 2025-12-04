@@ -391,6 +391,10 @@ function buildHeadSection(node: Mail.EmailNode, context: RenderContext): string 
 		`.responsive-grid td{display:block!important;width:100%!important}`,
 		`.responsive-grid td>table{display:table!important;width:100%!important}`,
 		`.responsive-grid td>table>tbody>tr>td{display:table-cell!important}`,
+		// Responsive gap: switch horizontal padding to vertical when columns stack
+		`.responsive-grid td.responsive-gap-first{padding-right:0!important;padding-bottom:var(--gap-half)!important}`,
+		`.responsive-grid td.responsive-gap-middle{padding-left:0!important;padding-right:0!important;padding-top:var(--gap-half)!important;padding-bottom:var(--gap-half)!important}`,
+		`.responsive-grid td.responsive-gap-last{padding-left:0!important;padding-top:var(--gap-half)!important}`,
 		`.mobile-only{display:table-cell!important;max-height:none!important;overflow:visible!important;width:auto!important}`,
 		`td.mobile-only{display:table-cell!important}`,
 		`div.mobile-only{display:block!important}`,
@@ -566,7 +570,30 @@ function renderDivAsGrid(
 		// Use explicit colWidths or calculated autoWidths
 		const effectiveColWidths = node.colWidths ?? autoWidths
 		
+		// When we have explicit percentage-based colWidths AND a gap, we can't use
+		// separate gap cells (35% + gap + 65% > 100%). Instead, implement gap using
+		// cell padding distributed evenly: each cell gets half the gap on each side
+		// (except first cell has no left padding, last cell has no right padding).
+		// This preserves the intended percentage ratios AND equal content areas.
+		const hasPercentageWidths = effectiveColWidths?.some(w => w?.endsWith('%'))
+		const useGapAsPadding = gap && hasPercentageWidths
+		
+		// Calculate half gap for even distribution (parse px value and divide)
+		let halfGap: string | undefined
+		if (useGapAsPadding && gap) {
+			const gapMatch = gap.match(/^(\d+(?:\.\d+)?)(px|rem|em)?$/)
+			if (gapMatch) {
+				const value = parseFloat(gapMatch[1])
+				const unit = gapMatch[2] || 'px'
+				halfGap = `${value / 2}${unit}`
+			} else {
+				// Fallback for complex values: use calc (limited email support)
+				halfGap = `calc(${gap} / 2)`
+			}
+		}
+		
 		// Extract width, valign, responsive, and span from each child's attrs to apply to <td>
+		const childCount = node.children.length
 		let colIndex = 0
 		const cells = node.children.map((child, index) => {
 			// Extract all cell-related attrs in single pass
@@ -587,9 +614,37 @@ function renderDivAsGrid(
 			}
 			
 			const widthAttr = width ? ` width="${width}"` : ''
-			const classAttr = cellAttrs.responsive ? ` class="${cellAttrs.responsive}"` : ''
+			
+			// Build class list
+			const classes: string[] = []
+			if (cellAttrs.responsive) classes.push(cellAttrs.responsive)
+			
 			// For mobile-only, start hidden; for desktop-only, start visible
-			const styleAttr = cellAttrs.responsive === 'mobile-only' ? ' style="display: none;"' : ''
+			const styleProps: string[] = []
+			if (cellAttrs.responsive === 'mobile-only') {
+				styleProps.push('display: none')
+			}
+			
+			// Apply gap as padding distributed evenly between cells
+			// First cell: padding-right only | Middle cells: both | Last cell: padding-left only
+			// For responsive grids, also add class to switch padding direction on mobile
+			if (useGapAsPadding && halfGap) {
+				const isFirst = index === 0
+				const isLast = index === childCount - 1
+				if (!isFirst) styleProps.push(`padding-left: ${halfGap}`)
+				if (!isLast) styleProps.push(`padding-right: ${halfGap}`)
+				
+				// Add responsive gap class and CSS variable for mobile padding direction switch
+				if (isResponsive) {
+					styleProps.push(`--gap-half: ${halfGap}`)
+					if (isFirst) classes.push('responsive-gap-first')
+					else if (isLast) classes.push('responsive-gap-last')
+					else classes.push('responsive-gap-middle')
+				}
+			}
+			
+			const classAttr = classes.length > 0 ? ` class="${classes.join(' ')}"` : ''
+			const styleAttr = styleProps.length > 0 ? ` style="${styleProps.join('; ')}"` : ''
 			const colspanAttr = cellAttrs.colspan ? ` colspan="${cellAttrs.colspan}"` : ''
 			const rowspanAttr = cellAttrs.rowspan ? ` rowspan="${cellAttrs.rowspan}"` : ''
 			const valign = cellAttrs.valign ?? 'top'
@@ -599,8 +654,8 @@ function renderDivAsGrid(
 			
 			const cell = `<td valign="${valign}"${widthAttr}${colspanAttr}${rowspanAttr}${classAttr}${styleAttr}>${childHtml}</td>`
 			
-			// Insert gap spacer between cells (not before first)
-			if (gap && index > 0) {
+			// Insert gap spacer between cells (not before first) - only when NOT using padding approach
+			if (gap && index > 0 && !useGapAsPadding) {
 				return `<td width="${gap}"></td>${cell}`
 			}
 			return cell
@@ -893,6 +948,17 @@ function renderImgNode(
 		maxWidth: '100%',
 		height: 'auto'
 	}
+
+	// Center block images when parent has text-align: center
+	// (text-align doesn't affect block elements, so we use margin: 0 auto)
+	if (inherited.textAlign === 'center') {
+		resetCss.marginLeft = 'auto'
+		resetCss.marginRight = 'auto'
+	} else if (inherited.textAlign === 'right') {
+		resetCss.marginLeft = 'auto'
+		resetCss.marginRight = '0'
+	}
+
 	const mergedCss = { ...resetCss, ...parsed.css }
 
 	const attrs: Record<string, string | number | undefined> = {

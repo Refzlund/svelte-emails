@@ -264,7 +264,7 @@
 
 	<!-- Speaker Application Section -->
 	<Div p={spacing.section}>
-		<Div cols="35% 65%" gap-6>
+		<Div cols="35% 65%" gap-4>
 			<Div>
 				<Img
 					src="https://fpoimg.com/200x200"

@@ -26,17 +26,36 @@
 
 	let iframeWidth = $state(80) // percentage
 	let iframeHeight = $state(0)
+	let containerHeight = $state(0)
 	let containerElement: HTMLDivElement | undefined = $state()
 	let iframeWrapperElement: HTMLDivElement | undefined = $state()
 	let iframeElement: HTMLIFrameElement | undefined = $state()
 	let resizeEdge: 'left' | 'right' | null = $state(null)
 	let isDragging = $state(false)
 
+	// Track container height for min-height calculation
+	$effect(() => {
+		if (!containerElement) return
+		
+		const updateContainerHeight = () => {
+			containerHeight = containerElement!.clientHeight
+		}
+		
+		updateContainerHeight()
+		const observer = new ResizeObserver(updateContainerHeight)
+		observer.observe(containerElement)
+		
+		return () => observer.disconnect()
+	})
+
+	// Reset iframe height when html changes to allow shrinking
+	$effect(() => {
+		const _ = imageCache.processedHtml || html
+		iframeHeight = 0
+	})
+
 	// Sync iframe height to its content and setup mouse event forwarding
 	$effect(() => {
-		// Track html changes to re-setup observer when content changes
-		const _ = imageCache.processedHtml || html
-
 		const iframe = iframeElement
 		if (!iframe) return
 
@@ -87,12 +106,19 @@
 
 	// Handle mouse move from inside iframe
 	function handleIframeMouseMove(e: MouseEvent) {
-		if (!iframeWrapperElement || !iframeElement || isDragging) return
+		if (!iframeWrapperElement || !iframeElement) return
 
 		// Get iframe's position in viewport
 		const iframeRect = iframeElement.getBoundingClientRect()
 		// Convert iframe-relative coords to viewport coords
 		const viewportX = iframeRect.left + e.clientX
+		const viewportY = iframeRect.top + e.clientY
+
+		// Update glow position
+		mouseX = viewportX
+		mouseY = viewportY
+
+		if (isDragging) return
 
 		const wrapperRect = iframeWrapperElement.getBoundingClientRect()
 		const edgeThreshold = 8
@@ -106,15 +132,15 @@
 		}
 	}
 
-	// Cursor glow effect
+	// Cursor glow effect - use viewport coordinates for fixed overlay
 	let mouseX = $state(0)
 	let mouseY = $state(0)
 
 	function handleMouseMove(e: MouseEvent) {
 		if (!containerElement || !iframeWrapperElement) return
-		const rect = containerElement.getBoundingClientRect()
-		mouseX = e.clientX - rect.left
-		mouseY = e.clientY - rect.top
+		// Use viewport coordinates for the fixed glow overlay
+		mouseX = e.clientX
+		mouseY = e.clientY
 
 		// Detect edge proximity using iframe wrapper bounds (always current)
 		if (!isDragging) {
@@ -165,19 +191,24 @@
 	}
 </script>
 
+<svelte:window onmousemove={handleMouseMove} />
+
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="preview-container"
 	bind:this={containerElement}
 	style:--iframe-width="{iframeWidth}%"
-	style:--mouse-x="{mouseX}px"
-	style:--mouse-y="{mouseY}px"
 	class:resizing={isDragging}
 	class:resize-active={resizeEdge !== null}
-	onmousemove={handleMouseMove}
 	onmousedown={handleMouseDown}
 	onmouseleave={() => { if (!isDragging) resizeEdge = null }}
 >
+	<!-- Glow overlay - fixed position, clipped by container's clip-path -->
+	<div 
+		class="glow-overlay"
+		style:--mouse-x="{mouseX}px"
+		style:--mouse-y="{mouseY}px"
+	></div>
 	<div
 		class="iframe-wrapper"
 		bind:this={iframeWrapperElement}
@@ -193,7 +224,8 @@
 			bind:this={iframeElement}
 			srcdoc={imageCache.processedHtml || html}
 			title="Email Preview"
-			style:height={iframeHeight > 0 ? `${iframeHeight}px` : '100%'}
+			style:height={iframeHeight > 0 ? `${iframeHeight}px` : `${containerHeight}px`}
+			style:min-height="{containerHeight}px"
 			scrolling="no"
 		></iframe>
 	</div>
@@ -207,8 +239,10 @@
 		height: 100%;
 		overflow-y: auto;
 		overflow-x: hidden;
+		/* Clip the glow overlay */
+		clip-path: inset(0);
 		
-		/* Wireframe grid background */
+		/* Wireframe grid background - fixed to viewport */
 		--grid-color: rgba(119, 123, 219, 0.12);
 		--grid-size: 24px;
 		background-color: #35354B;
@@ -216,28 +250,25 @@
 			linear-gradient(var(--grid-color) 1px, transparent 1px),
 			linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
 		background-size: var(--grid-size) var(--grid-size);
+		background-attachment: fixed;
 	}
 
-	/* Cursor glow effect on grid lines */
-	.preview-container::before {
-		content: '';
-		position: absolute;
-		inset: 0;
+	/* Cursor glow effect on grid lines - fixed but clipped by container */
+	.glow-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100vw;
+		height: 100vh;
 		pointer-events: none;
-		background:
-			radial-gradient(
-				circle 150px at var(--mouse-x, 50%) var(--mouse-y, 50%),
-				transparent 0%,
-				transparent 100%
-			);
 		/* Glow mask that only affects the grid lines */
 		mask-image:
-			linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px),
-			linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px);
+			linear-gradient(rgba(255,255,255,0.7) 1px, transparent 1px),
+			linear-gradient(90deg, rgba(255,255,255,0.7) 1px, transparent 1px);
 		mask-size: var(--grid-size) var(--grid-size);
 		-webkit-mask-image:
-			linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px),
-			linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px);
+			linear-gradient(rgba(255,255,255,0.7) 1px, transparent 1px),
+			linear-gradient(90deg, rgba(255,255,255,0.7) 1px, transparent 1px);
 		-webkit-mask-size: var(--grid-size) var(--grid-size);
 		background: radial-gradient(
 			circle 180px at var(--mouse-x, 50%) var(--mouse-y, 50%),
@@ -245,19 +276,21 @@
 			rgba(89, 73, 162, 0.25) 40%,
 			transparent 70%
 		);
-		z-index: 1;
+		z-index: 3;
 	}
 
 	.iframe-wrapper {
 		position: relative;
 		width: var(--iframe-width, 100%);
-		z-index: 2;
+		z-index: 4;
 		overflow: visible;
+		min-height: 100%;
 	}
 
 	.iframe-wrapper > iframe {
 		box-shadow: 0px 0 0 0 #777BDB;
-		transition: .2s;
+		transition: box-shadow .2s;
+		z-index: 2;
 	}
 
 	/* Visual resize indicators via box-shadow on wrapper */
@@ -274,9 +307,8 @@
 	}
 
 	.preview-container iframe {
-		position: relative;
+		display: block;
 		width: 100%;
-		min-height: 100%;
 		border: none;
 		pointer-events: auto;
 		z-index: 1;

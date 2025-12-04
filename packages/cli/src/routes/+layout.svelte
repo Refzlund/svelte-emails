@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte'
 	import initialEmails from 'virtual:email-list'
 	import { emailStore, type EmailListItem } from '$lib/email-store'
+	import * as icons from '$lib/Icons.svelte'
 
 	let { children } = $props()
 
@@ -89,7 +90,8 @@
 				target="_blank"
 				rel="noopener"
 			>
-				<span>⚡</span> Examples
+				{@render icons.sparkleAction()}
+				Examples
 			</a>
 			<a
 				href="https://github.com/Refzlund/svelte-emails/blob/main/ARCHITECTURE.md"

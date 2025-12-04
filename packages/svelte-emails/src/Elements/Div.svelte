@@ -9,8 +9,9 @@ Renders as a table cell in the final HTML for email compatibility.
 - `rows` — Vertical layout (children stacked)
 - `responsive` — Collapse columns to single-column on mobile (only with `cols`)
 
-**Column/Row Templates:** Define sizes using `cols-[...]` or `rows-[...]`.
-Widths are underscore-separated (e.g., `cols-[40%_30%_30%]`).
+**Column/Row Templates:** Define sizes in two ways:
+- Value syntax: `cols="35% 65%"` or `rows="100px auto"`
+- Bracket syntax: `cols-[35%_65%]` or `rows-[100px_auto]`
 
 **Gap Spacing:** Use `gap-*` (gap-1 through gap-12) or `gap-[20px]` for custom values.
 
@@ -43,7 +44,13 @@ Widths are underscore-separated (e.g., `cols-[40%_30%_30%]`).
 	// Don't auto-add w-full - let the renderer handle default widths
 	// This allows parent grids to control child widths via auto-calculation
 	// normalizeAttrs converts value-attributes (bg="#fff") to bracket syntax (bg-[#fff])
-	const attrKeys = normalizeAttrs(attrs)
+	// Include cols/rows if they are strings (e.g., cols="35% 65%") so they get normalized
+	const attrsWithColsRows = $derived({
+		...attrs,
+		...(typeof cols === 'string' ? { cols } : {}),
+		...(typeof rows === 'string' ? { rows } : {})
+	})
+	const attrKeys = $derived(normalizeAttrs(attrsWithColsRows))
 
 	// Parse column/row templates from attrs
 	const colWidths = $derived(parseColumnTemplate(attrKeys))
@@ -52,7 +59,7 @@ Widths are underscore-separated (e.g., `cols-[40%_30%_30%]`).
 
 	const node: Mail.DivNode = $state({
 		type: 'div',
-		attrs: attrKeys,
+		get attrs() { return attrKeys },
 		children: [],
 		get direction() { return direction },
 		get responsiveGrid() { return responsive },
