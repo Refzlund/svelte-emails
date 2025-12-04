@@ -31,6 +31,17 @@
 	let resizeEdge: 'left' | 'right' | null = $state(null)
 	let isDragging = $state(false)
 
+	// Cursor glow effect
+	let mouseX = $state(0)
+	let mouseY = $state(0)
+
+	function handleMouseMove(e: MouseEvent) {
+		if (!containerElement) return
+		const rect = containerElement.getBoundingClientRect()
+		mouseX = e.clientX - rect.left
+		mouseY = e.clientY - rect.top
+	}
+
 	function handleMouseDown(e: MouseEvent) {
 		if (!resizeEdge || !containerElement) return
 
@@ -69,7 +80,10 @@
 	class="preview-container"
 	bind:this={containerElement}
 	style:--iframe-width="{iframeWidth}%"
+	style:--mouse-x="{mouseX}px"
+	style:--mouse-y="{mouseY}px"
 	class:resizing={isDragging}
+	onmousemove={handleMouseMove}
 >
 	<div class="iframe-wrapper" bind:this={iframeWrapper}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -109,14 +123,53 @@
 		align-items: center;
 		justify-content: center;
 		height: 100%;
-		background: #e5e5e5;
 		overflow: hidden;
+		
+		/* Wireframe grid background */
+		--grid-color: rgba(119, 123, 219, 0.12);
+		--grid-size: 24px;
+		background-color: #35354B;
+		background-image:
+			linear-gradient(var(--grid-color) 1px, transparent 1px),
+			linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+		background-size: var(--grid-size) var(--grid-size);
+	}
+
+	/* Cursor glow effect on grid lines */
+	.preview-container::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background:
+			radial-gradient(
+				circle 150px at var(--mouse-x, 50%) var(--mouse-y, 50%),
+				transparent 0%,
+				transparent 100%
+			);
+		/* Glow mask that only affects the grid lines */
+		mask-image:
+			linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px),
+			linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px);
+		mask-size: var(--grid-size) var(--grid-size);
+		-webkit-mask-image:
+			linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px),
+			linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px);
+		-webkit-mask-size: var(--grid-size) var(--grid-size);
+		background: radial-gradient(
+			circle 180px at var(--mouse-x, 50%) var(--mouse-y, 50%),
+			rgba(119, 123, 219, 0.5) 0%,
+			rgba(89, 73, 162, 0.25) 40%,
+			transparent 70%
+		);
+		z-index: 1;
 	}
 
 	.iframe-wrapper {
 		position: relative;
 		width: var(--iframe-width, 100%);
 		height: 100%;
+		z-index: 2;
 	}
 
 	.resize-handle {
@@ -137,7 +190,7 @@
 	}
 
 	.resize-handle.active {
-		background: #667eea;
+		background: #777BDB;
 		opacity: 0.5;
 	}
 
@@ -149,11 +202,11 @@
 	}
 
 	.preview-container iframe.resize-left {
-		box-shadow: -2px 0 0 0 #667eea;
+		box-shadow: -2px 0 0 0 #777BDB;
 	}
 
 	.preview-container iframe.resize-right {
-		box-shadow: 2px 0 0 0 #667eea;
+		box-shadow: 2px 0 0 0 #777BDB;
 	}
 
 	.preview-container.resizing {
@@ -180,7 +233,7 @@
 		width: 16px;
 		height: 16px;
 		border: 2px solid #e5e5e5;
-		border-top-color: #667eea;
+		border-top-color: #777BDB;
 		border-radius: 50%;
 		animation: spin 0.8s linear infinite;
 	}
