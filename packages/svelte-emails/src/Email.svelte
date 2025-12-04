@@ -21,16 +21,25 @@ Use `max-w-*` to customize the content container width:
 - `max-w-[700px]` — Arbitrary pixel value
 - `max-w-xl`, `max-w-2xl`, etc. — Preset values
 
+## Responsive Breakpoint
+
+The default mobile breakpoint is 480px. Use `mobile-threshold` to customize:
+- `mobile-threshold-[425px]` — Tighter mobile breakpoint
+- `mobile-threshold-[600px]` — Looser breakpoint (stacks earlier)
+
+This affects `responsive` columns, `mobile-only`, and `desktop-only` elements.
+
 @example
 ```svelte
 <Email
 	body-bg-[#f5f5f5]
 	bg-[#ffffff]
 	max-w-[700px]
+	mobile-threshold-[425px]
 	preview='Check out our latest updates...'
 >
-	<Div cols>
-		<Div>Content here</Div>
+	<Div cols responsive>
+		<Div>Stacks at 425px instead of 480px</Div>
 	</Div>
 </Email>
 ```
@@ -69,6 +78,7 @@ Use `max-w-*` to customize the content container width:
 	const attrKeys = normalizeAttrs(attrs)
 	let bodyBackground: string | undefined
 	let maxWidth: number | undefined
+	let mobileBreakpoint: number | undefined
 	const filteredAttrs: string[] = []
 
 	for (const attr of attrKeys) {
@@ -76,6 +86,13 @@ Use `max-w-*` to customize the content container width:
 		const bodyBgMatch = attr.match(/^body-bg-\[(#[0-9a-fA-F]{3,8})\]$/)
 		if (bodyBgMatch) {
 			bodyBackground = bodyBgMatch[1]
+			continue
+		}
+
+		// Extract mobile-threshold-[value] for responsive breakpoint
+		const mobileThresholdMatch = attr.match(/^mobile-threshold-\[(\d+)(?:px)?\]$/)
+		if (mobileThresholdMatch) {
+			mobileBreakpoint = parseInt(mobileThresholdMatch[1])
 			continue
 		}
 
@@ -115,7 +132,8 @@ Use `max-w-*` to customize the content container width:
 		children: [],
 		get preview() { return preview },
 		get bodyBackground() { return bodyBackground },
-		get maxWidth() { return maxWidth }
+		get maxWidth() { return maxWidth },
+		get mobileBreakpoint() { return mobileBreakpoint }
 	})
 	
 	// Register with collector

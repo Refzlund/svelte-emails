@@ -198,7 +198,12 @@ export const MAX_WIDTHS: Record<string, string> = {
  */
 export const DEFAULT_ROOT_SIZE = 16
 
-export const MOBILE_BREAKPOINT = 425
+/**
+ * Default mobile breakpoint for responsive styles.
+ * Used for `responsive` columns, `mobile-only`, and `desktop-only`.
+ * Can be customized per-email with `mobile-threshold` attribute.
+ */
+export const DEFAULT_MOBILE_BREAKPOINT = 480
 
 // ============================================================================
 // Derived Scales (px-based)

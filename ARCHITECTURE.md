@@ -320,6 +320,7 @@ Components register via Svelte context using stable `Symbol.for()` keys (require
   body-bg-[#f0f4f8]
   bg-[#ffffff]
   max-w-[700px]
+  mobile-threshold-[425px]
 >
   ...
 </Email>
@@ -331,8 +332,11 @@ Components register via Svelte context using stable `Symbol.for()` keys (require
 | `body-bg-[#hex]` | Outer body background (full width) | `#ffffff` |
 | `bg-[#hex]` | Content container background | `#ffffff` |
 | `max-w-[Npx]` | Content container max-width | `600px` |
+| `mobile-threshold-[Npx]` | Breakpoint for responsive styles | `480px` |
 
 The `body-bg-*` is the root color for opacity blending throughout the email.
+
+The `mobile-threshold` controls when `responsive` columns stack, and when `mobile-only`/`desktop-only` toggle visibility. Use lower values for tighter responsiveness (stacks later), higher for looser (stacks earlier).
 
 ### Div (Container / Grid)
 
@@ -864,11 +868,13 @@ Outlook 2007-2019 uses **Microsoft Word's rendering engine**:
 
 ~75% of clients support media queries. Outlook Windows ignores them entirely.
 
+The default breakpoint is **480px**. Customize with `mobile-threshold-[Npx]` on the `<Email>` component.
+
 **`mobile-only` / `desktop-only` behavior:**
 | Client | `mobile-only` | `desktop-only` |
 |--------|---------------|----------------|
-| Mobile (≤600px) | ✅ Visible | ❌ Hidden |
-| Desktop (>600px) | ❌ Hidden | ✅ Visible |
+| Mobile (≤480px) | ✅ Visible | ❌ Hidden |
+| Desktop (>480px) | ❌ Hidden | ✅ Visible |
 | Outlook Windows | ❌ Hidden | ✅ Visible (fallback) |
 
 ### Images

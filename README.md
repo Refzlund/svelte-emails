@@ -299,6 +299,11 @@ Both syntaxes work identically — use whichever fits your needs.
     <Div>2 columns on Desktop</Div>
     <Div>1 column on Mobile</Div>
 </Div>
+
+<!-- Customize breakpoint (default: 480px) -->
+<Email mobile-threshold-[425px]>
+    <Div cols responsive>...</Div>  <!-- Stacks at 425px instead -->
+</Email>
 ```
 
 ### Opacity

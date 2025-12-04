@@ -6,9 +6,19 @@
 	 * for comprehensive testing and developer reference.
 	 * 
 	 * Coverage includes:
-	 * - All components: Email, Div, Text (all variants), Table, Button, Link, Img, Spacer, Divider, Br, Unsubscribe
-	 * - All style categories: spacing, sizing, colors, typography, borders, alignment, effects, responsive
-	 * - Special features: variable interpolation, markdown content, opacity emulation, margin emulation
+	 * - All components: Email, Div, Text (all variants), Table/Table.Row, Button, Link, Img, Spacer, Divider, Br, Unsubscribe
+	 * - All style categories: spacing, sizing, colors, typography, borders, alignment, effects, responsive, layout
+	 * - Spacing: p-*, px-*, py-*, pt/pr/pb/pl-*, m-* (emulated), fractional scales (p-0.5, p-1.5, etc.)
+	 * - Sizing: w-*, h-*, min-w-*, max-w-*, min-h-*, w-auto, h-auto, w-full, h-full
+	 * - Typography: text-xs through text-9xl, font-thin through font-black, italic, underline, overline, line-through, leading-*, tracking-*, whitespace-*
+	 * - Borders: border-*, border-t/r/b/l/x/y-*, border-solid/dashed/dotted/double, rounded-* (all directions), border-opacity-*
+	 * - Colors: text-[#hex], bg-[#hex], text-opacity-*, bg-opacity-*, opacity-* (element)
+	 * - Alignment: align-* (9 positions), justify-*
+	 * - Layout: cols, rows, gap-*, span-*, row-span-*, responsive, display modes
+	 * - Table: border, striped, border-outer, cell-border, compact, cell-padding-*, cols template
+	 * - Responsive: mobile-only, desktop-only
+	 * - Special features: variable interpolation, markdown content (all syntax), opacity emulation, margin emulation
+	 * - Value syntax: All bracket attrs support {variable} syntax
 	 */
 	import {
 		Email,
@@ -207,7 +217,7 @@
 		<Spacer h-4 />
 
 		<Text.H4 content="**Width & Height:**" text={colors.text} />
-		<Div cols gap-2>
+		<Div cols gap-2 responsive>
 			<Div w-[100px] h-[50px] bg={colors.pastel.red} align-middle>
 				<Text.Small content="100×50" />
 			</Div>
@@ -230,7 +240,7 @@
 
 		<Spacer h-2 />
 
-		<Div cols bg={colors.gray[100]}>
+		<Div cols bg={colors.gray[100]} responsive>
 			<Text.Small content="Left" />
 			<Spacer w-12 />
 			<Text.Small content="Right (w-12 spacer between)" />
@@ -258,7 +268,7 @@
 
 		<Text.H4 content="**Opacity Emulation (blended colors):**" text={colors.text} />
 		<Div bg={colors.white} p-4>
-			<Div cols gap-2>
+			<Div cols gap-2 responsive>
 				<Div p-3 bg={colors.black} align-middle>
 					<Text.Small content="100%" text={colors.white} />
 				</Div>
@@ -380,7 +390,7 @@
 		<Text.H4 content="**Content Alignment (align-*):**" text={colors.text} />
 
 		<!-- 3x3 grid showing all alignments -->
-		<Div cols gap-2>
+		<Div cols gap-2 responsive>
 			<Div h-[60px] bg={colors.pastel.red} align-top-left p-2>
 				<Text.Small content="top-left" />
 			</Div>
@@ -391,7 +401,7 @@
 				<Text.Small content="top-right" />
 			</Div>
 		</Div>
-		<Div cols gap-2>
+		<Div cols gap-2 responsive>
 			<Div h-[60px] bg={colors.pastel.blue} align-left p-2>
 				<Text.Small content="left" />
 			</Div>
@@ -402,7 +412,7 @@
 				<Text.Small content="right" />
 			</Div>
 		</Div>
-		<Div cols gap-2>
+		<Div cols gap-2 responsive>
 			<Div h-[60px] bg={colors.pastel.cyan} align-bottom-left p-2>
 				<Text.Small content="bottom-left" />
 			</Div>
@@ -508,7 +518,7 @@
 		<Spacer h-4 />
 
 		<Text.H4 content="**Border Opacity:**" text={colors.text} />
-		<Div cols gap-4>
+		<Div cols gap-4 responsive>
 			<Div border-2 border={colors.black} p-3 align-middle>
 				<Text.Small content="100%" />
 			</Div>
@@ -530,7 +540,7 @@
 
 	<Div p-6>
 		<Text.H4 content="**Basic Columns:**" text={colors.text} />
-		<Div cols>
+		<Div cols responsive>
 			<Div bg={colors.pastel.yellow} p-3 align-middle><Text.Small content="Col 1" /></Div>
 			<Div bg={colors.pastel.green} p-3 align-middle><Text.Small content="Col 2" /></Div>
 			<Div bg={colors.pastel.blue} p-3 align-middle><Text.Small content="Col 3" /></Div>
@@ -539,7 +549,7 @@
 		<Spacer h-4 />
 
 		<Text.H4 content="**Column Template (cols=...):**" text={colors.text} />
-		<Div cols="20% 50% 30%">
+		<Div cols="20% 50% 30%" responsive>
 			<Div bg={colors.pastel.yellow} p-3 align-middle><Text.Small content="20%" /></Div>
 			<Div bg={colors.pastel.green} p-3 align-middle><Text.Small content="50%" /></Div>
 			<Div bg={colors.pastel.blue} p-3 align-middle><Text.Small content="30%" /></Div>
@@ -548,7 +558,7 @@
 		<Spacer h-4 />
 
 		<Text.H4 content="**Gap Spacing:**" text={colors.text} />
-		<Div cols gap-4>
+		<Div cols gap-4 responsive>
 			<Div bg={colors.pastel.red} p-3 align-middle><Text.Small content="gap-4" /></Div>
 			<Div bg={colors.pastel.red} p-3 align-middle><Text.Small content="between" /></Div>
 			<Div bg={colors.pastel.red} p-3 align-middle><Text.Small content="columns" /></Div>
@@ -557,11 +567,11 @@
 		<Spacer h-4 />
 
 		<Text.H4 content="**Column Spanning (span-*):**" text={colors.text} />
-		<Div cols="25% 25% 25% 25%">
+		<Div cols="25% 25% 25% 25%" responsive>
 			<Div bg={colors.pastel.indigo} p-3 span-2 align-middle><Text.Small content="span-2" /></Div>
 			<Div bg={colors.pastel.purple} p-3 span-2 align-middle><Text.Small content="span-2" /></Div>
 		</Div>
-		<Div cols="25% 25% 25% 25%">
+		<Div cols="25% 25% 25% 25%" responsive>
 			<Div bg={colors.pastel.pink} p-3 align-middle><Text.Small content="1" /></Div>
 			<Div bg={colors.pink} p-3 span-3 align-middle><Text.Small content="span-3" text={colors.white} /></Div>
 		</Div>
@@ -753,7 +763,7 @@
 		<Spacer h-6 />
 
 		<Text.H4 content="**Button Sizes:**" text={colors.text} />
-		<Div cols gap-4 align-middle>
+		<Div cols gap-4 align-middle responsive>
 			<Button
 				href="https://example.com"
 				content="Small"
@@ -821,7 +831,7 @@
 		<Spacer h-4 />
 
 		<Text.H4 content="**Image with Border Radius:**" text={colors.text} />
-		<Div cols gap-4>
+		<Div cols gap-4 responsive>
 			<Img
 				src="https://fpoimg.com/120x120"
 				alt="Square image"
@@ -969,7 +979,7 @@
 		<Spacer h-4 />
 
 		<!-- Value syntax for cols uses cols="..." without the boolean cols attr -->
-		<Div cols="40% 30% 30%">
+		<Div cols="40% 30% 30%" responsive>
 			<Div bg={colors.pastel.blue} p="8px" align-middle>
 				<Text.Small content='cols="40% 30% 30%"' />
 			</Div>
@@ -980,6 +990,364 @@
 				<Text.Small content="30%" />
 			</Div>
 		</Div>
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**More Value Attributes:**" text={colors.text} />
+		<Div cols gap-2 responsive>
+			<Div text={colors.danger} bg={colors.pastel.red} p-3>
+				<Text.Small content='text={colors.danger}' />
+			</Div>
+			<Div border={colors.success} border-2 p-3>
+				<Text.Small content='border={colors.success}' />
+			</Div>
+			<Div rounded="12px" bg={colors.pastel.purple} p-3>
+				<Text.Small content='rounded="12px"' />
+			</Div>
+		</Div>
+	</Div>
+
+	<!-- ================================================================== -->
+	<!-- SECTION 15: DISPLAY & VISIBILITY -->
+	<!-- ================================================================== -->
+	<Div bg={colors.teal} p-4>
+		<Text.H2 content="15. Display & Visibility" text={colors.white} />
+	</Div>
+
+	<Div p-6>
+		<Text.H4 content="**Display Modes:**" text={colors.text} />
+		<Div bg={colors.gray[100]} p-3>
+			<Div inline-block bg={colors.pastel.yellow} p-2 mr-2>
+				<Text.Small content="inline-block" />
+			</Div>
+			<Div inline-block bg={colors.pastel.green} p-2 mr-2>
+				<Text.Small content="inline-block" />
+			</Div>
+			<Div inline bg={colors.pastel.blue} p-1>
+				<Text.Small content="inline" />
+			</Div>
+		</Div>
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Hidden Element:**" text={colors.text} />
+		<Text.Paragraph content="There is a hidden element below (display: none):" text={colors.textMuted} />
+		<Div hidden bg={colors.danger} p-2>
+			<Text content="This is hidden" />
+		</Div>
+		<Text.Paragraph content="↑ The hidden element is above (not visible)" text={colors.gray[400]} text-sm />
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Visibility:**" text={colors.text} />
+		<Div cols gap-2 responsive>
+			<Div visible bg={colors.pastel.yellow} p-3 align-middle>
+				<Text.Small content="visible" />
+			</Div>
+			<Div invisible bg={colors.pastel.blue} p-3 align-middle>
+				<Text.Small content="invisible (takes space)" />
+			</Div>
+			<Div visible bg={colors.pastel.green} p-3 align-middle>
+				<Text.Small content="visible" />
+			</Div>
+		</Div>
+	</Div>
+
+	<!-- ================================================================== -->
+	<!-- SECTION 16: FRACTIONAL SPACING -->
+	<!-- ================================================================== -->
+	<Div bg={colors.cyan} p-4>
+		<Text.H2 content="16. Fractional Spacing Scale" text={colors.white} />
+	</Div>
+
+	<Div p-6>
+		<Text.H4 content="**Fractional Padding (p-0.5, p-1.5, etc.):**" text={colors.text} />
+		<Div cols gap-1 responsive>
+			<Div p-0.5 bg={colors.pastel.yellow}><Text.Small content="p-0.5" /></Div>
+			<Div p-0.75 bg={colors.pastel.orange}><Text.Small content="p-0.75" /></Div>
+			<Div p-1.5 bg={colors.pastel.red}><Text.Small content="p-1.5" /></Div>
+			<Div p-2.5 bg={colors.pastel.purple}><Text.Small content="p-2.5" /></Div>
+			<Div p-3.5 bg={colors.pastel.blue}><Text.Small content="p-3.5" /></Div>
+		</Div>
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Auto Sizing:**" text={colors.text} />
+		<Div cols gap-2 responsive>
+			<Div w-auto bg={colors.pastel.green} p-3>
+				<Text.Small content="w-auto (shrink to fit)" />
+			</Div>
+			<Div h-auto bg={colors.pastel.cyan} p-3>
+				<Text.Small content="h-auto (content height)" />
+			</Div>
+		</Div>
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Height Utilities:**" text={colors.text} />
+		<Div cols gap-2 h-[100px] responsive>
+			<Div h-full bg={colors.pastel.yellow} align-middle p-2>
+				<Text.Small content="h-full (100%)" />
+			</Div>
+			<Div h-[50px] bg={colors.pastel.green} align-middle p-2>
+				<Text.Small content="h-[50px]" />
+			</Div>
+			<Div h-12 bg={colors.pastel.blue} align-middle p-2>
+				<Text.Small content="h-12 (48px)" />
+			</Div>
+		</Div>
+	</Div>
+
+	<!-- ================================================================== -->
+	<!-- SECTION 17: ADVANCED TYPOGRAPHY -->
+	<!-- ================================================================== -->
+	<Div bg={colors.pink} p-4>
+		<Text.H2 content="17. Advanced Typography" text={colors.white} />
+	</Div>
+
+	<Div p-6>
+		<Text.H4 content="**Additional Font Weights:**" text={colors.text} />
+		<Text content="font-thin (100)" font-thin text={colors.textMuted} />
+		<Br />
+		<Text content="font-extralight (200)" font-extralight text={colors.textMuted} />
+		<Br />
+		<Text content="font-black (900)" font-black text={colors.textMuted} />
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Additional Font Sizes:**" text={colors.text} />
+		<Text content="text-3xl" text-3xl text={colors.textMuted} />
+		<Br />
+		<Text content="text-4xl" text-4xl text={colors.textMuted} />
+		<Br />
+		<Text content="text-5xl" text-5xl text={colors.textMuted} />
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Text Decoration Reset:**" text={colors.text} />
+		<Link href="https://example.com" no-underline text={colors.primary}>
+			<Text content="Link with no-underline" />
+		</Link>
+		<Br />
+		<Text content="Overlined text" overline text={colors.textMuted} />
+		<Br />
+		<Text content="Normal case (after uppercase)" not-italic normal-case text={colors.textMuted} />
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Line Height Scale:**" text={colors.text} />
+		<Div bg={colors.gray[100]} p-3>
+			<Text.Paragraph content="leading-none: Line height 1" leading-none text={colors.textMuted} />
+		</Div>
+		<Spacer h-2 />
+		<Div bg={colors.gray[100]} p-3>
+			<Text.Paragraph content="leading-3: Line height from scale" leading-3 text={colors.textMuted} />
+		</Div>
+		<Spacer h-2 />
+		<Div bg={colors.gray[100]} p-3>
+			<Text.Paragraph content="leading-[2rem]: Arbitrary line height" leading-[2rem] text={colors.textMuted} />
+		</Div>
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Whitespace Control:**" text={colors.text} />
+		<Text.Paragraph content="⚠️ whitespace-nowrap prevents text wrapping. Use with caution as it can cause layout overflow." text={colors.gray[500]} text-sm />
+		<Spacer h-2 />
+		<Div bg={colors.gray[100]} p-3>
+			<Text content="whitespace-nowrap: No wrapping" whitespace-nowrap text={colors.textMuted} />
+		</Div>
+		<Spacer h-2 />
+		<Div bg={colors.gray[100]} p-3>
+			<Text content="whitespace-pre: Preserves   spaces   and
+line breaks" whitespace-pre text={colors.textMuted} />
+		</Div>
+	</Div>
+
+	<!-- ================================================================== -->
+	<!-- SECTION 18: ADVANCED BORDERS -->
+	<!-- ================================================================== -->
+	<Div bg={colors.purple} p-4>
+		<Text.H2 content="18. Advanced Borders" text={colors.white} />
+	</Div>
+
+	<Div p-6>
+		<Text.H4 content="**Axis Borders (border-x, border-y):**" text={colors.text} />
+		<Div cols gap-4 responsive>
+			<Div border-x-2 border={colors.danger} p-3 align-middle>
+				<Text.Small content="border-x-2" />
+			</Div>
+			<Div border-y-2 border={colors.success} p-3 align-middle>
+				<Text.Small content="border-y-2" />
+			</Div>
+		</Div>
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Border Double Style:**" text={colors.text} />
+		<Div border-4 border-double border={colors.textMuted} p-4 align-middle>
+			<Text.Small content="border-double (4px)" />
+		</Div>
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Directional Border Radius:**" text={colors.text} />
+		<Div cols gap-2 responsive>
+			<Div bg={colors.pastel.blue} p-4 rounded-t-lg align-middle>
+				<Text.Small content="rounded-t-lg" />
+			</Div>
+			<Div bg={colors.pastel.green} p-4 rounded-r-xl align-middle>
+				<Text.Small content="rounded-r-xl" />
+			</Div>
+			<Div bg={colors.pastel.yellow} p-4 rounded-b-2xl align-middle>
+				<Text.Small content="rounded-b-2xl" />
+			</Div>
+			<Div bg={colors.pastel.pink} p-4 rounded-l-full align-middle>
+				<Text.Small content="rounded-l-full" />
+			</Div>
+		</Div>
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Corner Border Radius:**" text={colors.text} />
+		<Div cols gap-2 responsive>
+			<Div bg={colors.pastel.purple} p-4 rounded-tl-xl align-middle>
+				<Text.Small content="rounded-tl-xl" />
+			</Div>
+			<Div bg={colors.pastel.cyan} p-4 rounded-tr-xl align-middle>
+				<Text.Small content="rounded-tr-xl" />
+			</Div>
+			<Div bg={colors.pastel.orange} p-4 rounded-br-xl align-middle>
+				<Text.Small content="rounded-br-xl" />
+			</Div>
+			<Div bg={colors.pastel.indigo} p-4 rounded-bl-xl align-middle>
+				<Text.Small content="rounded-bl-xl" />
+			</Div>
+		</Div>
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Min/Max Width:**" text={colors.text} />
+		<Div min-w-[200px] max-w-[400px] bg={colors.pastel.yellow} p-3>
+			<Text.Small content="min-w-[200px] max-w-[400px]" />
+		</Div>
+	</Div>
+
+	<!-- ================================================================== -->
+	<!-- SECTION 19: ROW SPANNING & ADVANCED GRID -->
+	<!-- ================================================================== -->
+	<Div bg={colors.cyan} p-4>
+		<Text.H2 content="19. Row Spanning & Advanced Grid" text={colors.white} />
+	</Div>
+
+	<Div p-6>
+		<Text.H4 content="**Row Spanning (row-span-*):**" text={colors.text} />
+		<Table cols="30% 70%" border>
+			<Table.Row>
+				<Text content="Row 1, Col 1" />
+				<Text content="Row 1, Col 2" row-span-2 bg={colors.pastel.yellow} />
+			</Table.Row>
+			<Table.Row>
+				<Text content="Row 2, Col 1" />
+				<!-- Col 2 is spanned from above -->
+			</Table.Row>
+		</Table>
+
+		<Spacer h-6 />
+
+		<Text.H4 content="**Rows Template (rows=...):**" text={colors.text} />
+		<Div rows="50px 100px 50px" bg={colors.gray[100]} gap-2>
+			<Div bg={colors.pastel.yellow} align-middle p-2>
+				<Text.Small content="50px height" />
+			</Div>
+			<Div bg={colors.pastel.green} align-middle p-2>
+				<Text.Small content="100px height" />
+			</Div>
+			<Div bg={colors.pastel.blue} align-middle p-2>
+				<Text.Small content="50px height" />
+			</Div>
+		</Div>
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Table Cell Padding Override:**" text={colors.text} />
+		<Table cols="50% 50%" border cell-padding-6>
+			<Table.Row header>
+				<Text content="Cell Padding 6" />
+				<Text content="(24px)" />
+			</Table.Row>
+			<Table.Row>
+				<Text content="Larger cells" />
+				<Text content="More space" />
+			</Table.Row>
+		</Table>
+	</Div>
+
+	<!-- ================================================================== -->
+	<!-- SECTION 20: MARKDOWN CODEBLOCKS -->
+	<!-- ================================================================== -->
+	<Div bg={colors.gray[700]} p-4>
+		<Text.H2 content="20. Markdown Codeblocks" text={colors.white} />
+	</Div>
+
+	<Div p-6>
+		<Text.H4 content="**Inline Code:**" text={colors.text} />
+		<Text.Paragraph
+			content="Use \`npm install svelte-emails\` to install the package."
+			text={colors.textMuted}
+		/>
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Code Block:**" text={colors.text} />
+		<Text.Paragraph
+			content={`Here's a code example:
+
+\`\`\`
+import { Email, Div, Text } from 'svelte-emails'
+
+<Email preview='Hello'>
+  <Div p-4>
+    <Text content='Hello World' />
+  </Div>
+</Email>
+\`\`\``}
+			text={colors.textMuted}
+		/>
+
+		<Spacer h-4 />
+
+		<Text.H4 content="**Escape Characters:**" text={colors.text} />
+		<Text.Paragraph
+			content="Escaped: \*not bold\* and \[not a link\](url)"
+			text={colors.textMuted}
+		/>
+	</Div>
+
+	<!-- ================================================================== -->
+	<!-- SECTION 21: FLOAT LAYOUT (⚠️ Limited) -->
+	<!-- ================================================================== -->
+	<Div bg={colors.warning} p-4>
+		<Text.H2 content="21. Float Layout (⚠️ ~90% Support)" text={colors.text} />
+	</Div>
+
+	<Div p-6>
+		<Text.H4 content="**Float Left/Right:**" text={colors.text} />
+		<Text.Paragraph content="⚠️ Float works but tables are preferred for email layouts." text={colors.gray[500]} text-sm />
+		<Spacer h-2 />
+		<Div bg={colors.gray[100]} p-4>
+			<Img
+				src="https://fpoimg.com/80x80"
+				alt="Float left image"
+				width={80}
+				height={80}
+				float-left
+				mr-3
+			/>
+			<Text.Paragraph
+				content="This text wraps around the floated image on the left. Float-based layouts can work for simple inline elements but are not recommended for major layout structure in emails. Use cols/rows or Table instead."
+				text={colors.textMuted}
+			/>
+		</Div>
 	</Div>
 
 	<!-- ================================================================== -->
@@ -989,7 +1357,7 @@
 		<Text.H3 content="🎉 Component Showcase Complete!" text={colors.text} />
 		<Spacer h-2 />
 		<Text.Paragraph
-			content="This email demonstrates all svelte-emails components and style attributes for comprehensive testing."
+			content="This email demonstrates all 21 sections of svelte-emails components and style attributes for comprehensive testing."
 			text={colors.gray[600]}
 			align-middle
 		/>

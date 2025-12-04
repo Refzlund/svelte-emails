@@ -50,6 +50,8 @@ export namespace Mail {
 		bodyBackground?: string
 		/** Content container max width in pixels (defaults to 600) */
 		maxWidth?: number
+		/** Mobile breakpoint in pixels for responsive styles (defaults to 480) */
+		mobileBreakpoint?: number
 		children: IRNode[]
 	}
 
@@ -286,7 +288,7 @@ const VALUE_ATTR_PREFIXES = [
 	// Layout
 	'span', 'row-span', 'cols', 'rows', 'gap', 'cell-padding',
 	// Email
-	'body-bg',
+	'body-bg', 'mobile-threshold',
 	// Effects
 	'opacity'
 ] as const

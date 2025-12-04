@@ -56,6 +56,7 @@ for smooth updates without flash, scroll reset, or image reloading.
 	let heightObserver: ResizeObserver | null = null
 	
 	// Track whether we've done the initial render
+	// svelte-ignore non_reactive_update
 	let isInitialized = false
 	// Track the last rendered HTML to detect changes
 	let lastRenderedHtml = ''

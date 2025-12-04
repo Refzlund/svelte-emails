@@ -16,7 +16,7 @@ export type {
 } from './types'
 
 // Constants
-export { MOBILE_BREAKPOINT } from './CONSTANTS'
+export { DEFAULT_MOBILE_BREAKPOINT } from './CONSTANTS'
 
 // Attribute Parsing
 export {

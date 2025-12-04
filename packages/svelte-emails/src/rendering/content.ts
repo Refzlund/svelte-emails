@@ -205,10 +205,17 @@ function buildCodeblockStyle(context: RenderContext): string {
 /**
  * Parse triple-backtick codeblocks.
  * Handles both ```code``` and ```lang\ncode\n```
+ * 
+ * Adds white-space: pre-wrap and word-wrap: break-word to ensure
+ * codeblocks wrap on mobile instead of causing horizontal overflow.
  */
 function parseCodeblocks(content: string, context: RenderContext): string {
-	const style = buildCodeblockStyle(context)
-	const styleAttr = style ? ` style="${style}"` : ''
+	const configStyle = buildCodeblockStyle(context)
+	// Add responsive text wrapping: pre-wrap preserves whitespace but allows wrapping
+	// word-wrap/overflow-wrap break long words/URLs that would overflow
+	const wrapStyles = 'white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word'
+	const style = configStyle ? `${configStyle}; ${wrapStyles}` : wrapStyles
+	const styleAttr = ` style="${style}"`
 
 	// Multi-line codeblocks: ```lang?\n...code...\n```
 	let result = content.replace(

@@ -45,7 +45,7 @@ import {
 	buildCellStylesFromRow,
 	extractRowStylesForCells,
 	CONFIG_MAPPINGS,
-	MOBILE_BREAKPOINT
+	DEFAULT_MOBILE_BREAKPOINT
 } from './rendering'
 import { getRootSize, merge, basePreset } from './styles'
 
@@ -321,6 +321,9 @@ function renderEmailNode(
 	
 	// Content width from max-w-* or default 600px
 	const contentWidth = node.maxWidth ?? DEFAULT_CONTENT_WIDTH
+	
+	// Mobile breakpoint from mobile-threshold-* or default 480px
+	const mobileBreakpoint = node.mobileBreakpoint ?? DEFAULT_MOBILE_BREAKPOINT
 
 	// Parse attrs for content container styling (bg-[#...] goes here)
 	// Use bodyBgColor as the inherited background for opacity blending
@@ -341,7 +344,7 @@ function renderEmailNode(
 	const childrenHtml = renderChildren(node.children, childInherited, context, rootSize)
 
 	// Build head section (only media queries - reset styles are inlined)
-	const headHtml = buildHeadSection(node, context)
+	const headHtml = buildHeadSection(node, context, mobileBreakpoint)
 
 	// Build body with wrapper tables
 	const bodyStyle = `margin: 0; padding: 0; width: 100%; background-color: ${bodyBgColor};`
@@ -377,8 +380,9 @@ function renderEmailNode(
  * 
  * @param node - Email node for subject extraction
  * @param context - Render context for variable interpolation
+ * @param mobileBreakpoint - Breakpoint in px for responsive styles
  */
-function buildHeadSection(node: Mail.EmailNode, context: RenderContext): string {
+function buildHeadSection(node: Mail.EmailNode, context: RenderContext, mobileBreakpoint: number): string {
 	const subject = node.subject 
 		? interpolatePlaceholders(node.subject, context)
 		: ''
@@ -386,7 +390,7 @@ function buildHeadSection(node: Mail.EmailNode, context: RenderContext): string 
 	// Only media query CSS - everything else is inlined
 	// This is the inline-first approach for maximum email client compatibility
 	const css = [
-		`@media screen and (max-width:${MOBILE_BREAKPOINT}px){`,
+		`@media screen and (max-width:${mobileBreakpoint}px){`,
 		`.email-container{width:100%!important}`,
 		`.responsive-grid td{display:block!important;width:100%!important}`,
 		`.responsive-grid td>table{display:table!important;width:100%!important}`,

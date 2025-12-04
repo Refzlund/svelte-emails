@@ -154,10 +154,11 @@ export type EffectValueAttributes = ValueAttributes<
 
 /**
  * Value-based email-specific attributes.
- * Use these with Svelte variables: `<Email body-bg={myBg} />`
+ * Use these with Svelte variables: `<Email body-bg={myBg} mobile-threshold={breakpoint} />`
  */
 export type EmailValueAttributes = ValueAttributes<
 	| 'body-bg'
+	| 'mobile-threshold'
 >
 
 /**
@@ -906,10 +907,14 @@ export type ExtendedSizingAttributes =
  * - `max-w-[value]` — Override the default 600px content width
  * - `max-w-xl`, `max-w-2xl`, etc. — Use preset widths
  * 
+ * Responsive breakpoint can be customized:
+ * - `mobile-threshold-[480px]` — Default breakpoint for responsive styles
+ * - Lower values = tighter (stacks later), higher = looser (stacks earlier)
+ * 
  * **Example:**
  * ```svelte
- * <Email body-bg-[#f5f5f5] bg-[#ffffff] max-w-[700px]>
- *   <!-- Light gray body, white content area, 700px wide -->
+ * <Email body-bg-[#f5f5f5] bg-[#ffffff] max-w-[700px] mobile-threshold-[425px]>
+ *   <!-- Light gray body, white content area, 700px wide, stacks at 425px -->
  * </Email>
  * ```
  * 
@@ -918,6 +923,15 @@ export type ExtendedSizingAttributes =
  */
 export type BodyBackgroundAttributes = Attributes<
 	| `body-bg-[${string}]`
+>
+
+/**
+ * Mobile breakpoint attribute for responsive styles.
+ * Controls when `responsive` columns stack and when `mobile-only`/`desktop-only` toggle.
+ * Default: 480px
+ */
+export type MobileThresholdAttributes = Attributes<
+	| `mobile-threshold-[${string}]`
 >
 
 /**
@@ -937,10 +951,12 @@ export type EmailMaxWidthAttributes = Attributes<
  * - `body-bg-[#hex]` — Body/wrapper background color (solid only, no opacity)
  * - `bg-[#hex]` — Content container background (supports opacity modifiers)
  * - `max-w-*` — Content container max width (default: 600px)
+ * - `mobile-threshold-[px]` — Responsive breakpoint (default: 480px)
  * - Standard styling attributes (padding, colors, typography, etc.)
  */
 export type EmailAttributes =
 	& BodyBackgroundAttributes
+	& MobileThresholdAttributes
 	& EmailMaxWidthAttributes
 	& CoreStyleAttributes
 	& SpacingAttributes
@@ -950,7 +966,7 @@ export type EmailAttributes =
 	& SafeBorderAttributes
 	& BorderRadiusAttributes
 	& EffectsAttributes
-	& EmailValueAttributes  // Value syntax support (body-bg)
+	& EmailValueAttributes  // Value syntax support (body-bg, mobile-threshold)
 	& ColorValueAttributes  // Value syntax support (bg, text)
 	& RoundedDualAttributes  // rounded properties can be boolean or string
 
