@@ -1000,7 +1000,21 @@ interface StylePreset {
 
 ### Symbol.for() for Context Keys
 
-`Symbol.for()` creates stable, globally-unique keys that work both when injecting context (in `render()`) and reading context (in components). Svelte's `createContext()` generates internal keys that aren't accessible from outside the component tree.
+`Symbol.for()` creates stable, globally-unique keys that work both when injecting context (in `render()`) and reading context (in components). This is critical for SSR where modules may be loaded multiple times by Vite's module runner.
+
+```typescript
+// In context.ts - defined once
+export const EMAIL_ROOT_CONTEXT_KEY = Symbol.for('svelte-emails:root-collector')
+
+// In render() - sets context
+const context = new Map([[EMAIL_ROOT_CONTEXT_KEY, collector]])
+await svelteRender(EmailComponent, { props, context })
+
+// In Email.svelte - reads context
+const collector = getContext<Collector>(EMAIL_ROOT_CONTEXT_KEY)
+```
+
+Using the same `Symbol.for()` key guarantees the symbol instance is identical across all module instances, even when Vite's SSR runner loads the same module multiple times.
 
 ---
 

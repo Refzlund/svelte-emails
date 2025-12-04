@@ -34,6 +34,10 @@
 	let iframeElement: HTMLIFrameElement | undefined = $state()
 	let resizeEdge: 'left' | 'right' | null = $state(null)
 	let isDragging = $state(false)
+	
+	// Track current HTML to avoid unnecessary updates
+	let currentHtml = ''
+	let heightObserver: ResizeObserver | null = null
 
 	// Track container height for min-height calculation
 	$effect(() => {
@@ -44,65 +48,64 @@
 		}
 		
 		updateContainerHeight()
-		const observer = new ResizeObserver(updateContainerHeight)
-		observer.observe(containerElement)
+		const resizeObserver = new ResizeObserver(updateContainerHeight)
+		resizeObserver.observe(containerElement)
 		
-		return () => observer.disconnect()
+		return () => resizeObserver.disconnect()
 	})
 
-	// Reset iframe height when html changes to allow shrinking
-	$effect(() => {
-		const _ = imageCache.processedHtml || html
-		iframeHeight = 0
-	})
+	// Derive the content to display
+	const contentHtml = $derived(imageCache.processedHtml || html)
 
-	// Sync iframe height to its content and setup mouse event forwarding
+	// Write HTML directly to iframe document (faster than srcdoc - no reload)
 	$effect(() => {
 		const iframe = iframeElement
-		if (!iframe) return
-
-		let observer: ResizeObserver | null = null
-
+		const content = contentHtml
+		if (!iframe || !content) return
+		
+		// Skip if content hasn't changed
+		if (content === currentHtml) return
+		currentHtml = content
+		
+		// Reset height to allow shrinking
+		iframeHeight = 0
+		
+		const doc = iframe.contentDocument
+		if (!doc) return
+		
+		// Cleanup previous observer
+		heightObserver?.disconnect()
+		doc.removeEventListener('mousemove', handleIframeMouseMove)
+		
+		// Write content directly (faster than srcdoc)
+		doc.open()
+		doc.write(content)
+		doc.close()
+		
+		// Setup height observer
 		const updateHeight = () => {
-			const doc = iframe.contentDocument
-			if (doc?.documentElement) {
+			if (doc.documentElement) {
 				const height = doc.documentElement.scrollHeight
 				if (height > 0) {
 					iframeHeight = height
 				}
 			}
 		}
-
-		const setupObserver = () => {
-			const doc = iframe.contentDocument
-			if (!doc?.body) return
-
-			updateHeight()
-
-			observer = new ResizeObserver(updateHeight)
-			observer.observe(doc.body)
-			if (doc.documentElement) {
-				observer.observe(doc.documentElement)
-			}
-
-			// Forward mouse events from iframe to detect edge proximity
-			doc.addEventListener('mousemove', handleIframeMouseMove)
-		}
-
-		const onLoad = () => {
-			setupObserver()
-		}
-
-		iframe.addEventListener('load', onLoad)
-
-		if (iframe.contentDocument?.readyState === 'complete') {
-			setupObserver()
-		}
-
+		
+		// Initial height update
+		requestAnimationFrame(updateHeight)
+		
+		// Observe for changes
+		heightObserver = new ResizeObserver(updateHeight)
+		if (doc.body) heightObserver.observe(doc.body)
+		if (doc.documentElement) heightObserver.observe(doc.documentElement)
+		
+		// Forward mouse events
+		doc.addEventListener('mousemove', handleIframeMouseMove)
+		
 		return () => {
-			iframe.removeEventListener('load', onLoad)
-			iframe.contentDocument?.removeEventListener('mousemove', handleIframeMouseMove)
-			observer?.disconnect()
+			heightObserver?.disconnect()
+			doc.removeEventListener('mousemove', handleIframeMouseMove)
 		}
 	})
 
@@ -225,7 +228,6 @@
 		{/if}
 		<iframe
 			bind:this={iframeElement}
-			srcdoc={imageCache.processedHtml || html}
 			title="Email Preview"
 			style:height={iframeHeight > 0 ? `${iframeHeight}px` : `${containerHeight}px`}
 			style:min-height="{containerHeight}px"

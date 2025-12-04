@@ -29,10 +29,19 @@ import type { StyleConfig } from './styles'
 import type { Component } from 'svelte'
 import { render as svelteRender } from 'svelte/server'
 
+// <Email.Render ...>
 const Email = Object.assign(_Email, { 
 	Render: _Render
 })
-
+// <Text content='...' />
+// <Text.H1 content='...' />
+// <Text.H2 content='...' />
+// <Text.H3 content='...' />
+// <Text.H4 content='...' />
+// <Text.H5 content='...' />
+// <Text.H6 content='...' />
+// <Text.Paragraph content='...' />
+// <Text.Small content='...' />
 const Text = Object.assign(_Text, {
 	H1: _TextH1,
 	H2: _TextH2,
@@ -43,7 +52,8 @@ const Text = Object.assign(_Text, {
 	Paragraph: _TextParagraph,
 	Small: _TextSmall
 })
-
+// <Table> ...
+// <Table.Row> ...
 const Table = Object.assign(_Table, {
 	Row: _TableRow
 })
@@ -104,17 +114,12 @@ export async function render<TProps extends Record<string, unknown> = Record<str
 		}
 	}
 
-	// Create context map with the collector
-	// This is passed to svelteRender so components can access it via getContext()
-	const context = new Map<symbol, unknown>([
-		[EMAIL_ROOT_CONTEXT_KEY, collector]
-	])
-
-	// Use Svelte's server-side render with context
-	// Note: render() returns a Promise in Svelte 5 and must be awaited
+	// Use Svelte's server-side render with context Map
+	// The context Map is the canonical way to pass context in SSR
+	// Using the same Symbol.for() key as getContext() uses in Email.svelte
 	await svelteRender(EmailComponent, {
 		props,
-		context
+		context: new Map([[EMAIL_ROOT_CONTEXT_KEY, collector]])
 	})
 
 	if (!root) {

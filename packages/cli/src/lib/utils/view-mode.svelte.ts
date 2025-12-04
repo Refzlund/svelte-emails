@@ -12,7 +12,7 @@
  * @see ARCHITECTURE_CLI.md for usage details
  */
 
-import { goto } from '$app/navigation'
+import { replaceState } from '$app/navigation'
 import { page } from '$app/state'
 
 export type ViewMode = 'preview' | 'source' | 'html' | 'raw' | 'text'
@@ -27,33 +27,32 @@ function parseMode(urlMode: string | null): ViewMode {
 }
 
 export function createViewMode() {
-	let mode: ViewMode = $state(parseMode(page.url.searchParams.get('mode')))
+	let value = $state<ViewMode>(parseMode(page.url.searchParams.get('mode')))
 
 	// Sync with URL changes (e.g., browser back/forward)
+	// Only sync FROM URL, not when we're setting it ourselves
 	$effect(() => {
 		const urlMode = page.url.searchParams.get('mode')
 		const newMode = parseMode(urlMode)
-		if (newMode !== mode) {
-			mode = newMode
-		}
+		// Always sync - the URL is the source of truth after replaceState
+		value = newMode
 	})
 
+	// Return object with getters - this creates live bindings that Svelte can track
 	return {
-		get current() {
-			return mode
-		},
-		get isRaw() {
-			return mode === 'raw'
-		},
+		get value() { return value },
+		get isRaw() { return value === 'raw' },
 		set(newMode: ViewMode) {
-			mode = newMode
-			const url = new URL(page.url)
+			value = newMode
+			// Update URL using SvelteKit's replaceState to properly sync with router
+			const url = new URL(window.location.href)
 			if (newMode === 'preview') {
 				url.searchParams.delete('mode')
 			} else {
 				url.searchParams.set('mode', newMode)
 			}
-			goto(url.toString(), { replaceState: true, keepFocus: true, noScroll: true })
+			// Use SvelteKit's replaceState - preserve existing page state
+			replaceState(url, page.state)
 		}
 	}
 }

@@ -1,19 +1,13 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation'
 	import { page } from '$app/state'
-	import { onMount } from 'svelte'
+	import { onMount, untrack } from 'svelte'
 	import { browser } from '$app/environment'
 	import { emailStore } from '$lib/email-store'
 	import { createHighlightManager } from '$lib/highlight.svelte'
-	import { EmailPreview, CodeView } from '$lib/components'
-	import {
-		cacheEmailData,
-		prefetchAdjacentEmails,
-		invalidateEmailCache,
-		getCachedEmailData,
-		type EmailData
-	} from '$lib/email-prefetch'
+	import { EmailPreview, CodeView, LoadingBar } from '$lib/components'
+	import { getCached, setCache, setCacheFormattedHtml, invalidateCache, prefetchAdjacentEmails, type EmailRenderData } from '$lib/page-cache'
 	import { createViewMode } from '$lib/utils/view-mode.svelte'
+	import { formatHtml } from 'svelte-emails'
 	import type { PageData } from './$types'
 	import * as icons from '$lib/Icons.svelte'
 	import floatingUI from 'floating-runes'
@@ -23,6 +17,87 @@
 	}
 
 	const { data }: Props = $props()
+
+	// Get email ID from shallow routing state or fall back to data/params
+	const currentEmailId = $derived(
+		(page.state as any)?.emailId ?? data.emailId ?? data.email?.id ?? page.params.email
+	)
+
+	// Local state for email content (fetched client-side for instant navigation)
+	let email = $state(data.email)
+	let source = $state(data.source)
+	let rendered = $state(data.rendered)
+	let formattedHtml = $state<string | null>(null)
+	let renderError = $state<string | null>(data.renderError)
+	let isLoading = $state(!data.email)
+	let isRerendering = $state(false)  // True when re-rendering after file change
+
+	/**
+	 * Process email render result - format HTML if needed and update state
+	 */
+	function processRenderResult(result: EmailRenderData, emailId: string) {
+		email = result.email
+		source = result.source
+		rendered = result.rendered
+		renderError = result.renderError
+		
+		// Use cached formatted HTML or format now
+		if (result.formattedHtml) {
+			formattedHtml = result.formattedHtml
+		} else if (result.rendered?.html) {
+			// Format HTML client-side and cache it
+			const formatted = formatHtml(result.rendered.html)
+			formattedHtml = formatted
+			result.formattedHtml = formatted
+			setCacheFormattedHtml(emailId, formatted)
+		} else {
+			formattedHtml = null
+		}
+	}
+
+	// Fetch email content when email ID changes (from shallow routing or regular navigation)
+	$effect(() => {
+		const emailId = currentEmailId
+		if (!emailId) return
+
+		// Check if we already have this email loaded
+		if (email?.id === emailId) return
+
+		// Check cache first for instant display
+		const cached = getCached(emailId)
+		if (cached) {
+			processRenderResult(cached.data, emailId)
+			isLoading = false
+			return
+		}
+
+		// Fetch from server
+		isLoading = true
+		renderError = null
+		fetch(`/__svelte-emails/render?id=${encodeURIComponent(emailId)}`)
+			.then(async (res) => {
+				// Check if this is still the current email
+				if (currentEmailId !== emailId) return
+				
+				if (!res.ok) {
+					const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+					renderError = err.error || 'Failed to load email'
+					isLoading = false
+					return
+				}
+				const result = await res.json()
+				// Add formattedHtml field (will be populated by processRenderResult)
+				result.formattedHtml = null
+				processRenderResult(result, emailId)
+				setCache(emailId, result)
+				isLoading = false
+			})
+			.catch((err) => {
+				if (currentEmailId !== emailId) return
+				renderError = err.message || 'Failed to load email'
+				isLoading = false
+			})
+	})
 
 	const viewMode = createViewMode()
 	
@@ -39,48 +114,29 @@
 		})
 	})
 
-	// Use cached data if available for instant display, fall back to server data
-	const effectiveData = $derived.by(() => {
-		const emailId = page.params.email
-		if (!emailId) return data
-		
-		const cached = getCachedEmailData(emailId)
-		// Use server data if it's for the current email, otherwise use cache
-		if (data.email.id === emailId) {
-			return data
-		}
-		return cached || data
-	})
-
 	// Highlight manager for off-thread syntax highlighting
 	const highlighter = createHighlightManager()
 
-	// Cache the loaded data and prefetch adjacent emails
+	// Trigger highlighting when data changes
+	// Highlights both formatted and raw HTML separately for proper caching
 	$effect(() => {
-		// Cache current email data
-		cacheEmailData({
-			email: data.email,
-			source: data.source,
-			rendered: data.rendered,
-			renderError: data.renderError,
-			timestamp: Date.now()
-		})
-
-		// Prefetch adjacent emails for instant navigation
-		const emailIds = emailStore.emails.map((e) => e.id)
-		if (emailIds.length > 0) {
-			prefetchAdjacentEmails(data.email.id, emailIds, 2)
-		}
+		if (!email || !source) return
+		highlighter.highlight(
+			email.id,
+			source,
+			formattedHtml,
+			rendered?.html ?? null,
+			rendered?.text ?? null
+		)
 	})
 
-	// Trigger highlighting when data changes
+	// Prefetch adjacent emails for instant navigation
 	$effect(() => {
-		highlighter.highlight(
-			effectiveData.email.id,
-			effectiveData.source,
-			effectiveData.rendered?.html ?? null,
-			effectiveData.rendered?.text ?? null
-		)
+		if (!email) return
+		const emailIds = emailStore.emails.map((e) => e.id)
+		if (emailIds.length > 0) {
+			untrack(() => prefetchAdjacentEmails(email!.id, emailIds, 2))
+		}
 	})
 
 	// Listen for content changes via shared store
@@ -90,19 +146,43 @@
 		const unsubscribe = emailStore.subscribe(() => {
 			// Check if content changed for this email
 			if (
-				emailStore.lastContentChangeId === data.email.id &&
+				emailStore.lastContentChangeId === currentEmailId &&
 				emailStore.lastContentChangeTime > lastSeenTime
 			) {
 				console.log('[svelte-emails] Reloading due to content change')
 				lastSeenTime = emailStore.lastContentChangeTime
-				// Invalidate cache before reloading
-				invalidateEmailCache(data.email.id)
-				invalidateAll()
+				
+				// Invalidate cache and trigger re-render (keep current content visible)
+				invalidateCache(currentEmailId)
+				isRerendering = true
+				
+				// Fetch updated content
+				fetch(`/__svelte-emails/render?id=${encodeURIComponent(currentEmailId)}`)
+					.then(async (res) => {
+						if (!res.ok) {
+							const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+							renderError = err.error || 'Failed to load email'
+							isRerendering = false
+							return
+						}
+						const result = await res.json()
+						result.formattedHtml = null
+						processRenderResult(result, currentEmailId)
+						setCache(currentEmailId, result)
+						isRerendering = false
+					})
+					.catch((err) => {
+						renderError = err.message || 'Failed to load email'
+						isRerendering = false
+					})
 			}
 		})
 
 		return unsubscribe
 	})
+
+	// Derive the relative path for display
+	const relativePath = $derived(email?.relativePath ?? currentEmailId ?? 'Loading...')
 </script>
 
 <div class="email-viewer">
@@ -121,52 +201,57 @@
 				></div>
 				<button
 					class="tab"
-					class:active={viewMode.current === 'preview'}
+					class:active={viewMode.value === 'preview'}
 					use:float.tether={'mouseenter'}
-					use:float.ref={() => viewMode.current === 'preview'}
+					use:float.ref={() => viewMode.value === 'preview'}
 					onclick={() => viewMode.set('preview')}
 				>
-					{@render icons.contentView({ size: 20, opacity: viewMode.current === 'preview' ? 1 : .75 })} Preview
+					{#if (isLoading || isRerendering) && viewMode.value === 'preview'}
+						<span class="spinner"></span>
+					{:else}
+						{@render icons.contentView({ size: 20, opacity: viewMode.value === 'preview' ? 1 : .75 })}
+					{/if}
+					Preview
 				</button>
 				<button
 					class="tab"
-					class:active={viewMode.current === 'source'}
+					class:active={viewMode.value === 'source'}
 					use:float.tether={'mouseenter'}
-					use:float.ref={() => viewMode.current === 'source'}
+					use:float.ref={() => viewMode.value === 'source'}
 					onclick={() => viewMode.set('source')}
 				>
 					{#if highlighter.loading.source}
 						<span class="spinner"></span>
 					{:else}
-						{@render icons.code({ size: 20, opacity: viewMode.current === 'source' ? 1 : .75 })}
+						{@render icons.code({ size: 20, opacity: viewMode.value === 'source' ? 1 : .75 })}
 					{/if}
 					Source
 				</button>
 				<button
 					class="tab"
-					class:active={viewMode.current === 'html' || viewMode.current === 'raw'}
+					class:active={viewMode.value === 'html' || viewMode.value === 'raw'}
 					use:float.tether={'mouseenter'}
-					use:float.ref={() => viewMode.current === 'html' || viewMode.current === 'raw'}
+					use:float.ref={() => viewMode.value === 'html' || viewMode.value === 'raw'}
 					onclick={() => viewMode.set('html')}
 				>
 					{#if highlighter.loading.html}
 						<span class="spinner"></span>
 					{:else}
-						{@render icons.document({ size: 20, opacity: viewMode.current === 'html' || viewMode.current === 'raw' ? 1 : .75 })}
+						{@render icons.document({ size: 20, opacity: viewMode.value === 'html' || viewMode.value === 'raw' ? 1 : .75 })}
 					{/if}
 					HTML
 				</button>
 				<button
 					class="tab"
-					class:active={viewMode.current === 'text'}
+					class:active={viewMode.value === 'text'}
 					use:float.tether={'mouseenter'}
-					use:float.ref={() => viewMode.current === 'text'}
+					use:float.ref={() => viewMode.value === 'text'}
 					onclick={() => viewMode.set('text')}
 				>
 					{#if highlighter.loading.text}
 						<span class="spinner"></span>
 					{:else}
-						{@render icons.codeText({ size: 20, opacity: viewMode.current === 'text' ? 1 : .75 })}
+						{@render icons.codeText({ size: 20, opacity: viewMode.value === 'text' ? 1 : .75 })}
 					{/if}
 					Text
 				</button>
@@ -176,44 +261,49 @@
 			<nav class="tabs">
 				<button
 					class="tab"
-					class:active={viewMode.current === 'preview'}
+					class:active={viewMode.value === 'preview'}
 					onclick={() => viewMode.set('preview')}
 				>
-					{@render icons.contentView({ size: 20, opacity: viewMode.current === 'preview' ? 1 : .75 })} Preview
+					{#if (isLoading || isRerendering) && viewMode.value === 'preview'}
+						<span class="spinner"></span>
+					{:else}
+						{@render icons.contentView({ size: 20, opacity: viewMode.value === 'preview' ? 1 : .75 })}
+					{/if}
+					Preview
 				</button>
 				<button
 					class="tab"
-					class:active={viewMode.current === 'source'}
+					class:active={viewMode.value === 'source'}
 					onclick={() => viewMode.set('source')}
 				>
 					{#if highlighter.loading.source}
 						<span class="spinner"></span>
 					{:else}
-						{@render icons.code({ size: 20, opacity: viewMode.current === 'source' ? 1 : .75 })}
+						{@render icons.code({ size: 20, opacity: viewMode.value === 'source' ? 1 : .75 })}
 					{/if}
 					Source
 				</button>
 				<button
 					class="tab"
-					class:active={viewMode.current === 'html' || viewMode.current === 'raw'}
+					class:active={viewMode.value === 'html' || viewMode.value === 'raw'}
 					onclick={() => viewMode.set('html')}
 				>
 					{#if highlighter.loading.html}
 						<span class="spinner"></span>
 					{:else}
-						{@render icons.document({ size: 20, opacity: viewMode.current === 'html' || viewMode.current === 'raw' ? 1 : .75 })}
+						{@render icons.document({ size: 20, opacity: viewMode.value === 'html' || viewMode.value === 'raw' ? 1 : .75 })}
 					{/if}
 					HTML
 				</button>
 				<button
 					class="tab"
-					class:active={viewMode.current === 'text'}
+					class:active={viewMode.value === 'text'}
 					onclick={() => viewMode.set('text')}
 				>
 					{#if highlighter.loading.text}
 						<span class="spinner"></span>
 					{:else}
-						{@render icons.codeText({ size: 20, opacity: viewMode.current === 'text' ? 1 : .75 })}
+						{@render icons.codeText({ size: 20, opacity: viewMode.value === 'text' ? 1 : .75 })}
 					{/if}
 					Text
 				</button>
@@ -221,41 +311,47 @@
 		{/if}
 
 		<div class="file-path">
-			{effectiveData.email.relativePath}
+			{relativePath}
 		</div>
+		<LoadingBar visible={isLoading || isRerendering} />
 	</header>
 
 	<!-- Content area -->
 	<div class="viewer-content">
-		{#if effectiveData.renderError}
+		{#if isLoading}
+			<div class="loading-panel">
+				<p>Rendering email...</p>
+			</div>
+		{:else if renderError}
 			<div class="error-panel">
 				<h3>⚠️ Render Error</h3>
-				<pre>{effectiveData.renderError}</pre>
+				<pre>{renderError}</pre>
 			</div>
-		{:else if viewMode.current === 'preview'}
-			{#if effectiveData.rendered}
-				<EmailPreview html={effectiveData.rendered.html} />
+		{:else if viewMode.value === 'preview'}
+			{#if rendered}
+				<EmailPreview html={rendered.html} />
 			{/if}
-		{:else if viewMode.current === 'source'}
+		{:else if viewMode.value === 'source'}
 			<CodeView
-				code={effectiveData.source}
+				code={source ?? ''}
 				highlightedHtml={highlighter.state.source}
 			/>
-		{:else if viewMode.current === 'html' || viewMode.current === 'raw'}
-			{#if effectiveData.rendered}
+		{:else if viewMode.value === 'html' || viewMode.value === 'raw'}
+			{#if rendered}
 				<CodeView
-					code={effectiveData.rendered.html}
-					rawCode={effectiveData.rendered.htmlRaw}
+					code={formattedHtml ?? rendered.html}
+					rawCode={rendered.html}
 					highlightedHtml={highlighter.state.html}
+					highlightedRawHtml={highlighter.state.htmlRaw}
 					showToggle
 					showRaw={viewMode.isRaw}
 					onToggle={(raw) => viewMode.set(raw ? 'raw' : 'html')}
 				/>
 			{/if}
-		{:else if viewMode.current === 'text'}
-			{#if effectiveData.rendered}
+		{:else if viewMode.value === 'text'}
+			{#if rendered}
 				<CodeView
-					code={effectiveData.rendered.text}
+					code={rendered.text}
 					highlightedHtml={highlighter.state.text}
 				/>
 			{/if}
@@ -271,6 +367,7 @@
 	}
 
 	.viewer-header {
+		position: relative;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -334,12 +431,13 @@
 	}
 
 	.spinner {
-		width: 12px;
-		height: 12px;
+		width: 20px;
+		height: 20px;
 		border: 2px solid rgba(255, 255, 255, 0.3);
 		border-top-color: rgba(255, 255, 255, 0.8);
 		border-radius: 50%;
 		animation: spin 0.8s linear infinite;
+		flex-shrink: 0;
 	}
 
 	@keyframes spin {
@@ -376,5 +474,15 @@
 		overflow: auto;
 		font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
 		font-size: 13px;
+	}
+
+	.loading-panel {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		height: 100%;
+		gap: 16px;
+		color: rgba(255, 255, 255, 0.6);
 	}
 </style>

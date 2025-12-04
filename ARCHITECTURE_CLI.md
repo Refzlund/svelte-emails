@@ -25,13 +25,17 @@ packages/cli/
 │   ├── cli.ts                 # CLI entry point (future)
 │   ├── app.html               # SvelteKit HTML template
 │   ├── app.d.ts               # Type declarations
+│   ├── hooks.client.ts        # Client-side hooks (console warning suppression)
 │   ├── lib/
 │   │   ├── email-store.ts     # Client-side SSE state management
-│   │   ├── email-prefetch.ts  # Adjacent email prefetching
+│   │   ├── page-cache.ts      # Client-side cache for instant navigation
+│   │   ├── image-cache.svelte.ts # Image caching with CORS proxy
+│   │   ├── highlight.svelte.ts # Off-thread syntax highlighting with caching
 │   │   ├── Icons.svelte       # SVG icons as Svelte snippets
 │   │   ├── components/
 │   │   │   ├── EmailPreview.svelte  # Resizable iframe preview
-│   │   │   └── CodeView.svelte      # Syntax-highlighted code panel
+│   │   │   ├── CodeView.svelte      # Syntax-highlighted code panel
+│   │   │   └── LoadingBar.svelte    # Animated loading indicator
 │   │   ├── utils/
 │   │   │   ├── view-mode.svelte.ts  # URL-synced view mode state
 │   │   │   └── preview-width.svelte.ts # Persisted preview width
@@ -39,11 +43,11 @@ packages/cli/
 │   │       ├── discovery.ts   # Email file discovery
 │   │       └── vite-plugin.ts # Core Vite plugin
 │   └── routes/
-│       ├── +layout.svelte     # Main layout with sidebar
+│       ├── +layout.svelte     # Main layout with sidebar + shallow routing
 │       ├── +page.svelte       # Index redirect
 │       └── [email]/
 │           ├── +page.svelte   # Email viewer with tabs
-│           └── +page.server.ts # Server-side data loading
+│           └── +page.ts       # Client-side load function
 ├── static/
 │   └── theme.css              # CSS variables and theme
 ├── vite.config.ts             # Vite configuration
@@ -202,7 +206,59 @@ export const emailStore = {
 - Singleton pattern prevents multiple SSE connections
 - Timestamp-based change detection for precise updates
 
-### 6. UI Components
+### 6. Page Cache (`page-cache.ts`)
+
+Client-side cache for instant email navigation.
+
+```typescript
+export interface EmailRenderData {
+  email: { id, name, relativePath, previewText }
+  source: string
+  rendered: { html, htmlRaw, text } | null
+  formattedHtml: string | null  // Computed client-side
+  renderError: string | null
+}
+
+export function getCached(emailId: string): CachedData | undefined
+export function setCache(emailId: string, data: EmailRenderData): void
+export function setCacheFormattedHtml(emailId: string, html: string): void
+export function invalidateCache(emailId?: string): void
+export function prefetchAdjacentEmails(currentId: string, emailIds: string[], count?: number): void
+```
+
+**Key features:**
+- 5-minute TTL for cached data
+- Prefetches adjacent emails for instant navigation
+- Caches formatted HTML separately (computed client-side)
+- Invalidated on file changes via SSE events
+
+### 7. Highlight Manager (`highlight.svelte.ts`)
+
+Off-thread syntax highlighting using Web Workers.
+
+```typescript
+export interface HighlightState {
+  source: string | null
+  html: string | null
+  htmlRaw: string | null
+  text: string | null
+}
+
+export function createHighlightManager(): {
+  state: HighlightState
+  loading: LoadingState
+  highlight(emailId, source, html, htmlRaw, text): Promise<void>
+  clear(): void
+}
+```
+
+**Key features:**
+- One worker per highlight type (parallel processing)
+- Per-email caching with version tracking
+- Separate caching for formatted vs raw HTML
+- Svelte 5 reactive state (`$state`)
+
+### 8. UI Components
 
 #### Layout (`+layout.svelte`)
 
@@ -217,7 +273,7 @@ export const emailStore = {
 - HTML tab has Formatted/Raw toggle (Raw shows minified output)
 - Uses `createViewMode()` for URL-synced tab state
 - Listens for `content-change` events to trigger reload
-- Uses `invalidateAll()` for SvelteKit data refetch
+- Client-side data fetching for instant navigation
 - Prefetches adjacent emails for instant navigation
 
 #### EmailPreview Component
@@ -242,20 +298,35 @@ Syntax-highlighted code panel with optional toggle:
 
 ```typescript
 interface Props {
-  code: string              // Primary code to display
-  highlightedHtml: string   // Pre-highlighted HTML from Shiki
-  showToggle?: boolean      // Show Formatted/Raw toggle
-  rawCode?: string          // Alternative code for raw view
-  showRaw?: boolean         // Controlled: current state
-  onToggle?: (raw) => void  // Callback when toggled
+  code: string                   // Primary code to display
+  highlightedHtml: string | null // Pre-highlighted HTML from Shiki
+  showToggle?: boolean           // Show Formatted/Raw toggle
+  rawCode?: string               // Alternative code for raw view
+  highlightedRawHtml?: string | null // Highlighted HTML for raw view
+  showRaw?: boolean              // Controlled: current state
+  onToggle?: (raw) => void       // Callback when toggled
 }
 ```
 
-#### Server Load (`[email]/+page.server.ts`)
+#### LoadingBar Component
 
-- Fetches from `/__svelte-emails/render` endpoint
-- Handles render errors gracefully
-- Returns email metadata, source, and rendered output (both formatted and raw HTML)
+Animated loading indicator shown during re-renders:
+
+```typescript
+interface Props {
+  visible: boolean  // Controls visibility
+}
+```
+
+Shows a smooth indeterminate progress animation with multiple animated lines.
+Gracefully completes current animation cycle before hiding.
+
+#### Client Load (`[email]/+page.ts`)
+
+- Checks client-side cache for instant navigation
+- Returns cached data immediately if available
+- Returns placeholder data for client-side fetching if not cached
+- SSR disabled (`export const ssr = false`) for instant client navigation
 
 ---
 
@@ -268,10 +339,11 @@ interface Props {
 2. virtual:email-list provides initial email array
 3. Browser connects to SSE endpoint
 4. SSE sends current emails (init event)
-5. User navigates to /[email]
-6. +page.server.ts fetches from /__svelte-emails/render
-7. Vite ssrLoadModule renders the component
-8. Page displays preview
+5. User navigates to /[email] (shallow routing for instant URL update)
+6. +page.ts checks client cache, returns immediately
+7. Component fetches from /__svelte-emails/render API
+8. Vite ssrLoadModule renders the component
+9. Page displays preview
 ```
 
 ### File Change Flow
@@ -285,8 +357,8 @@ interface Props {
    - content-change (if existing file modified)
 5. Client email-store receives events
 6. Layout updates sidebar (if list changed)
-7. Page calls invalidateAll() (if viewing changed file)
-8. +page.server.ts refetches fresh render
+7. Page invalidates cache and triggers refetch
+8. Component fetches fresh render from API
 9. UI updates with new content
 ```
 
@@ -340,6 +412,37 @@ Windows uses backslashes, everything else uses forward slashes. Always normalize
 ```typescript
 const normalizedPath = filePath.replace(/\\/g, '/')
 ```
+
+### 6. CSS Virtual Module Race Condition (Rolldown-Vite)
+
+With rolldown-vite (Vite 7+), CSS virtual modules can fail to load on first page request:
+
+```
+[vite-plugin-svelte:load] failed to load virtual css module .../+page.svelte?svelte&type=style&lang.css
+```
+
+**Why this happens:**
+
+When the browser requests a page, Vite loads the Svelte component which emits a CSS import. The CSS is stored in a virtual module that's populated during component compilation. With rolldown-vite, there's a race condition where the browser requests the CSS before compilation completes.
+
+**Solution:** Use `css: 'injected'` in Svelte compiler options to inject CSS directly into JS instead of emitting separate CSS files:
+
+```javascript
+// svelte.config.js
+const config = {
+  compilerOptions: {
+    css: 'injected'
+  }
+}
+```
+
+This bypasses the virtual CSS module system entirely. Since this is a dev-only tool, the slight performance tradeoff (CSS bundled with JS instead of separate files) is acceptable.
+
+**Alternative (did not work reliably):** Using `server.warmup` to pre-compile components was attempted but did not reliably fix the issue on first load.
+
+**References:**
+- [vite-plugin-svelte #1192](https://github.com/sveltejs/vite-plugin-svelte/issues/1192)
+- [vite-plugin-svelte #1194](https://github.com/sveltejs/vite-plugin-svelte/pull/1194)
 
 ---
 

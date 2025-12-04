@@ -8,13 +8,3 @@ export {
 } from './highlight.svelte.js'
 export { generateVersion } from './utils/index.js'
 export type { HighlightRequest, HighlightResponse } from './highlight-types.js'
-export {
-	getCachedEmailData,
-	cacheEmailData,
-	prefetchEmail,
-	prefetchAdjacentEmails,
-	invalidateEmailCache,
-	clearEmailCache,
-	type EmailData,
-	type RenderedEmail
-} from './email-prefetch.js'

@@ -126,14 +126,21 @@ function replaceImageUrls(html: string, urlMap: Map<string, string>): string {
 
 /**
  * Creates a reactive image cache manager.
- * Shows HTML immediately, then silently caches images in background for next time.
- * Does NOT re-render the iframe after images are cached to avoid flash.
+ * 
+ * Strategy:
+ * 1. Show HTML immediately with any already-cached images replaced
+ * 2. Fetch uncached images via proxy in background
+ * 3. Update HTML once all images are cached (eliminates CORS errors from extensions)
  */
 export function createImageCache() {
 	let isLoading = $state(false)
 	let processedHtml = $state('')
+	let currentRawHtml = ''
 
 	async function processHtml(html: string): Promise<void> {
+		// Track current HTML to handle rapid changes
+		currentRawHtml = html
+		
 		const urls = extractImageUrls(html)
 
 		// If no images to cache, return HTML as-is
@@ -142,31 +149,34 @@ export function createImageCache() {
 			return
 		}
 
-		// Replace any already-cached images immediately
+		// Separate cached and uncached URLs
 		const cachedUrls = urls.filter((url) => imageCache.has(url))
+		const uncachedUrls = urls.filter((url) => !imageCache.has(url))
+
+		// Replace any already-cached images immediately
 		if (cachedUrls.length > 0) {
 			const urlMap = new Map(cachedUrls.map((url) => [url, imageCache.get(url)!]))
 			processedHtml = replaceImageUrls(html, urlMap)
 		} else {
-			// No cached images yet, show original HTML immediately
 			processedHtml = html
 		}
 
-		// Check for uncached images
-		const uncachedUrls = urls.filter((url) => !imageCache.has(url))
+		// If all images are cached, we're done
 		if (uncachedUrls.length === 0) {
-			// All cached, we're done
 			return
 		}
 
-		// Fetch uncached images in background for NEXT time
-		// Don't update processedHtml to avoid iframe flash
+		// Fetch uncached images in background
 		isLoading = true
 		await Promise.all(uncachedUrls.map((url) => getCachedImage(url)))
 		isLoading = false
 		
-		// Images are now cached - they'll be used instantly on next navigation
-		// We intentionally don't update processedHtml here to avoid the flash
+		// Only update if this is still the current HTML (handles rapid navigation)
+		if (currentRawHtml === html) {
+			// Now replace ALL image URLs with cached versions
+			const allUrlMap = new Map(urls.map((url) => [url, imageCache.get(url)!]))
+			processedHtml = replaceImageUrls(html, allUrlMap)
+		}
 	}
 
 	function clearCache(): void {

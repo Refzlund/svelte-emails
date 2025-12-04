@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state'
+	import { pushState } from '$app/navigation'
 	import { onMount } from 'svelte'
 	import initialEmails from 'virtual:email-list'
 	import { emailStore, type EmailListItem } from '$lib/email-store'
@@ -10,7 +11,23 @@
 	// Start with virtual module data, then update via store
 	let emails: EmailListItem[] = $state(initialEmails)
 
-	const selectedId = $derived(page.params.email ?? emails[0]?.id)
+	// Get selected ID from shallow routing state, URL params, or default to first email
+	const selectedId = $derived(
+		(page.state as any)?.emailId ?? page.params.email ?? emails[0]?.id
+	)
+
+	// Handle instant navigation via shallow routing
+	function handleEmailClick(e: MouseEvent, emailId: string) {
+		e.preventDefault()
+		// Use shallow routing - updates URL without full navigation
+		// Preserve current query params (e.g., ?mode=html)
+		const url = new URL(`/${emailId}`, window.location.origin)
+		const currentMode = new URL(window.location.href).searchParams.get('mode')
+		if (currentMode) {
+			url.searchParams.set('mode', currentMode)
+		}
+		pushState(url.pathname + url.search, { emailId })
+	}
 
 	onMount(() => {
 		// Unregister any old service workers
@@ -60,7 +77,7 @@
 			<span class="title">*.email.svelte</span>
 		</header>
 
-		<nav class="email-list" data-sveltekit-preload-data="hover">
+		<nav class="email-list">
 			{#each emails as email, i}
 				<a
 					href="/{email.id}"
@@ -68,6 +85,7 @@
 					class:selected={selectedId === email.id}
 					class:even={i % 2 === 0}
 					class:odd={i % 2 === 1}
+					onclick={(e) => handleEmailClick(e, email.id)}
 				>
 					<span class="email-name">{email.name}</span>
 					{#if email.previewText}

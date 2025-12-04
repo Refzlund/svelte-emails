@@ -48,7 +48,11 @@ export default defineConfig({
 			'svelte-emails': getSvelteEmailsPath(),
 			// Alias for CLI/plugin code (server-side)
 			'$cli': resolve(__dirname, 'src/cli')
-		}
+		},
+		// Ensure single instance of svelte across all module boundaries
+		// This is critical for SSR context to work properly - the ssr_context
+		// module-level variable must be shared between svelte-emails and email components
+		dedupe: ['svelte']
 	},
 	optimizeDeps: {
 		// Don't scan the user's project for dependencies
@@ -59,7 +63,13 @@ export default defineConfig({
 		// Force cache to be in CLI directory
 		force: false
 	},
-	ssr: { noExternal: ['svelte-emails'] },
+	ssr: {
+		// Bundle these packages into SSR build to ensure single instances
+		// This is critical for Svelte's SSR context to work properly - the ssr_context
+		// module-level variable in svelte/internal/server/context.js must be shared
+		// between svelte-emails and the email component modules
+		noExternal: ['svelte-emails', 'svelte']
+	},
 	server: {
 		// Allow serving files from the user's email directory
 		fs: {

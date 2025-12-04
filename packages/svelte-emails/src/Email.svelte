@@ -4,7 +4,10 @@ Root email component.
 This is the top-level wrapper for all email content. It sets up the
 IR tree collector context and registers itself as the root node.
 
-Must be used inside `<Email.Preview>` or `render()` to provide the collector.
+## Usage
+
+For SSR rendering via `render()`, the collector is set automatically at module level.
+For client-side preview, use inside `<Email.Render>` which provides the collector via context.
 
 ## Background Colors
 
@@ -37,9 +40,8 @@ Use `max-w-*` to customize the content container width:
 <script lang='ts'>
 	import type { Snippet } from 'svelte'
 	import type { EmailAttributes } from './style-attributes'
-	import { getEmailRoot, setEmailParent, normalizeAttrs, type Mail, type Collector } from './context'
-	import { hasContext } from 'svelte'
-	import { EMAIL_ROOT_CONTEXT_KEY } from './context'
+	import { setEmailParent, normalizeAttrs, type Mail, type Collector, EMAIL_ROOT_CONTEXT_KEY } from './context'
+	import { getContext } from 'svelte'
 
 	export interface Props extends EmailAttributes {
 		/** Preview text shown in email client inbox (before opening) */
@@ -50,16 +52,18 @@ Use `max-w-*` to customize the content container width:
 
 	const { preview = '', children, ...attrs }: Props = $props()
 
-	// Check if we're inside Email.Render or render()
-	if (!hasContext(EMAIL_ROOT_CONTEXT_KEY)) {
+	// Get collector from Svelte context
+	// In SSR: render() passes collector via context Map
+	// In client: Email.Render provides collector via setContext()
+	// Both use the same Symbol.for() key which guarantees cross-module identity
+	const collector = getContext<Collector>(EMAIL_ROOT_CONTEXT_KEY)
+	
+	if (!collector) {
 		throw new Error(
 			'<Email> must be used inside <Email.Render> or render(). ' +
 			'No collector context found.'
 		)
 	}
-
-	// Get the collector from context (works in both client and SSR)
-	const collector: Collector = getEmailRoot()
 
 	// normalizeAttrs converts value-attributes (body-bg="#f5f5f5") to bracket syntax (body-bg-[#f5f5f5])
 	const attrKeys = normalizeAttrs(attrs)

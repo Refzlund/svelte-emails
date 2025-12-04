@@ -15,8 +15,10 @@ import { getContext, setContext } from 'svelte'
 
 /**
  * Stable key for the email root collector context.
- * Using a Symbol ensures the key is unique but consistent across module loads.
- * This is required for SSR because createContext() generates a new key per import.
+ * Using Symbol.for() guarantees the same symbol instance across ALL module
+ * instances - even when Vite's SSR runner loads the same module multiple times.
+ * This is critical for SSR because getContext() must find the same key that
+ * render()'s context Map was set with.
  */
 export const EMAIL_ROOT_CONTEXT_KEY = Symbol.for('svelte-emails:root-collector')
 export const EMAIL_PARENT_CONTEXT_KEY = Symbol.for('svelte-emails:parent-node')

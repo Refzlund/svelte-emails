@@ -1,7 +1,7 @@
 import { isRunnableDevEnvironment, type Plugin, type ViteDevServer } from 'vite'
 import { watch, type FSWatcher } from 'chokidar'
 import { discoverEmails } from './discovery.js'
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import type { ServerResponse } from 'node:http'
 import type { EmailFile } from './types.js'
 import { normalizePath, toSafeEmails, toSafeEmail, invalidateModule, debounce } from './utils.js'
@@ -309,28 +309,38 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 		}
 
 		try {
-			invalidateModule(server, email.path)
+			// Start reading source file immediately (parallel with module imports)
+			const sourcePromise = readFile(email.path, 'utf-8')
 
-			const mod = await ssrEnv.runner.import(email.path)
+			// Import both modules in parallel. Vite's module runner ensures they
+			// share the same module graph state, so render() and the email component
+			// will use the same Svelte instance (required for SSR context to work).
+			const [mod, svelteEmailsModule] = await Promise.all([
+				ssrEnv.runner.import(email.path),
+				ssrEnv.runner.import('svelte-emails') as Promise<{
+					render: Function
+					formatHtml: Function
+				}>
+			])
 			const EmailComponent = mod.default
-			const { render, formatHtml } = await ssrEnv.runner.import('svelte-emails')
 
-			const rendered = await render(EmailComponent, { placeholders: {} })
-			const source = readFileSync(email.path, 'utf-8')
+			// Render the email and wait for source in parallel
+			const [rendered, source] = await Promise.all([
+				svelteEmailsModule.render(EmailComponent, { placeholders: {} }),
+				sourcePromise
+			])
 
-			// Format HTML for display (better syntax highlighting, readability)
-			// Keep original minified HTML for actual email sending
-			const formattedRendered = {
-				...rendered,
-				html: formatHtml(rendered.html),
-				htmlRaw: rendered.html
-			}
-
+			// Send raw HTML - formatting is done client-side in a Web Worker
+			// This reduces server response time significantly for complex emails
 			res.setHeader('Content-Type', 'application/json')
 			res.end(JSON.stringify({
 				email: toSafeEmail(email),
 				source,
-				rendered: formattedRendered,
+				rendered: {
+					...rendered,
+					html: rendered.html,  // Raw HTML (formatting done client-side)
+					htmlRaw: rendered.html
+				},
 				renderError: null
 			}))
 		} catch (err) {
@@ -338,7 +348,7 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 
 			let source = ''
 			try {
-				source = readFileSync(email.path, 'utf-8')
+				source = await readFile(email.path, 'utf-8')
 			} catch { /* ignore */ }
 
 			res.setHeader('Content-Type', 'application/json')
