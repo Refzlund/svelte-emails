@@ -1163,11 +1163,16 @@ function parseOpacity(attr: string, result: ParsedAttrs): boolean {
 /**
  * Parse responsive attributes: mobile-only, desktop-only
  * These control visibility via media queries.
+ * 
+ * Note: We do NOT set display: none here. The wrapWithResponsive() function
+ * in html-helpers.ts handles hiding by wrapping the element in a div with
+ * the appropriate inline styles and class. Setting display: none in parsed.css
+ * would cause the inner element to stay hidden even when the outer wrapper
+ * is revealed by the media query.
  */
 function parseResponsive(attr: string, result: ParsedAttrs): boolean {
 	if (attr === 'mobile-only') {
 		result.responsive = 'mobile-only'
-		result.css.display = 'none'  // Hidden by default, revealed via media query
 		return true
 	}
 

@@ -56,7 +56,7 @@
 	<!-- Hero Section - Purple Background -->
 	<Div bg-[#6b2cf5] p-8 w-full>
 		<Div align-middle py-12>
-			<Text.H1 content="Hi [[first_name]]!" text-[#ffffff] text-[48px] />
+			<Text.H1 content="Hi [[first_name]]!" text-[#ffffff] text-[48px] break-words />
 		</Div>
 		<Div justify-left pb-4>
 			<Text content="🎉" text-[24px] />
@@ -85,60 +85,105 @@
 
 	<!-- Order Details Table -->
 	<Div p-6>
-		<Table cols-[50%_20%_15%_15%] cell-padding-0>
-			<!-- Table Header -->
-			<Table.Row header pb-2>
-				<Text content="Item" text-[#666666] text-[12px] />
-				<Text content="Quantity" text-[#666666] text-[12px] align-middle />
-				<Text content="Price" text-[#666666] text-[12px] align-middle />
-				<Text content="Total" text-[#666666] text-[12px] align-right />
-			</Table.Row>
+		<!-- Desktop: Full table layout -->
+		<Div desktop-only>
+			<Table cols-[50%_20%_15%_15%] cell-padding-0>
+				<!-- Table Header -->
+				<Table.Row header pb-2>
+					<Text content="Item" text-[#666666] text-[12px] />
+					<Text content="Quantity" text-[#666666] text-[12px] align-middle />
+					<Text content="Price" text-[#666666] text-[12px] align-middle />
+					<Text content="Total" text-[#666666] text-[12px] align-right />
+				</Table.Row>
 
-			<!-- Item Row -->
-			<Table.Row border-y border-opacity-25 py-2>
-				<Div cols>
-					<Div desktop-only w-[50px] bg-[#f5f5f5] align-middle-left>
+				<!-- Item Row -->
+				<Table.Row border-y border-opacity-25 py-2>
+					<Div cols>
+						<Div w-[50px] bg-[#f5f5f5] align-middle-left>
+							<Img src="https://fpoimg.com/50x50" alt={itemName} w-[50px] h-[50px] />
+						</Div>
+						<Spacer w-3 />
+						<Div w-fit align-middle-left>
+							<Text content="**{itemName}**" text-[#6b2cf5] text-[14px] />
+							<Br />
+							<Text.Small content="Size: {itemSize}, Color: {itemColor}" text-[#999999] />
+						</Div>
+					</Div>
+					<Text content={String(itemQuantity)} text-[#333333] align-middle />
+					<Text content="${itemPrice.toFixed(2)}" text-[#333333] align-middle />
+					<Text content="${itemTotal.toFixed(2)}" text-[#333333] align-right />
+				</Table.Row>
+
+				<!-- Totals: Item Total -->
+				<Table.Row py-0.5 pt-3>
+					<Spacer />
+					<Text.Small span-2 content="Item Total:" text-[#666666] align-right />
+					<Text.Small content="${itemTotal.toFixed(2)}" text-[#333333] align-right />
+				</Table.Row>
+
+				<!-- Totals: Shipping -->
+				<Table.Row py-0.5>
+					<Spacer />
+					<Text.Small span-2 content="Standard Shipping:" text-[#666666] align-right />
+					<Text.Small content="FREE" text-[#333333] align-right />
+				</Table.Row>
+
+				<!-- Totals: Tax -->
+				<Table.Row py-0.5>
+					<Spacer span-2 />
+					<Text.Small span-2 content="Tax: $0.00" text-[#999999] align-right />
+				</Table.Row>
+
+				<!-- Totals: Grand Total -->
+				<Table.Row py-0.5>
+					<Spacer />
+					<Text span-2 content="**TOTAL:**" text-[#333333] text-[12px] font-bold align-right />
+					<Text content="**${total.toFixed(2)} USD**" text-[#333333] text-[12px] font-bold align-right />
+				</Table.Row>
+			</Table>
+		</Div>
+
+		<!-- Mobile: Stacked card layout -->
+		<Div mobile-only>
+			<!-- Item Card -->
+			<Div rows border-b border-opacity-25 pb-4>
+				<Div cols gap-3>
+					<Div w-[50px] bg-[#f5f5f5] align-middle-left>
 						<Img src="https://fpoimg.com/50x50" alt={itemName} w-[50px] h-[50px] />
 					</Div>
-					<Spacer w-3 desktop-only />
-					<Div w-fit align-middle-left>
+					<Div rows>
 						<Text content="**{itemName}**" text-[#6b2cf5] text-[14px] />
-						<Br />
 						<Text.Small content="Size: {itemSize}, Color: {itemColor}" text-[#999999] />
 					</Div>
 				</Div>
-				<Text content={String(itemQuantity)} text-[#333333] align-middle />
-				<Text content="${itemPrice.toFixed(2)}" text-[#333333] align-middle />
-				<Text content="${itemTotal.toFixed(2)}" text-[#333333] align-right />
-			</Table.Row>
+				<Spacer h-2 />
+				<Div cols>
+					<Text.Small content="Qty: {itemQuantity} × ${itemPrice.toFixed(2)}" text-[#666666] />
+					<Text content="**${itemTotal.toFixed(2)}**" text-[#333333] align-right />
+				</Div>
+			</Div>
 
-			<!-- Totals: Item Total -->
-			<Table.Row py-0.5 pt-3>
-				<Spacer />
-				<Text.Small span-2 content="Item Total:" text-[#666666] align-right />
-				<Text.Small content="${itemTotal.toFixed(2)}" text-[#333333] align-right />
-			</Table.Row>
-
-			<!-- Totals: Shipping -->
-			<Table.Row py-0.5>
-				<Spacer />
-				<Text.Small span-2 content="Standard Shipping:" text-[#666666] align-right />
-				<Text.Small content="FREE" text-[#333333] align-right />
-			</Table.Row>
-
-			<!-- Totals: Tax -->
-			<Table.Row py-0.5>
-				<Spacer span-2 />
-				<Text.Small span-2 content="Tax: $0.00" text-[#999999] align-right />
-			</Table.Row>
-
-			<!-- Totals: Grand Total -->
-			<Table.Row py-0.5>
-				<Spacer />
-				<Text span-2 content="**TOTAL:**" text-[#333333] text-[12px] font-bold align-right />
-				<Text content="**${total.toFixed(2)} USD**" text-[#333333] text-[12px] font-bold align-right />
-			</Table.Row>
-		</Table>
+			<!-- Totals -->
+			<Div rows pt-3 gap-1>
+				<Div cols>
+					<Text.Small content="Item Total:" text-[#666666] />
+					<Text.Small content="${itemTotal.toFixed(2)}" text-[#333333] align-right />
+				</Div>
+				<Div cols>
+					<Text.Small content="Standard Shipping:" text-[#666666] />
+					<Text.Small content="FREE" text-[#333333] align-right />
+				</Div>
+				<Div cols>
+					<Text.Small content="Tax:" text-[#999999] />
+					<Text.Small content="$0.00" text-[#999999] align-right />
+				</Div>
+				<Spacer h-1 />
+				<Div cols>
+					<Text content="**TOTAL:**" text-[#333333] text-[12px] font-bold />
+					<Text content="**${total.toFixed(2)} USD**" text-[#333333] text-[12px] font-bold align-right />
+				</Div>
+			</Div>
+		</Div>
 	</Div>
 
 	<!-- Billing and Shipping Info Header -->
@@ -154,24 +199,46 @@
 
 	<!-- Billing and Shipping Details -->
 	<Div p-6>
-		<Table cols-[33%_33%_34%] cell-padding-0>
-			<Table.Row header border-b border-opacity-25 pb-2>
+		<!-- Desktop: Three-column table -->
+		<Div desktop-only>
+			<Table cols-[33%_33%_34%] cell-padding-0>
+				<Table.Row header border-b border-opacity-25 pb-2>
+					<Text.Small content="**Shipping To**" text-[#333333] />
+					<Text.Small content="**Billed To**" text-[#333333] />
+					<Text.Small content="**Date Ordered**" text-[#333333] />
+				</Table.Row>
+				<Table.Row align-top-left pt-2>
+					<Div>
+						<Text.Small content={shippingName} text-[#666666] />
+						{#each shippingAddress as line}
+							<Br />
+							<Text.Small content={line} text-[#666666] />
+						{/each}
+					</Div>
+					<Text.Small content={billedTo} text-[#666666] />
+					<Text.Small content={dateOrdered} text-[#666666] />
+				</Table.Row>
+			</Table>
+		</Div>
+
+		<!-- Mobile: Stacked layout -->
+		<Div mobile-only rows gap-4>
+			<Div rows>
 				<Text.Small content="**Shipping To**" text-[#333333] />
+				<Text.Small content={shippingName} text-[#666666] />
+				{#each shippingAddress as line}
+					<Text.Small content={line} text-[#666666] />
+				{/each}
+			</Div>
+			<Div rows>
 				<Text.Small content="**Billed To**" text-[#333333] />
-				<Text.Small content="**Date Ordered**" text-[#333333] />
-			</Table.Row>
-			<Table.Row align-top-left pt-2>
-				<Div>
-					<Text.Small content={shippingName} text-[#666666] />
-					{#each shippingAddress as line}
-						<Br />
-						<Text.Small content={line} text-[#666666] />
-					{/each}
-				</Div>
 				<Text.Small content={billedTo} text-[#666666] />
+			</Div>
+			<Div rows>
+				<Text.Small content="**Date Ordered**" text-[#333333] />
 				<Text.Small content={dateOrdered} text-[#666666] />
-			</Table.Row>
-		</Table>
+			</Div>
+		</Div>
 	</Div>
 
 	<Spacer h-6 />
