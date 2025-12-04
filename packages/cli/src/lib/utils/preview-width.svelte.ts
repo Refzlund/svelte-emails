@@ -1,3 +1,13 @@
+/**
+ * Persisted preview width state for email viewer iframe.
+ * 
+ * Stores the preview width percentage (10-100%) in localStorage so it
+ * persists across sessions. The width can be changed by dragging the
+ * edges of the EmailPreview component.
+ * 
+ * @see ARCHITECTURE_CLI.md for usage details
+ */
+
 const STORAGE_KEY = 'svelte-emails-preview-width'
 const DEFAULT_WIDTH = 80
 

@@ -9,9 +9,11 @@ This document covers the architecture, design decisions, and implementation deta
 The CLI provides a development server for previewing `*.email.svelte` templates with:
 
 - **Sidebar** listing all discovered email files
-- **Tabbed viewer** with Preview, Source, HTML, and Text views
+- **Tabbed viewer** with Preview, Source, HTML, Raw, and Text views
+- **Resizable preview** — drag edges to resize, persisted to localStorage
 - **Live reload** when files are added, removed, or modified
 - **SSR rendering** using the `svelte-emails` render function
+- **Syntax highlighting** via Shiki (off-thread worker)
 
 ---
 
@@ -24,15 +26,26 @@ packages/cli/
 │   ├── app.html               # SvelteKit HTML template
 │   ├── app.d.ts               # Type declarations
 │   ├── lib/
-│   │   ├── discovery.ts       # Email file discovery
 │   │   ├── email-store.ts     # Client-side SSE state management
-│   │   └── vite-plugin.ts     # Core Vite plugin
+│   │   ├── email-prefetch.ts  # Adjacent email prefetching
+│   │   ├── Icons.svelte       # SVG icons as Svelte snippets
+│   │   ├── components/
+│   │   │   ├── EmailPreview.svelte  # Resizable iframe preview
+│   │   │   └── CodeView.svelte      # Syntax-highlighted code panel
+│   │   ├── utils/
+│   │   │   ├── view-mode.svelte.ts  # URL-synced view mode state
+│   │   │   └── preview-width.svelte.ts # Persisted preview width
+│   │   └── cli/
+│   │       ├── discovery.ts   # Email file discovery
+│   │       └── vite-plugin.ts # Core Vite plugin
 │   └── routes/
 │       ├── +layout.svelte     # Main layout with sidebar
 │       ├── +page.svelte       # Index redirect
 │       └── [email]/
 │           ├── +page.svelte   # Email viewer with tabs
 │           └── +page.server.ts # Server-side data loading
+├── static/
+│   └── theme.css              # CSS variables and theme
 ├── vite.config.ts             # Vite configuration
 └── package.json
 ```
@@ -196,18 +209,53 @@ export const emailStore = {
 - Renders sidebar with email list
 - Subscribes to `emailStore` for live updates
 - Initial data from `virtual:email-list` (SSR-safe)
+- Footer links to documentation and examples
 
 #### Email Viewer (`[email]/+page.svelte`)
 
 - Tabbed interface: Preview, Source, HTML, Text
+- HTML tab has Formatted/Raw toggle (Raw shows minified output)
+- Uses `createViewMode()` for URL-synced tab state
 - Listens for `content-change` events to trigger reload
 - Uses `invalidateAll()` for SvelteKit data refetch
+- Prefetches adjacent emails for instant navigation
+
+#### EmailPreview Component
+
+Resizable iframe for rendering email HTML:
+
+```typescript
+// Features:
+// - Drag left/right edges to resize width
+// - Width persisted to localStorage via createPreviewWidth()
+// - Cursor glow effect on grid background
+// - Image caching as data URLs for instant loading
+// - Auto-height sync with iframe content
+```
+
+The preview shows a grid background with a cursor-following glow effect,
+giving visual feedback when hovering near the resize edges.
+
+#### CodeView Component
+
+Syntax-highlighted code panel with optional toggle:
+
+```typescript
+interface Props {
+  code: string              // Primary code to display
+  highlightedHtml: string   // Pre-highlighted HTML from Shiki
+  showToggle?: boolean      // Show Formatted/Raw toggle
+  rawCode?: string          // Alternative code for raw view
+  showRaw?: boolean         // Controlled: current state
+  onToggle?: (raw) => void  // Callback when toggled
+}
+```
 
 #### Server Load (`[email]/+page.server.ts`)
 
 - Fetches from `/__svelte-emails/render` endpoint
 - Handles render errors gracefully
-- Returns email metadata, source, and rendered output
+- Returns email metadata, source, and rendered output (both formatted and raw HTML)
 
 ---
 
@@ -465,6 +513,45 @@ If the user's project uses Svelte 5 but a third-party library was compiled with 
 
 ---
 
+## State Management Utilities
+
+### View Mode (`view-mode.svelte.ts`)
+
+URL-synced tab state using Svelte 5 runes:
+
+```typescript
+type ViewMode = 'preview' | 'source' | 'html' | 'raw' | 'text'
+
+const viewMode = createViewMode()
+
+viewMode.current  // Current mode
+viewMode.isRaw    // Shorthand for mode === 'raw'
+viewMode.set('html')  // Updates state and URL
+```
+
+The mode is stored in the URL query parameter `?mode=html`, allowing:
+- Shareable links to specific views
+- Browser back/forward navigation between views
+- Page refresh preserves view state
+
+**Note:** `html` and `raw` share the same tab (HTML) but have a Formatted/Raw toggle within the CodeView panel.
+
+### Preview Width (`preview-width.svelte.ts`)
+
+Persisted iframe width using localStorage:
+
+```typescript
+const previewWidth = createPreviewWidth()
+
+previewWidth.value  // Current width (10-100%)
+previewWidth.value = 60  // Update width
+previewWidth.persist()   // Save to localStorage
+```
+
+The width is persisted under the key `svelte-emails-preview-width`.
+
+---
+
 ## Configuration
 
 The plugin accepts options via environment variable:
@@ -496,10 +583,11 @@ export default defineConfig({
 1. **CLI binary** - `npx svelte-emails dev` to run from any project
 2. **Props editor** - UI to modify placeholder values
 3. **Send test email** - Integration with email providers
-4. **Mobile preview** - Responsive width simulation
+4. ~~**Mobile preview** - Responsive width simulation~~ ✅ Implemented (drag to resize)
 5. **Dark mode toggle** - Preview emails in dark mode
 6. **Export** - Download rendered HTML/text
 7. **Accessibility audit** - Check email accessibility
+8. **Placeholder editor** - Edit `[[variable]]` values in UI
 
 ---
 

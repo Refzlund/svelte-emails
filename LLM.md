@@ -510,20 +510,17 @@ responsive    <!-- On Div cols: stack on mobile -->
 
 <!-- ✅ Use components + content attribute + variables -->
 <script>
-  const colors = {
-    brand: '#2563eb',
-    ...
-  }
+  const colors = { brand: '#2563eb' }
 </script>
 <Div bg={colors.brand} p-4>
   <Text content='Some text here' />
-    <Button content='Click' bg={colors.brand} />
+  <Button content='Click' bg={colors.brand} />
 </Div>
 
 <!-- ✅ Use Div cols/rows -->
 <Div cols gap-4>...</Div>
 
-<!-- ❌ Text touch/colliding horizontally (`cols`) -->
+<!-- ❌ Text touching horizontally (`cols`) -->
 <Div cols>
     <Text content='This text is touc'/>
     <Text content='hing each other.'/>
@@ -537,9 +534,6 @@ responsive    <!-- On Div cols: stack on mobile -->
 <Div rows>
     <Text content='This text'/>
     <Text content='is on two lines.'/>
-</Div>
-<Div cols gap-2>
-    <Text.Paragrapjh content='This text'/>
 </Div>
 ```
 

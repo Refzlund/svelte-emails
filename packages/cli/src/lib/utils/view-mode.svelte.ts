@@ -1,3 +1,17 @@
+/**
+ * URL-synced view mode state for email viewer tabs.
+ * 
+ * Manages the current view mode (preview/source/html/raw/text) and syncs it
+ * with the URL query parameter `?mode=...`. This enables:
+ * - Shareable links to specific views
+ * - Browser back/forward navigation
+ * - Page refresh preserves view state
+ * 
+ * The 'preview' mode is the default and has no query parameter.
+ * 
+ * @see ARCHITECTURE_CLI.md for usage details
+ */
+
 import { goto } from '$app/navigation'
 import { page } from '$app/state'
 
