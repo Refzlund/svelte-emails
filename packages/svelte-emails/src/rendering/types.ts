@@ -58,6 +58,10 @@ export interface InheritedStyles {
 	// --- Font Properties ---
 	/** Inherited font family */
 	fontFamily?: string
+	/** Base font family (for font-base to reset to) */
+	baseFontFamily?: string
+	/** Monospace font family (for font-mono) */
+	monoFontFamily?: string
 	/** Inherited font size */
 	fontSize?: string
 	/** Inherited font weight */

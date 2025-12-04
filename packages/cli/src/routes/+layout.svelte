@@ -1,32 +1,111 @@
 <script lang="ts">
 	import { page } from '$app/state'
-	import { pushState } from '$app/navigation'
+	import { pushState, goto } from '$app/navigation'
 	import { onMount } from 'svelte'
-	import initialEmails from 'virtual:email-list'
-	import { emailStore, type EmailListItem } from '$lib/email-store'
+	import initialData from 'virtual:email-list'
+	import { emailStore, type EmailListItem, type ViewMode } from '$lib/email-store'
 	import * as icons from '$lib/Icons.svelte'
 
 	let { children } = $props()
 
 	// Start with virtual module data, then update via store
-	let emails: EmailListItem[] = $state(initialEmails)
+	let emails: EmailListItem[] = $state(initialData.emails || [])
+	let examples: EmailListItem[] = $state(initialData.examples || [])
+	let documentation: EmailListItem[] = $state(initialData.documentation || [])
 
-	// Get selected ID from shallow routing state, URL params, or default to first email
-	const selectedId = $derived(
-		(page.state as any)?.emailId ?? page.params.email ?? emails[0]?.id
-	)
+	// Derive view mode from current URL path
+	const viewMode: ViewMode = $derived.by(() => {
+		const path = page.url.pathname
+		if (path.startsWith('/examples')) return 'examples'
+		if (path.startsWith('/documentation')) return 'documentation'
+		return 'emails'
+	})
+
+	// Get the current list based on view mode
+	const currentList = $derived.by(() => {
+		switch (viewMode) {
+			case 'emails': return emails
+			case 'examples': return examples
+			case 'documentation': return documentation
+		}
+	})
+
+	// Get the title based on view mode
+	const navTitle = $derived.by(() => {
+		switch (viewMode) {
+			case 'emails': return '*.email.svelte'
+			case 'examples': return 'Examples'
+			case 'documentation': return 'Documentation'
+		}
+	})
+
+	// Get empty state message based on view mode
+	const emptyStateMessage = $derived.by(() => {
+		switch (viewMode) {
+			case 'emails': return { title: 'No *.email.svelte files found', hint: 'Create a file ending with .email.svelte' }
+			case 'examples': return { title: 'No examples found', hint: 'Examples are bundled with svelte-emails CLI' }
+			case 'documentation': return { title: 'No documentation found', hint: 'Documentation is bundled with svelte-emails CLI' }
+		}
+	})
+
+	// Get the URL prefix for current mode
+	const urlPrefix = $derived.by(() => {
+		switch (viewMode) {
+			case 'emails': return ''
+			case 'examples': return '/examples'
+			case 'documentation': return '/documentation'
+		}
+	})
+
+	// Get selected ID from URL params or shallow routing state
+	const selectedId = $derived.by(() => {
+		// First check shallow routing state (set by pushState)
+		const stateId = (page.state as any)?.emailId
+		if (stateId) return stateId
+		// For examples/documentation routes, use the 'file' param
+		if (page.params.file) return page.params.file
+		// For email routes, use the 'email' param
+		if (page.params.email) return page.params.email
+		// Default to first item in current list
+		return currentList[0]?.id
+	})
 
 	// Handle instant navigation via shallow routing
-	function handleEmailClick(e: MouseEvent, emailId: string) {
+	function handleItemClick(e: MouseEvent, itemId: string) {
 		e.preventDefault()
-		// Use shallow routing - updates URL without full navigation
+		// Build URL based on current view mode
+		const basePath = urlPrefix ? `${urlPrefix}/${itemId}` : `/${itemId}`
+		const url = new URL(basePath, window.location.origin)
 		// Preserve current query params (e.g., ?mode=html)
-		const url = new URL(`/${emailId}`, window.location.origin)
 		const currentMode = new URL(window.location.href).searchParams.get('mode')
 		if (currentMode) {
 			url.searchParams.set('mode', currentMode)
 		}
-		pushState(url.pathname + url.search, { emailId })
+		pushState(url.pathname + url.search, { emailId: itemId })
+	}
+
+	// Navigate to a specific view mode
+	function navigateToMode(mode: ViewMode) {
+		if (mode === viewMode) {
+			// Already in this mode, go back to emails
+			if (emails.length > 0) {
+				goto(`/${emails[0].id}`)
+			} else {
+				goto('/')
+			}
+			return
+		}
+		
+		// Navigate to the new mode
+		const list = mode === 'emails' ? emails : mode === 'examples' ? examples : documentation
+		if (list.length > 0) {
+			const prefix = mode === 'emails' ? '' : `/${mode}`
+			goto(`${prefix}/${list[0].id}`)
+		} else {
+			// Navigate to mode root even if empty
+			const prefix = mode === 'emails' ? '/' : `/${mode}`
+			goto(prefix)
+		}
 	}
 
 	onMount(() => {
@@ -42,10 +121,10 @@
 		// Subscribe to store updates
 		const unsubscribe = emailStore.subscribe(() => {
 			// Always update from store when it has data
-			const storeEmails = emailStore.emails
-			if (storeEmails.length > 0 || emailStore.lastListUpdateTime > 0) {
-				// Use store emails (could be empty if all files deleted)
-				emails = [...storeEmails]
+			if (emailStore.lastListUpdateTime > 0) {
+				emails = [...emailStore.emails]
+				examples = [...emailStore.examples]
+				documentation = [...emailStore.documentation]
 			}
 		})
 
@@ -74,51 +153,51 @@
 	<aside class="sidebar">
 		<header class="sidebar-header">
 			<img src="/svelte-emails.png" alt="svelte-emails logo" width="24" height="24" />
-			<span class="title">*.email.svelte</span>
+			<span class="title">{navTitle}</span>
 		</header>
 
 		<nav class="email-list">
-			{#each emails as email, i}
+			{#each currentList as item, i}
 				<a
-					href="/{email.id}"
+					href="{urlPrefix}/{item.id}"
 					class="email-item"
-					class:selected={selectedId === email.id}
+					class:selected={selectedId === item.id}
 					class:even={i % 2 === 0}
 					class:odd={i % 2 === 1}
-					onclick={(e) => handleEmailClick(e, email.id)}
+					onclick={(e) => handleItemClick(e, item.id)}
 				>
-					<span class="email-name">{email.name}</span>
-					{#if email.previewText}
-						<span class="email-preview">{email.previewText}</span>
+					<span class="email-name">{item.name}</span>
+					{#if item.previewText}
+						<span class="email-preview">{item.previewText}</span>
 					{/if}
 				</a>
 			{/each}
 
-			{#if emails.length === 0}
+			{#if currentList.length === 0}
 				<div class="empty-state">
-					<p>No *.email.svelte files found</p>
-					<p class="hint">Create a file ending with .email.svelte</p>
+					<p>{emptyStateMessage.title}</p>
+					<p class="hint">{emptyStateMessage.hint}</p>
 				</div>
 			{/if}
 		</nav>
 
 		<footer class="sidebar-footer">
-			<a
-				href="https://github.com/Refzlund/svelte-emails#readme"
-				target="_blank"
-				rel="noopener"
+			<button
+				class="mode-toggle"
+				class:active={viewMode === 'examples'}
+				onclick={() => navigateToMode('examples')}
 			>
-				{@render icons.sparkleAction({ size: 24, opacity: .5 })}
+				{@render icons.sparkleAction({ size: 24, opacity: viewMode === 'examples' ? 1 : .5 })}
 				Examples
-			</a>
-			<a
-				href="https://github.com/Refzlund/svelte-emails/blob/main/ARCHITECTURE.md"
-				target="_blank"
-				rel="noopener"
+			</button>
+			<button
+				class="mode-toggle"
+				class:active={viewMode === 'documentation'}
+				onclick={() => navigateToMode('documentation')}
 			>
-				{@render icons.bookInformation({ size: 24, opacity: .5 })}
+				{@render icons.bookInformation({ size: 24, opacity: viewMode === 'documentation' ? 1 : .5 })}
 				Documentation
-			</a>
+			</button>
 		</footer>
 	</aside>
 
@@ -237,7 +316,7 @@
 		gap: 4px;
 	}
 
-	.sidebar-footer a {
+	.sidebar-footer .mode-toggle {
 		display: flex;
 		align-items: center;
 		gap: 8px;
@@ -247,10 +326,20 @@
 		color: rgba(255, 255, 255, 0.6);
 		font-size: 13px;
 		transition: all 0.15s ease;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		width: 100%;
+		text-align: left;
 	}
 
-	.sidebar-footer a:hover {
+	.sidebar-footer .mode-toggle:hover {
 		background: rgba(255, 255, 255, 0.05);
+		color: #fff;
+	}
+
+	.sidebar-footer .mode-toggle.active {
+		background: rgba(255, 255, 255, 0.1);
 		color: #fff;
 	}
 

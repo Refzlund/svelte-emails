@@ -525,12 +525,26 @@ export type JustifyAttributes = Attributes<
  * Content placement in containers is handled by `AlignmentAttributes` (`align-*`).
  * 
  * Use web-safe font stacks with fallbacks for font-family.
+ * 
+ * **Font Family Switching:**
+ * - `font-mono` — Switches to monospace font stack (configured in StyleConfig.root.monoFontFamily)
+ * - `font-base` — Resets to base font stack (configured in StyleConfig.root.fontFamily)
+ * 
+ * These are useful for code snippets or reverting to the default font:
+ * ```svelte
+ * <Div font-mono>
+ *   <Text content="Monospace text" />
+ *   <Text content="Back to normal" font-base />
+ * </Div>
+ * ```
  */
 export type TypographyAttributes = Attributes<
 	// Font size
 	| 'text-xs' | 'text-sm' | 'text-base' | 'text-lg' | 'text-xl' | 'text-2xl' 
 	| 'text-3xl' | 'text-4xl' | 'text-5xl' | 'text-6xl' | 'text-7xl' | 'text-8xl' | 'text-9xl'
 	| `text-[${string}]`
+	// Font family switching
+	| 'font-mono' | 'font-base'
 	// Font weight
 	| 'font-thin' | 'font-extralight' | 'font-light' | 'font-normal' | 'font-medium' 
 	| 'font-semibold' | 'font-bold' | 'font-extrabold' | 'font-black'

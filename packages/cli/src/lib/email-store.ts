@@ -1,13 +1,15 @@
 import { browser } from '$app/environment'
-import type { SafeEmail } from '../cli/types.js'
+import type { SafeEmail, ViewMode } from '../cli/types.js'
 
-export type { SafeEmail as EmailListItem }
+export type { SafeEmail as EmailListItem, ViewMode }
 
 type Listener = () => void
 
 // Singleton SSE connection and state
 let eventSource: EventSource | null = null
 let emails: SafeEmail[] = []
+let examples: SafeEmail[] = []
+let documentation: SafeEmail[] = []
 let lastContentChangeId: string | null = null
 let lastContentChangeTime = 0
 let lastListUpdateTime = 0
@@ -27,8 +29,11 @@ function connect() {
 
 	eventSource.addEventListener('emails', (event) => {
 		const data = JSON.parse(event.data)
-		console.log('[svelte-emails] Received emails update:', data.event, data.emails.length, 'emails')
-		emails = data.emails
+		console.log('[svelte-emails] Received update:', data.event, 
+			`${data.emails?.length || 0} emails, ${data.examples?.length || 0} examples, ${data.documentation?.length || 0} docs`)
+		emails = data.emails || []
+		examples = data.examples || []
+		documentation = data.documentation || []
 		lastListUpdateTime = Date.now()
 		notify()
 	})
@@ -58,6 +63,22 @@ if (browser) {
 export const emailStore = {
 	get emails() {
 		return emails
+	},
+	get examples() {
+		return examples
+	},
+	get documentation() {
+		return documentation
+	},
+	/**
+	 * Get files for a specific mode
+	 */
+	getByMode(mode: ViewMode): SafeEmail[] {
+		switch (mode) {
+			case 'emails': return emails
+			case 'examples': return examples
+			case 'documentation': return documentation
+		}
 	},
 	get lastContentChangeId() {
 		return lastContentChangeId

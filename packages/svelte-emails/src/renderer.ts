@@ -179,6 +179,8 @@ export function renderTree(root: Mail.EmailNode, options: RenderOptions = {}): R
 		color: defaultColor,
 		borderColor: defaultColor, // Border inherits from text color
 		fontFamily: style.root?.fontFamily,
+		baseFontFamily: style.root?.fontFamily, // For font-base to reset to
+		monoFontFamily: style.root?.monoFontFamily, // For font-mono
 		fontSize: `${rootSize}px`,
 		lineHeight: typeof style.root?.lineHeight === 'number' 
 			? String(style.root.lineHeight) 

@@ -265,6 +265,8 @@ export function extractInheritable(
 
 		// Font properties
 		fontFamily: parsed.css.fontFamily || inherited.fontFamily,
+		baseFontFamily: inherited.baseFontFamily, // Always pass through (not settable via attrs)
+		monoFontFamily: inherited.monoFontFamily, // Always pass through (not settable via attrs)
 		fontSize: parsed.css.fontSize || inherited.fontSize,
 		fontWeight: parsed.css.fontWeight || inherited.fontWeight,
 		fontStyle: parsed.css.fontStyle || inherited.fontStyle,

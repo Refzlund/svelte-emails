@@ -9,10 +9,10 @@
 
 	const { data }: Props = $props()
 
-	// Get email ID from shallow routing state or fall back to data/params
-	const currentEmailId = $derived(
-		(page.state as any)?.emailId ?? data.emailId ?? page.params.email
+	// Get file ID from shallow routing state or fall back to data/params
+	const currentFileId = $derived(
+		(page.state as any)?.emailId ?? data.emailId ?? page.params.file
 	)
 </script>
 
-<EmailViewer mode="emails" itemId={currentEmailId} />
+<EmailViewer mode="examples" itemId={currentFileId} />

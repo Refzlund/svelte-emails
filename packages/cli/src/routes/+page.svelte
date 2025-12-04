@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { goto } from '$app/navigation'
 	import { onMount } from 'svelte'
-	import emails from 'virtual:email-list'
+	import emailData from 'virtual:email-list'
 
 	onMount(() => {
-		if (emails.length > 0) {
-			goto(`/${emails[0].id}`, { replaceState: true })
+		if (emailData.emails.length > 0) {
+			goto(`/${emailData.emails[0].id}`, { replaceState: true })
 		}
 	})
 </script>
 
-{#if emails.length === 0}
+{#if emailData.emails.length === 0}
 	<div class="welcome">
 		<h1>svelte-emails</h1>
 		<p>No email templates found.</p>

@@ -16,7 +16,8 @@ export function toSafeEmail(email: EmailFile): SafeEmail {
 		id: email.id,
 		name: email.name,
 		relativePath: email.relativePath,
-		previewText: email.previewText
+		previewText: email.previewText,
+		mode: email.mode
 	}
 }
 

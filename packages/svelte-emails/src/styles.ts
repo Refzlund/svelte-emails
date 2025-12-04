@@ -24,8 +24,10 @@ export interface RootStyle {
 	background?: string
 	/** Default line height */
 	lineHeight?: string | number
-	/** Default font family */
+	/** Default font family (used by font-base to reset from font-mono) */
 	fontFamily?: string
+	/** Monospace font family (used by font-mono attribute) */
+	monoFontFamily?: string
 }
 
 /**

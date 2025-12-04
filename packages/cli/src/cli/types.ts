@@ -1,10 +1,15 @@
 /**
+ * View mode for the CLI - emails, examples, or documentation
+ */
+export type ViewMode = 'emails' | 'examples' | 'documentation'
+
+/**
  * Full email file metadata (includes absolute path for internal use)
  */
 export interface EmailFile {
 	/** URL-safe identifier (slugified relative path) */
 	id: string
-	/** Display name (filename without .email.svelte) */
+	/** Display name (filename without .email.svelte or .svelte) */
 	name: string
 	/** Absolute path to the file */
 	path: string
@@ -12,6 +17,8 @@ export interface EmailFile {
 	relativePath: string
 	/** Preview text extracted from <Email preview="..."> */
 	previewText: string
+	/** Which view mode this file belongs to */
+	mode: ViewMode
 }
 
 /**
@@ -22,4 +29,5 @@ export interface SafeEmail {
 	name: string
 	relativePath: string
 	previewText: string
+	mode: ViewMode
 }

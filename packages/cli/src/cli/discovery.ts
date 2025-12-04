@@ -1,16 +1,18 @@
 import fg from 'fast-glob'
 import { readFileSync, existsSync } from 'node:fs'
 import { basename, relative, join } from 'node:path'
-import type { EmailFile } from './types.js'
+import type { EmailFile, ViewMode } from './types.js'
 
-export type { EmailFile }
+export type { EmailFile, ViewMode }
 
 /**
  * Create a URL-safe ID from a relative path
+ * Since each mode has its own route prefix, we don't need to include mode in the ID
  */
 function createId(relativePath: string): string {
 	return relativePath
 		.replace(/\.email\.svelte$/, '')
+		.replace(/\.svelte$/, '')
 		.replace(/[/\\]/g, '-')
 		.replace(/[^a-zA-Z0-9-]/g, '_')
 		.toLowerCase()
@@ -22,6 +24,7 @@ function createId(relativePath: string): string {
 function extractName(filename: string): string {
 	return basename(filename)
 		.replace(/\.email\.svelte$/, '')
+		.replace(/\.svelte$/, '')
 		.replace(/([a-z])([A-Z])/g, '$1 $2') // CamelCase to spaces
 		.replace(/[-_]/g, ' ') // kebab/snake to spaces
 		.replace(/\b\w/g, (c) => c.toUpperCase()) // Capitalize words
@@ -161,7 +164,8 @@ export async function discoverEmails(cwd: string, skipPreview = false): Promise<
 			name: extractName(relativePath),
 			path: absolutePath,
 			relativePath,
-			previewText
+			previewText,
+			mode: 'emails'
 		})
 	}
 
@@ -169,4 +173,91 @@ export async function discoverEmails(cwd: string, skipPreview = false): Promise<
 	emails.sort((a, b) => a.name.localeCompare(b.name))
 
 	return emails
+}
+
+/**
+ * Discover *.svelte files in a specific subfolder (e.g., src/examples, src/documentation)
+ * These are bundled with the CLI package itself, not in the user's project.
+ * @param subfolder - Subfolder name (e.g., 'examples', 'documentation')
+ * @param mode - The view mode for these files
+ * @param skipPreview - Skip reading file contents for preview text (faster)
+ */
+export async function discoverSvelteFiles(
+	subfolder: string, 
+	mode: ViewMode, 
+	skipPreview = false
+): Promise<EmailFile[]> {
+	// Get the CLI package's src directory (where this file lives)
+	// import.meta.url gives us the current file's URL
+	const currentFileUrl = import.meta.url
+	const currentFilePath = new URL(currentFileUrl).pathname
+	// On Windows, pathname starts with /C:/ - need to handle this
+	const normalizedPath = currentFilePath.replace(/^\/([A-Za-z]:)/, '$1')
+	const cliSrcDir = join(normalizedPath, '..', '..')
+	const searchPath = join(cliSrcDir, subfolder)
+	
+	if (!existsSync(searchPath)) {
+		return []
+	}
+
+	const files = await fg('**/*.svelte', {
+		cwd: searchPath,
+		absolute: true,
+		ignore: [
+			'**/node_modules/**',
+			'**/.svelte-kit/**'
+		],
+		followSymbolicLinks: false,
+		suppressErrors: true,
+		concurrency: 4,
+		deep: 5
+	})
+
+	const items: EmailFile[] = []
+
+	for (const absolutePath of files) {
+		const relativePath = relative(searchPath, absolutePath)
+		let previewText = ''
+
+		if (!skipPreview) {
+			try {
+				const content = readFileSync(absolutePath, 'utf-8')
+				previewText = extractPreviewText(content)
+			} catch {
+				// Ignore read errors
+			}
+		}
+
+		items.push({
+			id: createId(relativePath),
+			name: extractName(relativePath),
+			path: absolutePath,
+			relativePath: `${subfolder}/${relativePath}`,
+			previewText,
+			mode
+		})
+	}
+
+	// Sort alphabetically by name
+	items.sort((a, b) => a.name.localeCompare(b.name))
+
+	return items
+}
+
+/**
+ * Discover all files for all view modes
+ * @param cwd - User's project directory for emails
+ */
+export async function discoverAll(cwd: string, skipPreview = false): Promise<{
+	emails: EmailFile[]
+	examples: EmailFile[]
+	documentation: EmailFile[]
+}> {
+	const [emails, examples, documentation] = await Promise.all([
+		discoverEmails(cwd, skipPreview),
+		discoverSvelteFiles('examples', 'examples', skipPreview),
+		discoverSvelteFiles('documentation', 'documentation', skipPreview)
+	])
+
+	return { emails, examples, documentation }
 }

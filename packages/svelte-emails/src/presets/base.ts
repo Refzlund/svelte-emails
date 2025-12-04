@@ -25,7 +25,8 @@ export const base: StyleConfig = {
 		background: '#ffffff',
 		size: 16,
 		lineHeight: 1.5,
-		fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+		fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+		monoFontFamily: MONOSPACE_FONT_STACK
 	},
 	Text: {
 		color: 'inherit',

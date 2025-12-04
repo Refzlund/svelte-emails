@@ -232,7 +232,7 @@ function parseAttr(
 	if (parseColor(attr, result, inherited)) return
 	if (parseAlignment(attr, result)) return
 	if (parseJustify(attr, result)) return
-	if (parseTypography(attr, result, rootSize)) return
+	if (parseTypography(attr, result, inherited, rootSize)) return
 	if (parseBorder(attr, result, inherited, rootSize)) return
 	if (parseDisplay(attr, result)) return
 	if (parseOpacity(attr, result)) return
@@ -740,8 +740,31 @@ function parseJustify(attr: string, result: ParsedAttrs): boolean {
 
 /**
  * Parse typography attributes: text-*, font-*, italic, underline, etc.
+ * 
+ * Includes font-mono and font-base for switching between font stacks:
+ * - font-mono: Uses monoFontFamily from inherited styles (set via StyleConfig.root.monoFontFamily)
+ * - font-base: Resets to baseFontFamily from inherited styles (set via StyleConfig.root.fontFamily)
  */
-function parseTypography(attr: string, result: ParsedAttrs, rootSize: number): boolean {
+function parseTypography(
+	attr: string,
+	result: ParsedAttrs,
+	inherited: InheritedStyles,
+	rootSize: number
+): boolean {
+	// Font family: font-mono, font-base
+	if (attr === 'font-mono') {
+		if (inherited.monoFontFamily) {
+			result.css.fontFamily = inherited.monoFontFamily
+		}
+		return true
+	}
+	if (attr === 'font-base') {
+		if (inherited.baseFontFamily) {
+			result.css.fontFamily = inherited.baseFontFamily
+		}
+		return true
+	}
+
 	// Font size presets: text-xs, text-sm, etc.
 	let match = attr.match(TEXT_SIZE_PRESET_RE)
 	if (match) {

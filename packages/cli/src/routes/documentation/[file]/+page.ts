@@ -4,5 +4,5 @@ import type { PageLoad } from './$types'
 export const ssr = false
 
 export const load: PageLoad = async ({ params }) => {
-	return { emailId: params.email }
+	return { emailId: params.file }
 }
