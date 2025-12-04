@@ -253,6 +253,10 @@ export default defineConfig({
 		dependencies: {
 			'fast-glob': cliPackage.dependencies['fast-glob'],
 			'chokidar': cliPackage.dependencies['chokidar'],
+			// Syntax highlighting for code view
+			'shiki': cliPackage.dependencies['shiki'],
+			'@shikijs/langs': cliPackage.dependencies['@shikijs/langs'],
+			'@shikijs/themes': cliPackage.dependencies['@shikijs/themes'],
 			// CLI dev mode needs these
 			'@sveltejs/kit': '^2.48.5',
 			'@sveltejs/vite-plugin-svelte': '^6.2.1',

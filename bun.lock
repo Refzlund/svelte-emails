@@ -29,6 +29,8 @@
         "svelte-emails": "./src/cli.ts",
       },
       "dependencies": {
+        "@shikijs/langs": "^3.19.0",
+        "@shikijs/themes": "^3.19.0",
         "chokidar": "^4.0.3",
         "fast-glob": "^3.3.3",
         "floating-runes": "^1.3.1",
