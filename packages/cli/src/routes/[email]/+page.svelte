@@ -2,6 +2,7 @@
 	import { invalidateAll } from '$app/navigation'
 	import { page } from '$app/state'
 	import { onMount } from 'svelte'
+	import { browser } from '$app/environment'
 	import { emailStore } from '$lib/email-store'
 	import { createHighlightManager } from '$lib/highlight.svelte'
 	import { EmailPreview, CodeView } from '$lib/components'
@@ -25,8 +26,18 @@
 
 	const viewMode = createViewMode()
 	
-	// Floating indicator for active tab
-	const float = floatingUI()
+	// Floating indicator for active tab - only initialize on client
+	// floatingUI() uses onDestroy internally so must be called during component init
+	const float = browser ? floatingUI() : null
+	
+	// Disable initial transition animation
+	let enableTransition = $state(false)
+	onMount(() => {
+		// Enable transition after first paint
+		requestAnimationFrame(() => {
+			enableTransition = true
+		})
+	})
 
 	// Use cached data if available for instant display, fall back to server data
 	const effectiveData = $derived.by(() => {
@@ -97,66 +108,117 @@
 <div class="email-viewer">
 	<!-- Header with tabs and file path -->
 	<header class="viewer-header">
-		<nav class="tabs" use:float.untether={'pointerleave'}>
-			{#if float.referenced}
+		{#if float}
+			<nav class="tabs" use:float.untether={'pointerleave'}>
 				<div
-					class="tab-indicator active"
-					style="width: {float.referenced.clientWidth}px; height: {float.referenced.offsetHeight}px;"
+					class="tab-indicator"
+					class:active={float.referenced}
+					class:transition={enableTransition}
+					style:width={float.referenced ? `${float.referenced.clientWidth}px` : '0'}
+					style:height={float.referenced ? `${float.referenced.offsetHeight}px` : '0'}
+					style:opacity={float.referenced ? 1 : 0}
 					use:float={{ tether: false }}
 				></div>
-			{/if}
-			<button
-				class="tab"
-				class:active={viewMode.current === 'preview'}
-				use:float.tether={'mouseenter'}
-				use:float.ref={() => viewMode.current === 'preview'}
-				onclick={() => viewMode.set('preview')}
-			>
-				{@render icons.contentView({ size: 20, opacity: viewMode.current === 'preview' ? 1 : .75 })} Preview
-			</button>
-			<button
-				class="tab"
-				class:active={viewMode.current === 'source'}
-				use:float.tether={'mouseenter'}
-				use:float.ref={() => viewMode.current === 'source'}
-				onclick={() => viewMode.set('source')}
-			>
-				{#if highlighter.loading.source}
-					<span class="spinner"></span>
-				{:else}
-					{@render icons.code({ size: 20, opacity: viewMode.current === 'source' ? 1 : .75 })}
-				{/if}
-				Source
-			</button>
-			<button
-				class="tab"
-				class:active={viewMode.current === 'html' || viewMode.current === 'raw'}
-				use:float.tether={'mouseenter'}
-				use:float.ref={() => viewMode.current === 'html' || viewMode.current === 'raw'}
-				onclick={() => viewMode.set('html')}
-			>
-				{#if highlighter.loading.html}
-					<span class="spinner"></span>
-				{:else}
-					{@render icons.document({ size: 20, opacity: viewMode.current === 'html' || viewMode.current === 'raw' ? 1 : .75 })}
-				{/if}
-				HTML
-			</button>
-			<button
-				class="tab"
-				class:active={viewMode.current === 'text'}
-				use:float.tether={'mouseenter'}
-				use:float.ref={() => viewMode.current === 'text'}
-				onclick={() => viewMode.set('text')}
-			>
-				{#if highlighter.loading.text}
-					<span class="spinner"></span>
-				{:else}
-					{@render icons.codeText({ size: 20, opacity: viewMode.current === 'text' ? 1 : .75 })}
-				{/if}
-				Text
-			</button>
-		</nav>
+				<button
+					class="tab"
+					class:active={viewMode.current === 'preview'}
+					use:float.tether={'mouseenter'}
+					use:float.ref={() => viewMode.current === 'preview'}
+					onclick={() => viewMode.set('preview')}
+				>
+					{@render icons.contentView({ size: 20, opacity: viewMode.current === 'preview' ? 1 : .75 })} Preview
+				</button>
+				<button
+					class="tab"
+					class:active={viewMode.current === 'source'}
+					use:float.tether={'mouseenter'}
+					use:float.ref={() => viewMode.current === 'source'}
+					onclick={() => viewMode.set('source')}
+				>
+					{#if highlighter.loading.source}
+						<span class="spinner"></span>
+					{:else}
+						{@render icons.code({ size: 20, opacity: viewMode.current === 'source' ? 1 : .75 })}
+					{/if}
+					Source
+				</button>
+				<button
+					class="tab"
+					class:active={viewMode.current === 'html' || viewMode.current === 'raw'}
+					use:float.tether={'mouseenter'}
+					use:float.ref={() => viewMode.current === 'html' || viewMode.current === 'raw'}
+					onclick={() => viewMode.set('html')}
+				>
+					{#if highlighter.loading.html}
+						<span class="spinner"></span>
+					{:else}
+						{@render icons.document({ size: 20, opacity: viewMode.current === 'html' || viewMode.current === 'raw' ? 1 : .75 })}
+					{/if}
+					HTML
+				</button>
+				<button
+					class="tab"
+					class:active={viewMode.current === 'text'}
+					use:float.tether={'mouseenter'}
+					use:float.ref={() => viewMode.current === 'text'}
+					onclick={() => viewMode.set('text')}
+				>
+					{#if highlighter.loading.text}
+						<span class="spinner"></span>
+					{:else}
+						{@render icons.codeText({ size: 20, opacity: viewMode.current === 'text' ? 1 : .75 })}
+					{/if}
+					Text
+				</button>
+			</nav>
+		{:else}
+			<!-- SSR fallback without floating actions -->
+			<nav class="tabs">
+				<button
+					class="tab"
+					class:active={viewMode.current === 'preview'}
+					onclick={() => viewMode.set('preview')}
+				>
+					{@render icons.contentView({ size: 20, opacity: viewMode.current === 'preview' ? 1 : .75 })} Preview
+				</button>
+				<button
+					class="tab"
+					class:active={viewMode.current === 'source'}
+					onclick={() => viewMode.set('source')}
+				>
+					{#if highlighter.loading.source}
+						<span class="spinner"></span>
+					{:else}
+						{@render icons.code({ size: 20, opacity: viewMode.current === 'source' ? 1 : .75 })}
+					{/if}
+					Source
+				</button>
+				<button
+					class="tab"
+					class:active={viewMode.current === 'html' || viewMode.current === 'raw'}
+					onclick={() => viewMode.set('html')}
+				>
+					{#if highlighter.loading.html}
+						<span class="spinner"></span>
+					{:else}
+						{@render icons.document({ size: 20, opacity: viewMode.current === 'html' || viewMode.current === 'raw' ? 1 : .75 })}
+					{/if}
+					HTML
+				</button>
+				<button
+					class="tab"
+					class:active={viewMode.current === 'text'}
+					onclick={() => viewMode.set('text')}
+				>
+					{#if highlighter.loading.text}
+						<span class="spinner"></span>
+					{:else}
+						{@render icons.codeText({ size: 20, opacity: viewMode.current === 'text' ? 1 : .75 })}
+					{/if}
+					Text
+				</button>
+			</nav>
+		{/if}
 
 		<div class="file-path">
 			{effectiveData.email.relativePath}
@@ -234,6 +296,9 @@
 		pointer-events: none;
 		user-select: none;
 		transform: translateY(-100%);
+	}
+
+	.tab-indicator.transition {
 		transition:
 			left 0.1s ease-out,
 			width 0.1s ease-out;

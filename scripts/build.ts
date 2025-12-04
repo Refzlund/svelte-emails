@@ -87,7 +87,7 @@ export default config
 	// Create vite.config.ts for the CLI app with performance optimizations
 	const viteConfig = `import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite'
-import { emailListPlugin } from './src/lib/vite-plugin.js'
+import { emailListPlugin } from './src/cli/vite-plugin.js'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 

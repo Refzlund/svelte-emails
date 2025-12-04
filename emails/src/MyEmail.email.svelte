@@ -37,10 +37,10 @@
 		dateOrdered = 'Nov 15, 2025'
 	}: Props = $props()
 
-	const itemTotal = itemQuantity * itemPrice
+	const itemTotal = $derived(itemQuantity * itemPrice)
 	const shippingCost = 0
 	const tax = 0
-	const total = itemTotal + shippingCost + tax
+	const total = $derived(itemTotal + shippingCost + tax)
 </script>
 
 <Email
