@@ -13,6 +13,9 @@
 		type EmailData
 	} from '$lib/email-prefetch'
 	import type { PageData } from './$types'
+	import * as icons from '$lib/Icons.svelte'
+	import floatingUI from 'floating-runes'
+	import { fade } from 'svelte/transition'
 
 	interface Props {
 		data: PageData
@@ -21,6 +24,9 @@
 	const { data }: Props = $props()
 
 	let mode: 'preview' | 'source' | 'html' | 'text' = $state('preview')
+	
+	// Floating indicator for active tab
+	const float = floatingUI()
 
 	// Use cached data if available for instant display, fall back to server data
 	const effectiveData = $derived.by(() => {
@@ -91,47 +97,62 @@
 <div class="email-viewer">
 	<!-- Header with tabs and file path -->
 	<header class="viewer-header">
-		<nav class="tabs">
+		<nav class="tabs" use:float.untether={'pointerleave'}>
+			{#if float.referenced}
+				<div
+					class="tab-indicator active"
+					style="width: {float.referenced.clientWidth}px; height: {float.referenced.offsetHeight}px;"
+					use:float={{ tether: false }}
+				></div>
+			{/if}
 			<button
 				class="tab"
 				class:active={mode === 'preview'}
+				use:float.tether={'mouseenter'}
+				use:float.ref={() => mode === 'preview'}
 				onclick={() => mode = 'preview'}
 			>
-				<span class="icon">🖼️</span> Preview
+				{@render icons.contentView({ size: 20, opacity: mode === 'preview' ? 1 : .75 })} Preview
 			</button>
 			<button
 				class="tab"
 				class:active={mode === 'source'}
+				use:float.tether={'mouseenter'}
+				use:float.ref={() => mode === 'source'}
 				onclick={() => mode = 'source'}
 			>
 				{#if highlighter.loading.source}
 					<span class="spinner"></span>
 				{:else}
-					<span class="icon">&lt;/&gt;</span>
+					{@render icons.code({ size: 20, opacity: mode === 'source' ? 1 : .75 })}
 				{/if}
 				Source
 			</button>
 			<button
 				class="tab"
 				class:active={mode === 'html'}
+				use:float.tether={'mouseenter'}
+				use:float.ref={() => mode === 'html'}
 				onclick={() => mode = 'html'}
 			>
 				{#if highlighter.loading.html}
 					<span class="spinner"></span>
 				{:else}
-					<span class="icon">📄</span>
+					{@render icons.document({ size: 20, opacity: mode === 'html' ? 1 : .75 })}
 				{/if}
 				HTML
 			</button>
 			<button
 				class="tab"
 				class:active={mode === 'text'}
+				use:float.tether={'mouseenter'}
+				use:float.ref={() => mode === 'text'}
 				onclick={() => mode = 'text'}
 			>
 				{#if highlighter.loading.text}
 					<span class="spinner"></span>
 				{:else}
-					<span class="icon">≡</span>
+					{@render icons.codeText({ size: 20, opacity: mode === 'text' ? 1 : .75 })}
 				{/if}
 				Text
 			</button>
@@ -190,17 +211,39 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 0 16px;
-		background: #1a1a2e;
+		height: 70px;
+		background: var(--viewer-header-bg);
 		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 	}
 
 	.tabs {
+		position: relative;
 		display: flex;
 		gap: 4px;
-		padding: 8px 0;
+		padding: 4px;
+		border-radius: 6px;
+		background-color: var(--tabs-bg);
+	}
+
+	.tab-indicator {
+		left: 0px;
+		position: absolute;
+		border-radius: 4px;
+		pointer-events: none;
+		user-select: none;
+		transform: translateY(-100%);
+		transition:
+			left 0.1s ease-out,
+			width 0.1s ease-out;
+	}
+
+	.tab-indicator.active {
+		background: var(--tab-active-gradient);
 	}
 
 	.tab {
+		position: relative;
+		z-index: 1;
 		display: flex;
 		align-items: center;
 		gap: 6px;
@@ -216,17 +259,11 @@
 	}
 
 	.tab:hover {
-		background: rgba(255, 255, 255, 0.05);
 		color: rgba(255, 255, 255, 0.9);
 	}
 
 	.tab.active {
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 		color: #fff;
-	}
-
-	.icon {
-		font-size: 12px;
 	}
 
 	.spinner {

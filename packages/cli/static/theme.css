@@ -1,0 +1,31 @@
+:root {
+	/* Viewer header (top bar) */
+	--viewer-header-bg: #3B3C54;
+	--tabs-bg: #35354B;
+	--tab-active-gradient: linear-gradient(100deg, #5949A2 0%, #564181 100%);
+	
+	/* Nav sidebar (left side) */
+	--nav-bg: #3F405A;
+	
+	/* Nav left email listing - alternating rows */
+	--nav-item-even: #454661;
+	--nav-item-odd: #484965;
+	--nav-item-selected: #545575;
+	
+	/* Nav left selected item border */
+	--nav-item-selected-border: #777BDB;
+	--nav-item-selected-border-width: 4px;
+	
+	/* Nav left items padding */
+	--nav-item-padding-y: 16px;
+	--nav-item-padding-x: 20px;
+	
+	/* Nav left items text colors */
+	--nav-item-text: #ffffff;
+	--nav-item-preview-opacity: 0.5;
+	--nav-item-preview-opacity-selected: 0.75;
+	
+	/* Nav top (main content area header) */
+	--nav-top-bg: #3B3C54;
+	--nav-top-border-left: #545575;
+}

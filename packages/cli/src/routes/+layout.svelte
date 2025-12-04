@@ -47,6 +47,7 @@
 			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
 		}
 	</style>
+	<link rel="stylesheet" href="/theme.css" />
 	<link rel="icon" href='/svelte-emails.png' />
 </svelte:head>
 
@@ -54,16 +55,18 @@
 	<!-- Sidebar -->
 	<aside class="sidebar">
 		<header class="sidebar-header">
-			<span class="logo">📧</span>
+			<img src="/svelte-emails.png" alt="svelte-emails logo" width="24" height="24" />
 			<span class="title">*.email.svelte</span>
 		</header>
 
 		<nav class="email-list" data-sveltekit-preload-data="hover">
-			{#each emails as email}
+			{#each emails as email, i}
 				<a
 					href="/{email.id}"
 					class="email-item"
 					class:selected={selectedId === email.id}
+					class:even={i % 2 === 0}
+					class:odd={i % 2 === 1}
 				>
 					<span class="email-name">{email.name}</span>
 					{#if email.previewText}
@@ -115,22 +118,18 @@
 	.sidebar {
 		width: 320px;
 		min-width: 320px;
-		background: #1a1a2e;
+		background: var(--nav-bg);
 		display: flex;
 		flex-direction: column;
-		border-right: 1px solid rgba(255, 255, 255, 0.1);
 	}
 
 	.sidebar-header {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 16px 20px;
+		gap: 1rem;
+		height: 70px;
+		padding: 0px 20px;
 		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-	}
-
-	.logo {
-		font-size: 20px;
 	}
 
 	.title {
@@ -143,41 +142,55 @@
 	.email-list {
 		flex: 1;
 		overflow-y: auto;
-		padding: 8px;
 	}
 
 	.email-item {
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		padding: 12px 16px;
-		border-radius: 8px;
+		padding: var(--nav-item-padding-y) var(--nav-item-padding-x);
 		text-decoration: none;
-		color: rgba(255, 255, 255, 0.7);
-		transition: all 0.15s ease;
+		color: var(--nav-item-text);
+		transition: background 0.15s ease;
+		border-left: var(--nav-item-selected-border-width) solid transparent;
+	}
+
+	.email-item.even {
+		background: var(--nav-item-even);
+	}
+
+	.email-item.odd {
+		background: var(--nav-item-odd);
 	}
 
 	.email-item:hover {
-		background: rgba(255, 255, 255, 0.05);
-		color: #fff;
+		background: var(--nav-item-selected);
 	}
 
 	.email-item.selected {
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		color: #fff;
+		background: var(--nav-item-selected);
+		border-left-color: var(--nav-item-selected-border);
 	}
 
 	.email-name {
-		font-weight: 600;
+		font-weight: 400;
 		font-size: 14px;
+	}
+
+	.email-item.selected .email-name {
+		font-weight: 700;
 	}
 
 	.email-preview {
 		font-size: 12px;
-		opacity: 0.7;
+		opacity: var(--nav-item-preview-opacity);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	.email-item.selected .email-preview {
+		opacity: var(--nav-item-preview-opacity-selected);
 	}
 
 	.empty-state {
@@ -222,7 +235,8 @@
 
 	.main {
 		flex: 1;
-		background: #f5f5f5;
+		background: var(--nav-top-bg);
+		border-left: 1px solid var(--nav-top-border-left);
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
