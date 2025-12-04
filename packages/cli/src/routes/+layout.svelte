@@ -90,7 +90,7 @@
 				target="_blank"
 				rel="noopener"
 			>
-				{@render icons.sparkleAction()}
+				{@render icons.sparkleAction({ size: 24, opacity: .5 })}
 				Examples
 			</a>
 			<a
@@ -98,7 +98,8 @@
 				target="_blank"
 				rel="noopener"
 			>
-				<span>📖</span> Documentation
+				{@render icons.bookInformation({ size: 24, opacity: .5 })}
+				Documentation
 			</a>
 		</footer>
 	</aside>
@@ -211,7 +212,7 @@
 	}
 
 	.sidebar-footer {
-		padding: 12px 16px;
+		padding: 10px 8px;
 		border-top: 1px solid rgba(255, 255, 255, 0.1);
 		display: flex;
 		flex-direction: column;
