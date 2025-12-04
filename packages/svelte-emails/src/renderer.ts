@@ -1182,8 +1182,10 @@ function renderTableNode(
 	// Get table config
 	const tableConfig = context.style.Table
 	const borderColor = parsed.css.borderColor ?? tableConfig?.borderColor ?? '#e5e7eb'
-	// Node's cellPadding takes precedence over config
-	const cellPadding = node.cellPadding ?? tableConfig?.cellPadding ?? '8px'
+	// Node's cellPadding takes precedence, then check compact flag, then default
+	const cellPadding = node.cellPadding 
+		?? (node.compact ? tableConfig?.compactCellPadding : tableConfig?.cellPadding) 
+		?? '8px'
 
 	// Build border styles based on node flags
 	// border: outer + cell borders

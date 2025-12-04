@@ -257,11 +257,11 @@
 	<Div p-6>
 		<Text.H4 content="**Background Colors:**" text={colors.text} />
 		<Div cols gap-2 responsive>
-			<Div p-3 bg={colors.danger} align-middle><Text.Small content="#ef4444" text={colors.white} /></Div>
-			<Div p-3 bg={colors.orange} align-middle><Text.Small content="#f97316" text={colors.white} /></Div>
-			<Div p-3 bg={colors.warning} align-middle><Text.Small content="#eab308" /></Div>
-			<Div p-3 bg={colors.success} align-middle><Text.Small content="#22c55e" text={colors.white} /></Div>
-			<Div p-3 bg={colors.primary} align-middle><Text.Small content="#3b82f6" text={colors.white} /></Div>
+			<Div p-3 bg={colors.danger} align-middle><Text.Small content={colors.danger} text={colors.white} /></Div>
+			<Div p-3 bg={colors.orange} align-middle><Text.Small content={colors.orange} text={colors.white} /></Div>
+			<Div p-3 bg={colors.warning} align-middle><Text.Small content={colors.warning} /></Div>
+			<Div p-3 bg={colors.success} align-middle><Text.Small content={colors.success} text={colors.white} /></Div>
+			<Div p-3 bg={colors.primary} align-middle><Text.Small content={colors.primary} text={colors.white} /></Div>
 		</Div>
 
 		<Spacer h-4 />
@@ -683,7 +683,7 @@
 			</Table.Row>
 			<Table.Row bg={colors.pastel.green} italic text={colors.success}>
 				<Text content="Italic green row" />
-				<Text content="Also inherited" font-normal />
+				<Text content="Not italic (override)" not-italic />
 			</Table.Row>
 		</Table>
 
@@ -1292,7 +1292,7 @@ line breaks" whitespace-pre text={colors.textMuted} />
 	<Div p-6>
 		<Text.H4 content="**Inline Code:**" text={colors.text} />
 		<Text.Paragraph
-			content="Use \`npm install svelte-emails\` to install the package."
+			content="Use `bun add -D svelte-emails` to install the package."
 			text={colors.textMuted}
 		/>
 
