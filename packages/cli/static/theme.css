@@ -28,4 +28,39 @@
 	/* Nav top (main content area header) */
 	--nav-top-bg: #3B3C54;
 	--nav-top-border-left: #545575;
+	
+	/* Scrollbar */
+	--scrollbar-width: 10px;
+	--scrollbar-track: transparent;
+	--scrollbar-thumb: hsla(238, 65%, 75%, 0.3);
+	--scrollbar-thumb-hover: hsla(238, 65%, 75%, 0.5);
+}
+
+/* Custom scrollbar styles */
+* {
+	scrollbar-width: initial;
+	scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+	width: var(--scrollbar-width);
+	height: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+	background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--scrollbar-thumb);
+	border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: var(--scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-corner {
+	background: var(--scrollbar-track);
 }

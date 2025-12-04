@@ -177,14 +177,24 @@ export function parseAttrs(
 ): ParsedAttrs {
 	const result: ParsedAttrs = { css: {} }
 
-	// Pre-parse color opacity modifiers first so they're available when parsing colors
+	// Pre-parse opacity modifiers first so they're available when parsing colors
+	// This includes both color-specific opacities (text-opacity, bg-opacity, border-opacity)
+	// and element-wide opacity (opacity-50), which compounds with all color opacities
 	for (const attr of attrs) {
 		parseColorOpacity(attr, result)
+		parseOpacity(attr, result)
 	}
 
-	// Parse all other attributes
+	// Calculate effective inherited opacity: parent opacity × this element's opacity
+	// This allows opacity-50 to affect all colors on this element, not just children
+	const effectiveInherited: InheritedStyles = {
+		...inherited,
+		opacity: inherited.opacity * (result.opacity ?? 1)
+	}
+
+	// Parse all other attributes using the effective inherited opacity
 	for (const attr of attrs) {
-		parseAttr(attr, result, inherited, rootSize)
+		parseAttr(attr, result, effectiveInherited, rootSize)
 	}
 
 	// Apply inherited border color with opacity if border-opacity-* was used 
@@ -192,7 +202,7 @@ export function parseAttrs(
 	if (result.borderOpacity !== undefined && !result.css.borderColor) {
 		// Use inherited border color (which defaults to text color)
 		const inheritedBorderColor = inherited.borderColor ?? inherited.color ?? '#000000'
-		const finalOpacity = result.borderOpacity * inherited.opacity
+		const finalOpacity = result.borderOpacity * effectiveInherited.opacity
 		if (finalOpacity < 1) {
 			result.css.borderColor = blendColor(inheritedBorderColor, inherited.backgroundColor, finalOpacity)
 		} else {
@@ -875,7 +885,8 @@ function parseBorder(
 	let match = attr.match(BORDER_WIDTH_SCALE_RE)
 	if (match) {
 		result.css.borderWidth = BORDER_WIDTHS[match[1]] || `${match[1]}px`
-		if (match[1] !== '0') result.css.borderStyle = 'solid'
+		// Only set solid as default if no explicit border style was specified
+		if (match[1] !== '0' && !result.css.borderStyle) result.css.borderStyle = 'solid'
 		return true
 	}
 
@@ -883,7 +894,8 @@ function parseBorder(
 	match = attr.match(BORDER_WIDTH_ARBITRARY_RE)
 	if (match) {
 		result.css.borderWidth = match[1].includes('px') ? match[1] : `${match[1]}px`
-		result.css.borderStyle = 'solid'
+		// Only set solid as default if no explicit border style was specified
+		if (!result.css.borderStyle) result.css.borderStyle = 'solid'
 		return true
 	}
 
@@ -894,7 +906,8 @@ function parseBorder(
 		const side = sideMap[match[1] as keyof typeof sideMap]
 		const value = match[3] || (match[2] ? BORDER_WIDTHS[match[2]] : '1px')
 		result.css[`border${side}Width`] = value
-		if (value !== '0') result.css[`border${side}Style`] = 'solid'
+		// Only set solid as default if no explicit border style was specified
+		if (value !== '0' && !result.css[`border${side}Style`]) result.css[`border${side}Style`] = 'solid'
 		return true
 	}
 
@@ -905,16 +918,18 @@ function parseBorder(
 		if (match[1] === 'x') {
 			result.css.borderLeftWidth = value
 			result.css.borderRightWidth = value
+			// Only set solid as default if no explicit border style was specified
 			if (value !== '0') {
-				result.css.borderLeftStyle = 'solid'
-				result.css.borderRightStyle = 'solid'
+				if (!result.css.borderLeftStyle) result.css.borderLeftStyle = 'solid'
+				if (!result.css.borderRightStyle) result.css.borderRightStyle = 'solid'
 			}
 		} else {
 			result.css.borderTopWidth = value
 			result.css.borderBottomWidth = value
+			// Only set solid as default if no explicit border style was specified
 			if (value !== '0') {
-				result.css.borderTopStyle = 'solid'
-				result.css.borderBottomStyle = 'solid'
+				if (!result.css.borderTopStyle) result.css.borderTopStyle = 'solid'
+				if (!result.css.borderBottomStyle) result.css.borderBottomStyle = 'solid'
 			}
 		}
 		return true
@@ -931,6 +946,21 @@ function parseBorder(
 			result.css.borderColor = blendColor(color, inherited.backgroundColor, finalOpacity)
 		} else {
 			result.css.borderColor = color
+		}
+		// Set default width and style ONLY if no border width is already specified
+		// (including directional borders like border-t-2)
+		// This allows `border={color}` alone to show a visible border,
+		// but doesn't override directional borders
+		const hasBorderWidth = result.css.borderWidth ||
+			result.css.borderTopWidth || result.css.borderRightWidth ||
+			result.css.borderBottomWidth || result.css.borderLeftWidth
+		if (!hasBorderWidth) {
+			result.css.borderWidth = '1px'
+		}
+		if (!result.css.borderStyle && !result.css.borderTopStyle &&
+			!result.css.borderRightStyle && !result.css.borderBottomStyle &&
+			!result.css.borderLeftStyle) {
+			result.css.borderStyle = 'solid'
 		}
 		return true
 	}

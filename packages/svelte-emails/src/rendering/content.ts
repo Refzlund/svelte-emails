@@ -127,17 +127,17 @@ export function parseMarkdown(content: string, context: RenderContext): string {
 function parseInlineFormatting(content: string, context: RenderContext): string {
 	let result = content
 
-	// Bold: **text**
-	result = result.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+	// Bold: **text** - allows single * inside content (e.g., **align-*:**)
+	result = result.replace(/\*\*((?:[^*]|\*(?!\*))+)\*\*/g, '<strong>$1</strong>')
 
-	// Italic: *text* (but not **)
-	result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>')
+	// Italic: *text* (but not **) - allows single * inside if not followed by another *
+	result = result.replace(/(?<!\*)\*((?:[^*]|\*(?!\*))+?)\*(?!\*)/g, '<em>$1</em>')
 
-	// Strikethrough: ~~text~~
-	result = result.replace(/~~([^~]+)~~/g, '<s>$1</s>')
+	// Strikethrough: ~~text~~ - allows single ~ inside
+	result = result.replace(/~~((?:[^~]|~(?!~))+)~~/g, '<s>$1</s>')
 
-	// Underline: __text__
-	result = result.replace(/__([^_]+)__/g, '<u>$1</u>')
+	// Underline: __text__ - allows single _ inside
+	result = result.replace(/__((?:[^_]|_(?!_))+)__/g, '<u>$1</u>')
 
 	// Links: [text](url) — apply Link styles from config
 	const linkStyle = buildLinkStyle(context)
@@ -149,7 +149,13 @@ function parseInlineFormatting(content: string, context: RenderContext): string 
 	// Superscript: ^text^
 	result = result.replace(/\^([^^]+)\^/g, '<sup>$1</sup>')
 
-	// Subscript: _text_ (single underscore, word boundaries)
+	// Subscript: _text_ 
+	// Two patterns:
+	// 1. Inline subscript like H_2_O - requires letter/digit before and after underscores
+	// 2. Word-level subscript with spaces: _text_ at word boundaries
+	// Pattern 1: letter/digit_content_letter/digit (for chemical formulas)
+	result = result.replace(/(?<=[A-Za-z0-9])_([^_]+)_(?=[A-Za-z0-9])/g, '<sub>$1</sub>')
+	// Pattern 2: space/start_content_space/end (for word-level subscript)
 	result = result.replace(/(?<=\s|^)_([^_]+)_(?=\s|$)/g, '<sub>$1</sub>')
 
 	// Inline code: `text` — apply Code styles from config
@@ -230,17 +236,45 @@ function parseCodeblocks(content: string, context: RenderContext): string {
 // ============================================================================
 
 /**
- * Convert newlines to <br> tags, but not inside <pre> blocks.
+ * Convert newlines to <br> tags, but not inside block-level elements.
+ * 
+ * Block elements (<pre>, <ul>, <ol>, <table>) are handled specially:
+ * - <pre> blocks preserve newlines as-is
+ * - <ul>/<ol> lists remove newlines entirely (structural, not content)
+ * - <table> blocks remove newlines entirely (structural, not content)
+ * 
+ * Newlines immediately before or after block elements are also removed
+ * to prevent extra <br> tags around blocks.
  */
 function parseLineBreaks(content: string): string {
-	// Split on <pre> blocks to avoid converting newlines inside them
-	const parts = content.split(/(<pre[\s\S]*?<\/pre>)/g)
+	// Split on block elements that shouldn't have <br> tags inside
+	const blockPattern = /(<(?:pre|ul|ol|table)[\s\S]*?<\/(?:pre|ul|ol|table)>)/g
+	const parts = content.split(blockPattern)
 	
 	return parts.map((part, i) => {
-		// Odd indices are <pre> blocks, leave them alone
-		if (i % 2 === 1) return part
-		// Even indices are regular content, convert newlines
-		return part.replace(/\n/g, '<br>')
+		// Odd indices are block elements
+		if (i % 2 === 1) {
+			// For lists and tables, remove newlines entirely (structural, not content)
+			if (part.startsWith('<ul') || part.startsWith('<ol') || part.startsWith('<table')) {
+				return part.replace(/\n/g, '')
+			}
+			// For <pre> blocks, preserve newlines as-is
+			return part
+		}
+		// Even indices are regular content
+		// Trim leading/trailing newlines adjacent to block elements
+		// (which are at odd indices)
+		let processed = part
+		if (i > 0) {
+			// Previous part was a block element, remove leading newlines
+			processed = processed.replace(/^\n+/, '')
+		}
+		if (i < parts.length - 1) {
+			// Next part is a block element, remove trailing newlines
+			processed = processed.replace(/\n+$/, '')
+		}
+		// Convert remaining newlines to <br>
+		return processed.replace(/\n/g, '<br>')
 	}).join('')
 }
 
@@ -253,63 +287,134 @@ function parseLineBreaks(content: string): string {
  * 
  * Unordered: Lines starting with - or *
  * Ordered: Lines starting with 1., a., A., i., I.
+ * 
+ * A list requires at least 2 consecutive list items to be recognized.
+ * This prevents single lines like "1. Introduction" from being treated as lists.
  */
 function parseLists(content: string): string {
 	const lines = content.split('\n')
-	const result: string[] = []
-	let inList: 'ul' | 'ol' | null = null
-	let listType: string | null = null
-
+	
+	// First pass: identify which lines are potential list items and collect runs of consecutive items
+	const listRuns: { start: number; end: number; type: 'ul' | 'ol'; listType?: string }[] = []
+	let currentRun: { start: number; type: 'ul' | 'ol'; listType?: string } | null = null
+	
 	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i]
-		const trimmed = line.trim()
-
-		// Unordered list item: - or *
+		const trimmed = lines[i].trim()
+		
+		// Check for unordered list item
 		const ulMatch = trimmed.match(/^[-*]\s+(.+)$/)
 		if (ulMatch) {
-			if (inList !== 'ul') {
-				if (inList) result.push(`</${inList}>`)
-				result.push('<ul>')
-				inList = 'ul'
+			if (currentRun?.type === 'ul') {
+				// Continue the run
+			} else {
+				// Start new run
+				if (currentRun) {
+					listRuns.push({ ...currentRun, end: i - 1 })
+				}
+				currentRun = { start: i, type: 'ul' }
 			}
-			result.push(`<li>${ulMatch[1]}</li>`)
 			continue
 		}
-
-		// Ordered list item: 1. a. A. i. I.
+		
+		// Check for ordered list item
 		const olMatch = trimmed.match(/^(\d+|[a-z]|[A-Z]|[ivxIVX]+)\.\s+(.+)$/)
 		if (olMatch) {
 			const marker = olMatch[1]
-			let type = '1' // default decimal
+			let type = '1'
 			if (/^[a-z]$/.test(marker)) type = 'a'
 			else if (/^[A-Z]$/.test(marker)) type = 'A'
 			else if (/^[ivxIVX]+$/.test(marker) && marker.toLowerCase() === marker) type = 'i'
 			else if (/^[ivxIVX]+$/.test(marker)) type = 'I'
-
-			if (inList !== 'ol' || listType !== type) {
-				if (inList) result.push(`</${inList}>`)
-				result.push(`<ol type="${type}">`)
-				inList = 'ol'
-				listType = type
+			
+			if (currentRun?.type === 'ol' && currentRun?.listType === type) {
+				// Continue the run
+			} else {
+				// Start new run
+				if (currentRun) {
+					listRuns.push({ ...currentRun, end: i - 1 })
+				}
+				currentRun = { start: i, type: 'ol', listType: type }
 			}
-			result.push(`<li>${olMatch[2]}</li>`)
 			continue
 		}
-
-		// Not a list item — close any open list
-		if (inList) {
-			result.push(`</${inList}>`)
-			inList = null
-			listType = null
+		
+		// Not a list item - end current run
+		if (currentRun) {
+			listRuns.push({ ...currentRun, end: i - 1 })
+			currentRun = null
 		}
-		result.push(line)
 	}
-
+	
+	// End any remaining run
+	if (currentRun) {
+		listRuns.push({ ...currentRun, end: lines.length - 1 })
+	}
+	
+	// Filter out runs with only 1 item (not a real list)
+	const validRuns = listRuns.filter((run) => run.end > run.start)
+	
+	// If no valid runs, return content unchanged
+	if (validRuns.length === 0) {
+		return content
+	}
+	
+	// Create a set of line indices that are part of valid lists
+	const listLineIndices = new Set<number>()
+	for (const run of validRuns) {
+		for (let i = run.start; i <= run.end; i++) {
+			listLineIndices.add(i)
+		}
+	}
+	
+	// Second pass: build the output
+	const result: string[] = []
+	let currentValidRun: typeof validRuns[0] | null = null
+	let inList = false
+	
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i]
+		const trimmed = line.trim()
+		
+		// Check if this line is part of a valid list
+		if (listLineIndices.has(i)) {
+			// Find which run this belongs to
+			const run = validRuns.find((r) => i >= r.start && i <= r.end)!
+			
+			// Open list if needed
+			if (currentValidRun !== run) {
+				if (inList) {
+					result.push(currentValidRun!.type === 'ul' ? '</ul>' : '</ol>')
+				}
+				if (run.type === 'ul') {
+					result.push('<ul>')
+				} else {
+					result.push(`<ol type="${run.listType}">`)
+				}
+				currentValidRun = run
+				inList = true
+			}
+			
+			// Extract content from the list item
+			const ulMatch = trimmed.match(/^[-*]\s+(.+)$/)
+			const olMatch = trimmed.match(/^(\d+|[a-z]|[A-Z]|[ivxIVX]+)\.\s+(.+)$/)
+			const itemContent = ulMatch ? ulMatch[1] : olMatch![2]
+			result.push(`<li>${itemContent}</li>`)
+		} else {
+			// Not a list line - close any open list
+			if (inList) {
+				result.push(currentValidRun!.type === 'ul' ? '</ul>' : '</ol>')
+				inList = false
+				currentValidRun = null
+			}
+			result.push(line)
+		}
+	}
+	
 	// Close any remaining list
 	if (inList) {
-		result.push(`</${inList}>`)
+		result.push(currentValidRun!.type === 'ul' ? '</ul>' : '</ol>')
 	}
-
+	
 	return result.join('\n')
 }
 

@@ -454,17 +454,18 @@ function renderDivNode(
 	// Normal Div: single cell containing all children
 	const childrenHtml = renderChildren(node.children, childInherited, context, rootSize)
 
-	// Table attrs: always 100% width to fill container, height if specified
-	// Note: Actual width constraint comes from parent (Grid's <td> or margin wrapper)
+	// Table attrs: use explicit width if provided, otherwise 100% to fill container
+	// Note: When Div has explicit width (w="300px" or w-[300px]), respect it
+	// When no width, default to 100% to fill parent container
 	const tableAttrs: Record<string, string> = {
-		width: '100%'
+		width: parsed.css.width ?? '100%'
 	}
 	if (parsed.css.height) {
 		tableAttrs.height = parsed.css.height
 	}
 
-	// Build CSS without width (width is controlled by parent)
-	// Clone parsed.css and remove width to avoid "40% of 40%" in nested contexts
+	// Build CSS without width (width is on table attribute, not inline style)
+	// Clone parsed.css and remove width to avoid duplication
 	const cssWithoutWidth = { ...parsed.css }
 	delete cssWithoutWidth.width
 
@@ -749,7 +750,12 @@ function renderTextNode(
 	const inlineStyle = toInlineCSS(mergedCss, inherited)
 	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
 
-	const html = `<${variantInfo.tag}${styleAttr}>${content}</${variantInfo.tag}>`
+	// Check if content contains block-level elements (lists, tables, etc.)
+	// Block elements cannot be inside <p> tags - use <div> instead
+	const hasBlockElements = /<(?:ul|ol|table|blockquote|pre|div|hr)[>\s]/i.test(content)
+	const tag = hasBlockElements ? 'div' : variantInfo.tag
+
+	const html = `<${tag}${styleAttr}>${content}</${tag}>`
 
 	return applyWrappers(html, parsed)
 }
@@ -1202,12 +1208,14 @@ function renderTableNode(
 			return renderTableRowNode(child, rowInherited, context, rootSize, {
 				rowBackground: stripeColor,
 				colWidths: node.colWidths,
-				borderColor: needCellBorders ? borderColor : undefined
+				borderColor: needCellBorders ? borderColor : undefined,
+				cellPadding
 			})
 		}
 		return renderTableRowNode(node.children[index] as Mail.TableRowNode, childInherited, context, rootSize, {
 			colWidths: node.colWidths,
-			borderColor: needCellBorders ? borderColor : undefined
+			borderColor: needCellBorders ? borderColor : undefined,
+			cellPadding
 		})
 	}).join('')
 
@@ -1238,7 +1246,7 @@ function renderTableNode(
 		}
 	}
 
-	const html = `<table cellpadding="${cellPadding}" cellspacing="0" border="0"${widthAttr}${heightAttr}${finalStyle}>${rowsHtml}</table>`
+	const html = `<table cellpadding="0" cellspacing="0" border="0"${widthAttr}${heightAttr}${finalStyle}>${rowsHtml}</table>`
 
 	return applyWrappers(html, parsed)
 }
@@ -1250,6 +1258,7 @@ interface TableRowRenderOptions {
 	rowBackground?: string
 	colWidths?: string[]
 	borderColor?: string
+	cellPadding?: string
 }
 
 /**
@@ -1297,7 +1306,7 @@ function renderTableRowNode(
 	rootSize: number,
 	options: TableRowRenderOptions = {}
 ): string {
-	const { rowBackground, colWidths, borderColor } = options
+	const { rowBackground, colWidths, borderColor, cellPadding } = options
 	const parsed = parseAttrs(node.attrs, inherited, rootSize)
 	const cellTag = node.header ? 'th' : 'td'
 
@@ -1316,6 +1325,10 @@ function renderTableRowNode(
 	let colIndex = 0
 	const totalChildren = node.children.length
 
+	// Check if row has any explicit padding
+	const rowHasPadding = rowStyles.padding || rowStyles.paddingTop ||
+		rowStyles.paddingRight || rowStyles.paddingBottom || rowStyles.paddingLeft
+
 	// Each child becomes a cell
 	const cellsHtml = node.children.map((child, childIndex) => {
 		const cellHtml = renderNodeToHtml(child, childInherited, context, rootSize)
@@ -1326,6 +1339,12 @@ function renderTableRowNode(
 			{ isFirst: childIndex === 0, isLast: childIndex === totalChildren - 1 },
 			{ rowBackground, tableBorderColor: borderColor }
 		)
+
+		// Add table-level cell padding if specified AND row doesn't have explicit padding
+		// This allows row padding (py-2, pb-2) to override table cell-padding
+		if (cellPadding && !rowHasPadding) {
+			rowTransferStyles.push(`padding: ${cellPadding}`)
+		}
 
 		// Extract cell-related attrs
 		const childCellAttrs = extractCellAttrs(child.attrs, rootSize)

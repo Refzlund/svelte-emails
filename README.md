@@ -1,5 +1,7 @@
 # svelte-emails
 
+Think Tailwind for emails. `svelte-emails` builds on a "Virtual level" handling all rendering of the actual email up to us. That means we can emulate behaviour such as margin (padding+wrappers) and opacity (color blending based on backgrounds) — and use modern terms such as "Grids". We take care of responsibility features and fallbacks, ensuring you get the look you want across platforms, with `mobile-only`, `desktop-only` and `responsive` (collapse columns to one column on mobile) attributes. But we don't stop there! We support placeholders `[[first_name]]` so your end users can customize their emails with custom variables at render time. We support extended markdown features, so you and your end users can format to your hearts desires. Icing of the cake? View and develop e-mails using `bunx svelte-emails` / `npx svelte-emails` with a beautiful UI that scans the CWD for the `*.email.svelte` syntax, and re-renders when files changes, are adeded or removed. The `Output` includes `html`, `text` and `headers` (for e-mail header such as `Unsubscribe`).
+
 Build email templates using Svelte components with Tailwind-like styling attributes.
 
 ## Quick Example
