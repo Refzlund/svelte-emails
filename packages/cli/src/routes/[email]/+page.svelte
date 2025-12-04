@@ -24,11 +24,18 @@
 	)
 
 	// Local state for email content (fetched client-side for instant navigation)
+	// These are intentionally initialized once from server data, then managed client-side.
+	// The $effect below handles updates based on currentEmailId changes.
+	// svelte-ignore state_referenced_locally
 	let email = $state(data.email)
+	// svelte-ignore state_referenced_locally
 	let source = $state(data.source)
+	// svelte-ignore state_referenced_locally
 	let rendered = $state(data.rendered)
 	let formattedHtml = $state<string | null>(null)
+	// svelte-ignore state_referenced_locally
 	let renderError = $state<string | null>(data.renderError)
+	// svelte-ignore state_referenced_locally
 	let isLoading = $state(!data.email)
 	let isRerendering = $state(false)  // True when re-rendering after file change
 

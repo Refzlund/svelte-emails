@@ -1,5 +1,5 @@
 import { browser } from '$app/environment'
-import type { SafeEmail } from '$cli/types.js'
+import type { SafeEmail } from '../cli/types.js'
 
 export type { SafeEmail as EmailListItem }
 
