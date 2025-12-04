@@ -135,19 +135,7 @@ let escapeCounter = 0
 
 ---
 
-### 3. Float Attributes Parser Missing
-
-**Location:** [parse-attrs.ts](packages/svelte-emails/src/rendering/parse-attrs.ts)
-
-**Issue:** `FloatAttributes` are defined in `style-attributes.ts` but there's no parser for `float-left`, `float-right`, `float-none`, `clear-*` in `parse-attrs.ts`.
-
-**Impact:** Float attributes silently do nothing.
-
-**Fix:** Add `parseFloat()` function to handle these attributes.
-
----
-
-### 4. Inconsistent Default Border Style Handling
+### 3. Inconsistent Default Border Style Handling
 
 **Location:** [parse-attrs.ts#L800-L850](packages/svelte-emails/src/rendering/parse-attrs.ts#L800-L850)
 
@@ -192,13 +180,10 @@ const parseCache = new WeakMap<string[], ParsedAttrs>()
 
 ## 📝 Documentation Gaps
 
-### 1. Missing Float Parser Note
-Add a note in `style-attributes.ts` that float attributes are defined but not yet implemented in the parser.
-
-### 2. Row Spanning Limitations
+### 1. Row Spanning Limitations
 Document in ARCHITECTURE.md that row-span works in HTML but not in plain text output.
 
-### 3. Escape System Thread Safety
+### 2. Escape System Thread Safety
 Add a comment in `content.ts` explaining the synchronous assumption.
 
 ---
@@ -208,7 +193,6 @@ Add a comment in `content.ts` explaining the synchronous assumption.
 | Opportunity | Impact | Effort | Priority |
 |------------|--------|--------|----------|
 | Cell rendering helper | High | Medium | 🔴 High |
-| Float parser missing | Medium | Low | 🔴 High |
 | Anchor-like components | Medium | Low | 🟡 Medium |
 | Standard render flow | Medium | High | 🟡 Medium |
 | Escape system race | Low | Medium | 🟢 Low |

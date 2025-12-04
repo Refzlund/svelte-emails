@@ -601,10 +601,22 @@ export type SafeBorderAttributes = Attributes<
  * For rounded buttons in Outlook, use VML (Vector Markup Language) fallbacks.
  * Design should look acceptable with square corners as fallback.
  */
+type BorderRadiusSizes = 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full'
 export type BorderRadiusAttributes = Attributes<
+	// All corners
 	| Scales<'rounded'> | 'rounded-full' | 'rounded-none'
 	| 'rounded-sm' | 'rounded-md' | 'rounded-lg' | 'rounded-xl' | 'rounded-2xl' | 'rounded-3xl'
 	| `rounded-[${string}]`
+	// Per-side (top, right, bottom, left)
+	| `rounded-t-${BorderRadiusSizes}` | `rounded-t-[${string}]`
+	| `rounded-r-${BorderRadiusSizes}` | `rounded-r-[${string}]`
+	| `rounded-b-${BorderRadiusSizes}` | `rounded-b-[${string}]`
+	| `rounded-l-${BorderRadiusSizes}` | `rounded-l-[${string}]`
+	// Per-corner (tl, tr, br, bl)
+	| `rounded-tl-${BorderRadiusSizes}` | `rounded-tl-[${string}]`
+	| `rounded-tr-${BorderRadiusSizes}` | `rounded-tr-[${string}]`
+	| `rounded-br-${BorderRadiusSizes}` | `rounded-br-[${string}]`
+	| `rounded-bl-${BorderRadiusSizes}` | `rounded-bl-[${string}]`
 >
 
 /**
@@ -631,20 +643,9 @@ export type SafeLayoutAttributes = Attributes<
 >
 
 /**
- * ⚠️ Float/Clear Utilities (~90% support)
- * 
- * Float-based layouts work but tables are strongly preferred for email.
- * Only use floats for simple inline elements, not for major layout structure.
- */
-export type FloatAttributes = Attributes<
-	| 'float-left' | 'float-right' | 'float-none'
-	| 'clear-left' | 'clear-right' | 'clear-both' | 'clear-none'
->
-
-/**
  * All layout attributes
  */
-export type LayoutAttributes = SafeLayoutAttributes & FloatAttributes
+export type LayoutAttributes = SafeLayoutAttributes
 
 
 // ============================================================================

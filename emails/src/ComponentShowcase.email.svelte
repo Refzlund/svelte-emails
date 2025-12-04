@@ -1324,40 +1324,13 @@ import { Email, Div, Text } from 'svelte-emails'
 	</Div>
 
 	<!-- ================================================================== -->
-	<!-- SECTION 21: FLOAT LAYOUT (⚠️ Limited) -->
-	<!-- ================================================================== -->
-	<Div bg={colors.warning} p-4>
-		<Text.H2 content="21. Float Layout (⚠️ ~90% Support)" text={colors.text} />
-	</Div>
-
-	<Div p-6>
-		<Text.H4 content="**Float Left/Right:**" text={colors.text} />
-		<Text.Paragraph content="⚠️ Float works but tables are preferred for email layouts." text={colors.gray[500]} text-sm />
-		<Spacer h-2 />
-		<Div bg={colors.gray[100]} p-4>
-			<Img
-				src="https://fpoimg.com/80x80"
-				alt="Float left image"
-				width={80}
-				height={80}
-				float-left
-				mr-3
-			/>
-			<Text.Paragraph
-				content="This text wraps around the floated image on the left. Float-based layouts can work for simple inline elements but are not recommended for major layout structure in emails. Use cols/rows or Table instead."
-				text={colors.textMuted}
-			/>
-		</Div>
-	</Div>
-
-	<!-- ================================================================== -->
 	<!-- FOOTER -->
 	<!-- ================================================================== -->
 	<Div bg={colors.gray[100]} p-6 align-middle>
 		<Text.H3 content="🎉 Component Showcase Complete!" text={colors.text} />
 		<Spacer h-2 />
 		<Text.Paragraph
-			content="This email demonstrates all 21 sections of svelte-emails components and style attributes for comprehensive testing."
+			content="This email demonstrates all 20 sections of svelte-emails components and style attributes for comprehensive testing."
 			text={colors.gray[600]}
 			align-middle
 		/>
