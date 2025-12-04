@@ -394,13 +394,18 @@ function buildHeadSection(node: Mail.EmailNode, context: RenderContext, mobileBr
 	const css = [
 		`@media screen and (max-width:${mobileBreakpoint}px){`,
 		`.email-container{width:100%!important}`,
-		`.responsive-grid td{display:block!important;width:100%!important}`,
-		`.responsive-grid td>table{display:table!important;width:100%!important}`,
-		`.responsive-grid td>table>tbody>tr>td{display:table-cell!important}`,
-		// Responsive gap: switch horizontal padding to vertical when columns stack
+		// Responsive grid: content cells stack vertically
+		`.responsive-grid td.content-cell{display:block!important;width:auto!important;box-sizing:border-box!important}`,
+		`.responsive-grid td.content-cell>table{display:table!important;width:100%!important}`,
+		`.responsive-grid td.content-cell>table>tbody>tr>td{display:table-cell!important}`,
+		// Gap handling: hide spacer cells, add vertical margin to stacked cells
+		`.responsive-grid td.gap-spacer{display:none!important}`,
+		`.responsive-grid td.content-cell.has-gap{margin-top:var(--gap)!important}`,
+		// Gap-as-padding fallback: switch horizontal padding to vertical
 		`.responsive-grid td.responsive-gap-first{padding-right:0!important;padding-bottom:var(--gap-half)!important}`,
 		`.responsive-grid td.responsive-gap-middle{padding-left:0!important;padding-right:0!important;padding-top:var(--gap-half)!important;padding-bottom:var(--gap-half)!important}`,
 		`.responsive-grid td.responsive-gap-last{padding-left:0!important;padding-top:var(--gap-half)!important}`,
+		// Visibility toggles
 		`.mobile-only{display:table-cell!important;max-height:none!important;overflow:visible!important;width:auto!important}`,
 		`td.mobile-only{display:table-cell!important}`,
 		`div.mobile-only{display:block!important}`,
@@ -470,14 +475,29 @@ function renderDivNode(
 		tableAttrs.height = parsed.css.height
 	}
 
-	// Build CSS without width (width is on table attribute, not inline style)
+	// Build CSS without width/height (these are on table/td attributes, not inline style)
 	// Clone parsed.css and remove width to avoid duplication
-	const cssWithoutWidth = { ...parsed.css }
-	delete cssWithoutWidth.width
+	const cssWithoutDimensions = { ...parsed.css }
+	delete cssWithoutDimensions.width
+	delete cssWithoutDimensions.height
 
-	// Build the table cell with inline styles (excluding width)
-	const inlineStyle = toInlineCSS(cssWithoutWidth, inherited)
-	const html = presentationTable(childrenHtml, tableAttrs, { style: inlineStyle })
+	// Build td attributes - vertical alignment and height need to be HTML attributes for email
+	const tdAttrs: Record<string, string> = {}
+	if (parsed.css.verticalAlign) {
+		tdAttrs.valign = parsed.css.verticalAlign
+		delete cssWithoutDimensions.verticalAlign // Don't duplicate in inline style
+	}
+	// Height on <td> must be an HTML attribute for email clients
+	if (parsed.css.height) {
+		tdAttrs.height = parsed.css.height
+	}
+
+	// Build the table cell with inline styles (excluding width/height)
+	const inlineStyle = toInlineCSS(cssWithoutDimensions, inherited)
+	if (inlineStyle) {
+		tdAttrs.style = inlineStyle
+	}
+	const html = presentationTable(childrenHtml, tableAttrs, tdAttrs)
 
 	return applyWrappers(html, parsed)
 }
@@ -601,6 +621,16 @@ function renderDivAsGrid(
 		
 		// Extract width, valign, responsive, and span from each child's attrs to apply to <td>
 		const childCount = node.children.length
+		
+		// Check if any child will be unwrapped (h-full Div) - if so, use gap spacer cells
+		const hasUnwrappedChildren = node.children.some(child => {
+			const attrs = extractCellAttrs(child.attrs, rootSize)
+			return child.type === 'div' && !child.direction && attrs.height === '100%'
+		})
+		// Use gap spacer cells instead of padding when children are unwrapped
+		const useGapCells = gap && hasUnwrappedChildren
+		const effectiveUseGapAsPadding = useGapAsPadding && !useGapCells
+		
 		let colIndex = 0
 		const cells = node.children.map((child, index) => {
 			// Extract all cell-related attrs in single pass
@@ -612,7 +642,22 @@ function renderDivAsGrid(
 				: child.attrs
 			const childForRender = { ...child, attrs: childAttrsFiltered }
 			
-			const childHtml = renderNodeToHtml(childForRender, childInherited, context, rootSize)
+			// Special case: when child is a Div with h-full, apply its styles to the <td>
+			// and render its children directly. This makes equal-height columns work.
+			let childHtml: string
+			let cellStylesCss: Record<string, string> = {}
+			
+			if (child.type === 'div' && !child.direction && cellAttrs.height === '100%') {
+				const childParsed = parseAttrs(childForRender.attrs, childInherited, rootSize)
+				const childChildInherited = extractInheritable(childParsed, childInherited)
+				childHtml = renderChildren(child.children, childChildInherited, context, rootSize)
+				
+				// Apply child's visual styles to the cell (excluding dimensions)
+				const { width: _w, height: _h, verticalAlign: _v, ...visualCss } = childParsed.css
+				cellStylesCss = { ...visualCss }
+			} else {
+				childHtml = renderNodeToHtml(childForRender, childInherited, context, rootSize)
+			}
 			
 			// Width priority: explicit child width > effectiveColWidths[index] > none
 			let width = cellAttrs.width
@@ -625,45 +670,48 @@ function renderDivAsGrid(
 			// Build class list
 			const classes: string[] = []
 			if (cellAttrs.responsive) classes.push(cellAttrs.responsive)
+			if (cellAttrs.responsive === 'mobile-only') cellStylesCss.display = 'none'
 			
-			// For mobile-only, start hidden; for desktop-only, start visible
-			const styleProps: string[] = []
-			if (cellAttrs.responsive === 'mobile-only') {
-				styleProps.push('display: none')
-			}
-			
-			// Apply gap as padding distributed evenly between cells
-			// First cell: padding-right only | Middle cells: both | Last cell: padding-left only
-			// For responsive grids, also add class to switch padding direction on mobile
-			if (useGapAsPadding && halfGap) {
+			// Apply gap as padding (only when not using gap cells)
+			if (effectiveUseGapAsPadding && halfGap) {
 				const isFirst = index === 0
 				const isLast = index === childCount - 1
-				if (!isFirst) styleProps.push(`padding-left: ${halfGap}`)
-				if (!isLast) styleProps.push(`padding-right: ${halfGap}`)
+				if (!isFirst) cellStylesCss.paddingLeft = halfGap
+				if (!isLast) cellStylesCss.paddingRight = halfGap
 				
-				// Add responsive gap class and CSS variable for mobile padding direction switch
 				if (isResponsive) {
-					styleProps.push(`--gap-half: ${halfGap}`)
+					cellStylesCss['--gap-half'] = halfGap
 					if (isFirst) classes.push('responsive-gap-first')
 					else if (isLast) classes.push('responsive-gap-last')
 					else classes.push('responsive-gap-middle')
 				}
 			}
 			
-			const classAttr = classes.length > 0 ? ` class="${classes.join(' ')}"` : ''
-			const styleAttr = styleProps.length > 0 ? ` style="${styleProps.join('; ')}"` : ''
 			const colspanAttr = cellAttrs.colspan ? ` colspan="${cellAttrs.colspan}"` : ''
 			const rowspanAttr = cellAttrs.rowspan ? ` rowspan="${cellAttrs.rowspan}"` : ''
 			const valign = cellAttrs.valign ?? 'top'
 			
-			// Advance column index by colspan
 			colIndex += cellAttrs.colspan ?? 1
+			
+			// Add content-cell class for responsive targeting
+			if (isResponsive) {
+				classes.push('content-cell')
+				// Add has-gap class + CSS variable for margin-top on mobile (gap cells approach)
+				if (gap && index > 0 && !effectiveUseGapAsPadding) {
+					classes.push('has-gap')
+					cellStylesCss['--gap'] = gap
+				}
+			}
+			
+			const classAttr = classes.length > 0 ? ` class="${classes.join(' ')}"` : ''
+			const styleStr = toInlineCSS(cellStylesCss, inherited)
+			const styleAttr = styleStr ? ` style="${styleStr}"` : ''
 			
 			const cell = `<td valign="${valign}"${widthAttr}${colspanAttr}${rowspanAttr}${classAttr}${styleAttr}>${childHtml}</td>`
 			
-			// Insert gap spacer between cells (not before first) - only when NOT using padding approach
-			if (gap && index > 0 && !useGapAsPadding) {
-				return `<td width="${gap}"></td>${cell}`
+			// Insert gap spacer between cells when using gap cells approach
+			if (gap && index > 0 && !effectiveUseGapAsPadding) {
+				return `<td class="gap-spacer" style="width: ${gap}; min-width: ${gap}; font-size: 0; line-height: 0;">&nbsp;</td>${cell}`
 			}
 			return cell
 		}).join('')
@@ -713,7 +761,12 @@ function renderDivAsGrid(
 		if (backgroundColor) wrapperCss.backgroundColor = backgroundColor
 		
 		const wrapperStyle = toInlineCSS(wrapperCss, inherited)
-		html = presentationTable(html, { width: '100%' }, { style: wrapperStyle })
+		// Preserve height on wrapper table when h-full is set
+		const wrapperTableAttrs: Record<string, string> = { width: '100%' }
+		if (parsed.css.height) {
+			wrapperTableAttrs.height = parsed.css.height
+		}
+		html = presentationTable(html, wrapperTableAttrs, { style: wrapperStyle })
 	}
 
 	return applyWrappers(html, parsed)

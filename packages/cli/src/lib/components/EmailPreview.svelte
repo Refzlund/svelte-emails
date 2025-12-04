@@ -69,7 +69,17 @@
 			const wrapperRect = iframeWrapperElement.getBoundingClientRect()
 			const edgeThreshold = 8
 
-			if (Math.abs(e.clientX - wrapperRect.left) < edgeThreshold) {
+			// Check if mouse is within the iframe wrapper bounds
+			const isInsideWrapper = 
+				e.clientX > wrapperRect.left + edgeThreshold &&
+				e.clientX < wrapperRect.right - edgeThreshold &&
+				e.clientY >= wrapperRect.top &&
+				e.clientY <= wrapperRect.bottom
+
+			if (isInsideWrapper) {
+				// Mouse is inside the iframe content area, not near edges
+				resizeEdge = null
+			} else if (Math.abs(e.clientX - wrapperRect.left) < edgeThreshold) {
 				resizeEdge = 'left'
 			} else if (Math.abs(e.clientX - wrapperRect.right) < edgeThreshold) {
 				resizeEdge = 'right'
@@ -149,6 +159,7 @@
 			title="Email Preview"
 			style="min-height: {containerHeight}px;"
 			scrolling="no"
+			sandbox=""
 		/>
 	</div>
 </div>
@@ -232,17 +243,15 @@
 		display: block;
 		width: 100%;
 		border: none;
-		pointer-events: auto;
+		/* Disable pointer events so mouse events pass through to parent */
+		/* This allows the glow effect and resize detection to work smoothly */
+		pointer-events: none;
 		z-index: 1;
 	}
 
 	.preview-container.resizing {
 		cursor: ew-resize;
 		user-select: none;
-	}
-
-	.preview-container.resizing :global(iframe) {
-		pointer-events: none;
 	}
 
 	.loading-indicator {

@@ -399,6 +399,84 @@ Generic container supporting grid layouts via `cols` or `rows`:
 | `span-2` through `span-12` | Column span |
 | `row-span-2` through `row-span-12` | Row span |
 
+#### Equal-Height Columns with `h-full`
+
+Use `h-full` on child Divs to make all columns in a row the same height:
+
+```svelte
+<Div cols responsive gap-4>
+  <Div h-full bg-[#f5f5f5] p-4 rounded>
+    <Text content='Short content' />
+  </Div>
+  <Div h-full bg-[#f5f5f5] p-4 rounded>
+    <Text content='Much longer content that makes this column taller...' />
+    <Text content='More text here...' />
+  </Div>
+</Div>
+```
+
+**How it works (implementation insight):**
+
+HTML table cells (`<td>`) in the same `<tr>` naturally have equal heights. However, this doesn't cascade to nested elements—a nested table inside a `<td>` won't expand with `height: 100%` in most email clients.
+
+The solution is **unwrapping**: when a child Div has `h-full`, the renderer applies its visual styles (background, border, padding) directly to the parent grid's `<td>` cell, and renders the child's content directly inside that cell. This allows the visual container to naturally match the row height.
+
+```
+Before (nested tables, height doesn't cascade):
+┌─ <td> ─────────────────┐
+│  ┌─ <table> ──────┐    │  ← Nested table doesn't expand
+│  │  Content       │    │
+│  └────────────────┘    │
+│        [gap]           │  ← Empty space at bottom
+└────────────────────────┘
+
+After (unwrapped, styles on <td>):
+┌─ <td bg, padding> ─────┐
+│  Content               │  ← Direct content, <td> fills row height
+│                        │
+│                        │
+└────────────────────────┘
+```
+
+**When unwrapping occurs:**
+- The child Div has `h-full` or `h-screen` (100% height)
+- The parent is a `cols` or `rows` grid layout
+
+**What gets applied to the `<td>`:**
+- Visual styles: `background`, `border`, `padding`, `border-radius`
+- Layout styles: `valign` (from child's vertical alignment)
+- The child's children are rendered directly into the cell
+
+#### Responsive Gap Handling
+
+When `responsive` is set, columns stack vertically on mobile. The gap behavior adapts:
+
+**Desktop:** Gap cells (`<td class="gap-spacer">`) create horizontal spacing between columns.
+
+**Mobile:** Gap cells are hidden via CSS, and `margin-top` creates vertical spacing between stacked rows.
+
+```css
+/* Desktop: gap cells create horizontal spacing */
+<td class="content-cell">...</td>
+<td class="gap-spacer" width="16px">&nbsp;</td>
+<td class="content-cell has-gap">...</td>
+
+/* Mobile media query: */
+.responsive-grid td.gap-spacer { display: none !important; }
+.responsive-grid td.content-cell.has-gap { margin-top: var(--gap) !important; }
+.responsive-grid td.content-cell { display: block !important; width: auto !important; }
+```
+
+**CSS classes used:**
+| Class | Purpose |
+|-------|---------|
+| `content-cell` | Marks actual content cells (not gap spacers) |
+| `gap-spacer` | Marks gap cells, hidden on mobile |
+| `has-gap` | Applied to content cells after the first, receives vertical margin on mobile |
+
+**Why `width: auto` instead of `width: 100%`:**
+Using `width: 100%` on stacked cells causes them to stretch beyond parent padding. `width: auto` respects the parent container's padding.
+
 ### Table (Data Tables)
 
 For tabular data with proper semantics:
@@ -814,6 +892,67 @@ Grid layouts read **column by column**, then row by row for logical flow.
 - **Lazy regex compilation** — Patterns compiled once at import
 - **Early exit** — Skip markdown parsing if no markdown chars present
 - **Output < 100KB** — Gmail clips larger emails
+
+### Implementation Patterns for Email Constraints
+
+This section documents reusable patterns for working around HTML email limitations.
+
+#### Pattern: Style Promotion (Unwrapping)
+
+**Problem:** CSS properties don't cascade through nested tables in email clients.
+
+**Solution:** Move visual styles from nested elements to their parent table cells.
+
+**When to use:**
+- A feature requires the container to match its parent's dimensions (like equal-height columns)
+- The nested element's visual appearance (bg, border, padding) needs to fill the available space
+
+**Implementation steps:**
+1. In `parse-attrs.ts`: Add the triggering attribute to `CellAttrs` interface and extraction logic
+2. In `renderer.ts`: Detect the attribute and apply visual styles to the parent `<td>` instead of creating a nested element
+3. Render the element's children directly into the parent cell
+
+**Example:** The `h-full` handling in `renderDivAsGrid()` promotes background/border/padding to the grid's `<td>` cells so they naturally match row height.
+
+#### Pattern: Dual Gap Strategies
+
+**Problem:** Gap between grid children needs different implementations based on context.
+
+**Solutions:**
+1. **Gap-as-spacer-cells:** Insert empty `<td>` cells with fixed width between content cells. Best for equal-height layouts where cells are unwrapped.
+2. **Gap-as-padding:** Use padding-right on content cells. Best for percentage-width columns where spacer cells would break width calculations.
+
+**Responsive adaptation:**
+- Desktop: Horizontal gap via spacer cells or padding
+- Mobile: Hide spacer cells via CSS, use `margin-top` for vertical gap (margins work when cells become `display: block`)
+
+#### Pattern: Targeted Responsive CSS
+
+**Problem:** Responsive media queries can inadvertently affect non-content elements (gap spacers, wrapper tables).
+
+**Solution:** Use specific CSS classes to target only the elements that should respond:
+- `content-cell` — Actual content cells that should stack
+- `gap-spacer` — Gap cells that should hide on mobile
+- `has-gap` — Content cells needing vertical margin on mobile
+
+**Implementation:**
+```css
+/* Target content cells specifically, not all <td> elements */
+.responsive-grid td.content-cell { display: block; width: auto; }
+.responsive-grid td.gap-spacer { display: none; }
+.responsive-grid td.content-cell.has-gap { margin-top: var(--gap); }
+```
+
+#### Pattern: CSS Variables for Runtime Values
+
+**Problem:** Gap values are dynamic per-component but CSS is generated once.
+
+**Solution:** Use CSS custom properties (`var(--gap)`) in the media query CSS, and set inline styles on individual elements:
+```html
+<table class="responsive-grid" style="--gap: 16px;">...</table>
+```
+
+This keeps the media query CSS static while allowing per-element configuration.
 
 ---
 

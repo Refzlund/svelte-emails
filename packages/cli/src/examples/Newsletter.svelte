@@ -43,7 +43,50 @@
 		recipientName = 'Developer',
 		issueNumber = 42
 	}: Props = $props()
+
+	interface Article {
+		title: string
+		description: string
+		href: string
+	}
+
+	const articles: Article[] = [
+		{
+			title: 'Building Forms with Superforms',
+			description: 'Type-safe forms made easy with SvelteKit Superforms.',
+			href: 'https://example.com/forms'
+		},
+		{
+			title: 'SvelteKit + Tailwind CSS',
+			description: 'The ultimate guide to styling your SvelteKit apps.',
+			href: 'https://example.com/tailwind'
+		},
+		{
+			title: 'Auth with Lucia',
+			description: 'Implement authentication in your SvelteKit app.',
+			href: 'https://example.com/auth'
+		},
+		{
+			title: 'Server Actions Deep Dive',
+			description: 'Master form actions and progressive enhancement.',
+			href: 'https://example.com/actions'
+		}
+	]
 </script>
+
+{#snippet articleCard(article: Article)}
+	<Div bg={colors.white} border={colors.border} border-1 rounded-lg p-4 h-full>
+		<Text.H5 content="**{article.title}**" text={colors.text} />
+		<Spacer h-2 />
+		<Text.Small content={article.description} text={colors.textMuted} />
+		<Spacer h-3 />
+		<Link href={article.href} text={colors.primary} content='Read article →' />
+	</Div>
+{/snippet}
+
+{#snippet socialLink(href: string, label: string)}
+	<Link {href} text={colors.textMuted}>{label}</Link>
+{/snippet}
 
 <Email
 	preview="Issue #{issueNumber} - The latest in Svelte development"
@@ -53,7 +96,7 @@
 >
 	<!-- Header -->
 	<Div p-6 bg={colors.primary}>
-		<Div cols responsive align-middle>
+		<Div cols responsive align-middle-left>
 			<Div>
 				<Text.H1 
 					content="📧 {companyName}" 
@@ -126,57 +169,15 @@
 		<Spacer h-4 />
 		
 		<Div cols responsive gap-4>
-			<!-- Article 1 -->
-			<Div bg={colors.white} border={colors.border} border-1 rounded-lg p-4 h-full>
-				<Text.H5 content="**Building Forms with Superforms**" text={colors.text} />
-				<Spacer h-2 />
-				<Text.Small 
-					content="Type-safe forms made easy with SvelteKit Superforms."
-					text={colors.textMuted}
-				/>
-				<Spacer h-3 />
-				<Link href="https://example.com/forms" text={colors.primary} content='Read article →' />
-			</Div>
-
-			<!-- Article 2 -->
-			<Div bg={colors.white} border={colors.border} border-1 rounded-lg p-4 h-full>
-				<Text.H5 content="**SvelteKit + Tailwind CSS**" text={colors.text} />
-				<Spacer h-2 />
-				<Text.Small 
-					content="The ultimate guide to styling your SvelteKit apps."
-					text={colors.textMuted}
-				/>
-				<Spacer h-3 />
-				<Link href="https://example.com/tailwind" text={colors.primary} content='Read article →' align-bottom />
-			</Div>
+			{@render articleCard(articles[0])}
+			{@render articleCard(articles[1])}
 		</Div>
 
 		<Spacer h-4 />
 
 		<Div cols responsive gap-4>
-			<!-- Article 3 -->
-			<Div bg={colors.white} border={colors.border} border-1 rounded-lg p-4>
-				<Text.H5 content="**Auth with Lucia**" text={colors.text} />
-				<Spacer h-2 />
-				<Text.Small 
-					content="Implement authentication in your SvelteKit app."
-					text={colors.textMuted}
-				/>
-				<Spacer h-3 />
-				<Link href="https://example.com/auth" text={colors.primary} content='Read article →' />
-			</Div>
-
-			<!-- Article 4 -->
-			<Div bg={colors.white} border={colors.border} border-1 rounded-lg p-4>
-				<Text.H5 content="**Server Actions Deep Dive**" text={colors.text} />
-				<Spacer h-2 />
-				<Text.Small 
-					content="Master form actions and progressive enhancement."
-					text={colors.textMuted}
-				/>
-				<Spacer h-3 />
-				<Link href="https://example.com/actions" text={colors.primary} content='Read article →' />
-			</Div>
+			{@render articleCard(articles[2])}
+			{@render articleCard(articles[3])}
 		</Div>
 	</Div>
 
@@ -215,11 +216,11 @@
 			<Spacer h-4 />
 			
 			<Div cols align-middle gap-4>
-				<Link href="https://twitter.com" text={colors.textMuted}>Twitter</Link>
+				{@render socialLink('https://twitter.com', 'Twitter')}
 				<Text content="•" text={colors.border} />
-				<Link href="https://github.com" text={colors.textMuted}>GitHub</Link>
+				{@render socialLink('https://github.com', 'GitHub')}
 				<Text content="•" text={colors.border} />
-				<Link href="https://discord.com" text={colors.textMuted}>Discord</Link>
+				{@render socialLink('https://discord.com', 'Discord')}
 			</Div>
 			
 			<Spacer h-4 />

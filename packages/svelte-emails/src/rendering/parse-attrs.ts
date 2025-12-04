@@ -1374,6 +1374,7 @@ export interface CellAttrs {
 	valign?: 'top' | 'middle' | 'bottom'
 	textAlign?: 'left' | 'center' | 'right'
 	width?: string
+	height?: string
 	responsive?: 'mobile-only' | 'desktop-only'
 }
 
@@ -1387,6 +1388,7 @@ export interface CellAttrs {
  * - valign: align-top, align-middle, align-bottom (and compound forms)
  * - textAlign: align-* or justify-* for horizontal alignment
  * - width: w-{value}, w-[value], or w-full
+ * - height: h-full, h-screen (signals cell should expand to fill row height)
  * - responsive: mobile-only or desktop-only
  * 
  * @param attrs - Array of Tailwind-like attributes
@@ -1395,8 +1397,8 @@ export interface CellAttrs {
  * 
  * @example
  * ```ts
- * extractCellAttrs(['span-2', 'align-top-left', 'w-[200px]'], 16)
- * // → { colspan: 2, valign: 'top', textAlign: 'left', width: '200px' }
+ * extractCellAttrs(['span-2', 'align-top-left', 'w-[200px]', 'h-full'], 16)
+ * // → { colspan: 2, valign: 'top', textAlign: 'left', width: '200px', height: '100%' }
  * ```
  */
 export function extractCellAttrs(attrs: string[], rootSize: number): CellAttrs {
@@ -1455,6 +1457,13 @@ export function extractCellAttrs(attrs: string[], rootSize: number): CellAttrs {
 		// width: w-{value}, w-[value], w-full, w-screen
 		if (!result.width) {
 			result.width = extractWidthValue(attr, rootSize)
+		}
+		
+		// height: h-full or h-screen signals the cell should expand to fill row height
+		if (!result.height) {
+			if (attr === 'h-full' || attr === 'h-screen') {
+				result.height = '100%'
+			}
 		}
 		
 		// responsive: mobile-only or desktop-only
