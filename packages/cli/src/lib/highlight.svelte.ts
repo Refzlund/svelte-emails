@@ -8,7 +8,7 @@ interface CacheEntry {
 	html: string
 }
 
-type HighlightType = 'source' | 'html' | 'htmlRaw' | 'text'
+type HighlightType = 'source' | 'html' | 'text'
 
 // Cache: Map<emailId:type, CacheEntry>
 const cache = new Map<string, CacheEntry>()
@@ -56,14 +56,12 @@ function getCacheKey(emailId: string, type: HighlightType): string {
 export interface HighlightState {
 	source: string | null
 	html: string | null
-	htmlRaw: string | null
 	text: string | null
 }
 
 export interface LoadingState {
 	source: boolean
 	html: boolean
-	htmlRaw: boolean
 	text: boolean
 }
 
@@ -71,14 +69,12 @@ export function createHighlightManager() {
 	let state = $state<HighlightState>({
 		source: null,
 		html: null,
-		htmlRaw: null,
 		text: null
 	})
 
 	let loading = $state<LoadingState>({
 		source: false,
 		html: false,
-		htmlRaw: false,
 		text: false
 	})
 
@@ -125,7 +121,6 @@ export function createHighlightManager() {
 		emailId: string,
 		source: string,
 		html: string | null,
-		htmlRaw: string | null,
 		text: string | null
 	) {
 		currentEmailId = emailId
@@ -133,12 +128,10 @@ export function createHighlightManager() {
 		// Check if all are already cached with correct version
 		const sourceVersion = generateVersion(source)
 		const htmlVersion = html ? generateVersion(html) : null
-		const htmlRawVersion = htmlRaw ? generateVersion(htmlRaw) : null
 		const textVersion = text ? generateVersion(text) : null
 
 		const sourceCached = cache.get(getCacheKey(emailId, 'source'))
 		const htmlCached = cache.get(getCacheKey(emailId, 'html'))
-		const htmlRawCached = cache.get(getCacheKey(emailId, 'htmlRaw'))
 		const textCached = cache.get(getCacheKey(emailId, 'text'))
 
 		// Set cached values immediately if available
@@ -154,13 +147,6 @@ export function createHighlightManager() {
 		} else if (html) {
 			state.html = null
 			loading.html = true
-		}
-
-		if (htmlRaw && htmlRawCached?.version === htmlRawVersion) {
-			state.htmlRaw = htmlRawCached.html
-		} else if (htmlRaw) {
-			state.htmlRaw = null
-			loading.htmlRaw = true
 		}
 
 		if (text && textCached?.version === textVersion) {
@@ -195,17 +181,6 @@ export function createHighlightManager() {
 			)
 		}
 
-		if (htmlRaw && loading.htmlRaw) {
-			tasks.push(
-				highlightInWorker('htmlRaw', htmlRaw, 'html', emailId).then((result) => {
-					if (currentEmailId === emailId) {
-						state.htmlRaw = result
-						loading.htmlRaw = false
-					}
-				})
-			)
-		}
-
 		if (text && loading.text) {
 			tasks.push(
 				highlightInWorker('text', text, 'markdown', emailId).then((result) => {
@@ -226,8 +201,8 @@ export function createHighlightManager() {
 		highlight,
 		clear() {
 			currentEmailId = null
-			state = { source: null, html: null, htmlRaw: null, text: null }
-			loading = { source: false, html: false, htmlRaw: false, text: false }
+			state = { source: null, html: null, text: null }
+			loading = { source: false, html: false, text: false }
 		}
 	}
 }

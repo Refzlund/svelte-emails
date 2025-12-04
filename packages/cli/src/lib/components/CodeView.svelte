@@ -14,8 +14,6 @@
 		showToggle?: boolean
 		/** Raw (non-prettified) code to show when toggle is off */
 		rawCode?: string
-		/** Highlighted HTML for the raw code (separate from formatted) */
-		highlightedRawHtml?: string | null
 		/** Controlled: whether to show raw view */
 		showRaw?: boolean
 		/** Callback when toggle changes */
@@ -27,7 +25,6 @@
 		highlightedHtml,
 		showToggle = false,
 		rawCode,
-		highlightedRawHtml,
 		showRaw,
 		onToggle
 	}: Props = $props()
@@ -39,7 +36,7 @@
 	const showFormatted = $derived(showRaw !== undefined ? !showRaw : internalShowFormatted)
 
 	const displayCode = $derived(showFormatted ? code : (rawCode ?? code))
-	const displayHighlighted = $derived(showFormatted ? highlightedHtml : (highlightedRawHtml ?? null))
+	const displayHighlighted = $derived(showFormatted ? highlightedHtml : null)
 	
 	const handleToggle = (formatted: boolean) => {
 		if (onToggle) {

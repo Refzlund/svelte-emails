@@ -118,14 +118,13 @@
 	const highlighter = createHighlightManager()
 
 	// Trigger highlighting when data changes
-	// Highlights both formatted and raw HTML separately for proper caching
+	// Highlights source and formatted HTML (raw mode displays plain code without highlighting)
 	$effect(() => {
 		if (!email || !source) return
 		highlighter.highlight(
 			email.id,
 			source,
 			formattedHtml,
-			rendered?.html ?? null,
 			rendered?.text ?? null
 		)
 	})
@@ -342,7 +341,6 @@
 					code={formattedHtml ?? rendered.html}
 					rawCode={rendered.html}
 					highlightedHtml={highlighter.state.html}
-					highlightedRawHtml={highlighter.state.htmlRaw}
 					showToggle
 					showRaw={viewMode.isRaw}
 					onToggle={(raw) => viewMode.set(raw ? 'raw' : 'html')}
