@@ -3,6 +3,7 @@
 	
 	The iframe width can be adjusted by dragging the edges.
 	Images are automatically cached as data URLs for instant loading.
+	Uses the shared IframePreview component with morphdom for seamless updates.
 
 @example
 ```svelte
@@ -12,6 +13,7 @@
 <script lang="ts">
 	import { createImageCache } from '$lib/image-cache.svelte'
 	import { createPreviewWidth } from '$lib/utils/preview-width.svelte'
+	import { Email } from 'svelte-emails'
 
 	interface Props {
 		html: string
@@ -31,13 +33,8 @@
 	let containerHeight = $state(0)
 	let containerElement: HTMLDivElement | undefined = $state()
 	let iframeWrapperElement: HTMLDivElement | undefined = $state()
-	let iframeElement: HTMLIFrameElement | undefined = $state()
 	let resizeEdge: 'left' | 'right' | null = $state(null)
 	let isDragging = $state(false)
-	
-	// Track current HTML to avoid unnecessary updates
-	let currentHtml = ''
-	let heightObserver: ResizeObserver | null = null
 
 	// Track container height for min-height calculation
 	$effect(() => {
@@ -54,88 +51,8 @@
 		return () => resizeObserver.disconnect()
 	})
 
-	// Derive the content to display
+	// Derive the content to display (with cached images)
 	const contentHtml = $derived(imageCache.processedHtml || html)
-
-	// Write HTML directly to iframe document (faster than srcdoc - no reload)
-	$effect(() => {
-		const iframe = iframeElement
-		const content = contentHtml
-		if (!iframe || !content) return
-		
-		// Skip if content hasn't changed
-		if (content === currentHtml) return
-		currentHtml = content
-		
-		// Reset height to allow shrinking
-		iframeHeight = 0
-		
-		const doc = iframe.contentDocument
-		if (!doc) return
-		
-		// Cleanup previous observer
-		heightObserver?.disconnect()
-		doc.removeEventListener('mousemove', handleIframeMouseMove)
-		
-		// Write content directly (faster than srcdoc)
-		doc.open()
-		doc.write(content)
-		doc.close()
-		
-		// Setup height observer
-		const updateHeight = () => {
-			if (doc.documentElement) {
-				const height = doc.documentElement.scrollHeight
-				if (height > 0) {
-					iframeHeight = height
-				}
-			}
-		}
-		
-		// Initial height update
-		requestAnimationFrame(updateHeight)
-		
-		// Observe for changes
-		heightObserver = new ResizeObserver(updateHeight)
-		if (doc.body) heightObserver.observe(doc.body)
-		if (doc.documentElement) heightObserver.observe(doc.documentElement)
-		
-		// Forward mouse events
-		doc.addEventListener('mousemove', handleIframeMouseMove)
-		
-		return () => {
-			heightObserver?.disconnect()
-			doc.removeEventListener('mousemove', handleIframeMouseMove)
-		}
-	})
-
-	// Handle mouse move from inside iframe
-	function handleIframeMouseMove(e: MouseEvent) {
-		if (!iframeWrapperElement || !iframeElement) return
-
-		// Get iframe's position in viewport
-		const iframeRect = iframeElement.getBoundingClientRect()
-		// Convert iframe-relative coords to viewport coords
-		const viewportX = iframeRect.left + e.clientX
-		const viewportY = iframeRect.top + e.clientY
-
-		// Update glow position
-		mouseX = viewportX
-		mouseY = viewportY
-
-		if (isDragging) return
-
-		const wrapperRect = iframeWrapperElement.getBoundingClientRect()
-		const edgeThreshold = 8
-
-		if (Math.abs(viewportX - wrapperRect.left) < edgeThreshold) {
-			resizeEdge = 'left'
-		} else if (Math.abs(viewportX - wrapperRect.right) < edgeThreshold) {
-			resizeEdge = 'right'
-		} else {
-			resizeEdge = null
-		}
-	}
 
 	// Cursor glow effect - use viewport coordinates for fixed overlay
 	let mouseX = $state(0)
@@ -226,13 +143,13 @@
 				<div class="spinner-small"></div>
 			</div>
 		{/if}
-		<iframe
-			bind:this={iframeElement}
+		<Email.IframePreview
+			html={contentHtml}
+			bind:height={iframeHeight}
 			title="Email Preview"
-			style:height={iframeHeight > 0 ? `${iframeHeight}px` : `${containerHeight}px`}
-			style:min-height="{containerHeight}px"
+			style="min-height: {containerHeight}px;"
 			scrolling="no"
-		></iframe>
+		/>
 	</div>
 </div>
 
@@ -292,18 +209,18 @@
 		min-height: 100%;
 	}
 
-	.iframe-wrapper > iframe {
+	.iframe-wrapper :global(iframe) {
 		box-shadow: 0px 0 0 0 #777BDB;
 		transition: box-shadow .2s;
 		z-index: 2;
 	}
 
 	/* Visual resize indicators via box-shadow on wrapper */
-	.iframe-wrapper.resize-left > iframe {
+	.iframe-wrapper.resize-left :global(iframe) {
 		box-shadow: -6px 0 0 0 #777BDB;
 	}
 
-	.iframe-wrapper.resize-right > iframe {
+	.iframe-wrapper.resize-right :global(iframe) {
 		box-shadow: 6px 0 0 0 #777BDB;
 	}
 
@@ -311,7 +228,7 @@
 		cursor: ew-resize;
 	}
 
-	.preview-container iframe {
+	.preview-container :global(iframe) {
 		display: block;
 		width: 100%;
 		border: none;
@@ -324,7 +241,7 @@
 		user-select: none;
 	}
 
-	.preview-container.resizing iframe {
+	.preview-container.resizing :global(iframe) {
 		pointer-events: none;
 	}
 

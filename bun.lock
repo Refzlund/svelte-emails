@@ -32,12 +32,14 @@
         "chokidar": "^4.0.3",
         "fast-glob": "^3.3.3",
         "floating-runes": "^1.3.1",
+        "morphdom": "^2.7.7",
         "shiki": "^3.19.0",
         "svelte-emails": "workspace:*",
       },
       "devDependencies": {
         "@sveltejs/kit": "^2.48.5",
         "@sveltejs/vite-plugin-svelte": "^6.2.1",
+        "@types/morphdom": "^2.4.2",
         "@types/node": "^22.15.29",
         "svelte": "^5.43.8",
         "typescript": "^5.9.3",
@@ -48,10 +50,14 @@
     "packages/svelte-emails": {
       "name": "svelte-emails",
       "version": "0.0.4",
+      "dependencies": {
+        "morphdom": "^2.7.7",
+      },
       "devDependencies": {
         "@sveltejs/kit": "catalog:",
         "@sveltejs/package": "^2.3.11",
         "@sveltejs/vite-plugin-svelte": "catalog:",
+        "@types/morphdom": "^2.4.2",
         "svelte": "catalog:",
         "typescript": "catalog:",
       },
@@ -264,6 +270,8 @@
 
     "@types/mdast": ["@types/mdast@4.0.4", "", { "dependencies": { "@types/unist": "*" } }, "sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA=="],
 
+    "@types/morphdom": ["@types/morphdom@2.4.2", "", { "dependencies": { "morphdom": "*" } }, "sha512-tKZZkqBzRJ1ucthVqr41rW2yvTO5ItYTp5I1vc30t06OsRmZTP+TprYa5S6VHdQEuMbnAxR5WXtFmOZ2FIhc/g=="],
+
     "@types/node": ["@types/node@22.19.1", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-LCCV0HdSZZZb34qifBsyWlUmok6W7ouER+oQIGBScS8EsZsQbrtFTUrDX4hOl+CS6p7cnNC4td+qrSVGSCTUfQ=="],
 
     "@types/unist": ["@types/unist@3.0.3", "", {}, "sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q=="],
@@ -365,6 +373,8 @@
     "micromark-util-types": ["micromark-util-types@2.0.2", "", {}, "sha512-Yw0ECSpJoViF1qTU4DC6NwtC4aWGt1EkzaQB8KPPyCRR8z9TWeV0HbEFGTO+ZY1wB22zmxnJqhPyTpOVCpeHTA=="],
 
     "micromatch": ["micromatch@4.0.8", "", { "dependencies": { "braces": "^3.0.3", "picomatch": "^2.3.1" } }, "sha512-PXwfBhYu0hBCPw8Dn0E+WDYb7af3dSLVWKi3HGv84IdF4TyFoC0ysxFd0Goxw7nSv4T/PzEJQxsYsEiFCKo2BA=="],
+
+    "morphdom": ["morphdom@2.7.7", "", {}, "sha512-04GmsiBcalrSCNmzfo+UjU8tt3PhZJKzcOy+r1FlGA7/zri8wre3I1WkYN9PT3sIeIKfW9bpyElA+VzOg2E24g=="],
 
     "mri": ["mri@1.2.0", "", {}, "sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA=="],
 

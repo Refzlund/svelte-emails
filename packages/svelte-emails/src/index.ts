@@ -1,5 +1,6 @@
 import _Email from './Email.svelte'
 import _Render from './Render.svelte'
+import _IframePreview from './IframePreview.svelte'
 import Div from './Elements/Div.svelte'
 import _Text from './Elements/Text/Text.svelte'
 import _TextH1 from './Elements/Text/H1.svelte'
@@ -30,8 +31,10 @@ import type { Component } from 'svelte'
 import { render as svelteRender } from 'svelte/server'
 
 // <Email.Render ...>
+// <Email.IframePreview ...>
 const Email = Object.assign(_Email, { 
-	Render: _Render
+	Render: _Render,
+	IframePreview: _IframePreview
 })
 // <Text content='...' />
 // <Text.H1 content='...' />
