@@ -12,10 +12,10 @@
 		getCachedEmailData,
 		type EmailData
 	} from '$lib/email-prefetch'
+	import { createViewMode } from '$lib/utils/view-mode.svelte'
 	import type { PageData } from './$types'
 	import * as icons from '$lib/Icons.svelte'
 	import floatingUI from 'floating-runes'
-	import { fade } from 'svelte/transition'
 
 	interface Props {
 		data: PageData
@@ -23,7 +23,7 @@
 
 	const { data }: Props = $props()
 
-	let mode: 'preview' | 'source' | 'html' | 'text' = $state('preview')
+	const viewMode = createViewMode()
 	
 	// Floating indicator for active tab
 	const float = floatingUI()
@@ -107,52 +107,52 @@
 			{/if}
 			<button
 				class="tab"
-				class:active={mode === 'preview'}
+				class:active={viewMode.current === 'preview'}
 				use:float.tether={'mouseenter'}
-				use:float.ref={() => mode === 'preview'}
-				onclick={() => mode = 'preview'}
+				use:float.ref={() => viewMode.current === 'preview'}
+				onclick={() => viewMode.set('preview')}
 			>
-				{@render icons.contentView({ size: 20, opacity: mode === 'preview' ? 1 : .75 })} Preview
+				{@render icons.contentView({ size: 20, opacity: viewMode.current === 'preview' ? 1 : .75 })} Preview
 			</button>
 			<button
 				class="tab"
-				class:active={mode === 'source'}
+				class:active={viewMode.current === 'source'}
 				use:float.tether={'mouseenter'}
-				use:float.ref={() => mode === 'source'}
-				onclick={() => mode = 'source'}
+				use:float.ref={() => viewMode.current === 'source'}
+				onclick={() => viewMode.set('source')}
 			>
 				{#if highlighter.loading.source}
 					<span class="spinner"></span>
 				{:else}
-					{@render icons.code({ size: 20, opacity: mode === 'source' ? 1 : .75 })}
+					{@render icons.code({ size: 20, opacity: viewMode.current === 'source' ? 1 : .75 })}
 				{/if}
 				Source
 			</button>
 			<button
 				class="tab"
-				class:active={mode === 'html'}
+				class:active={viewMode.current === 'html' || viewMode.current === 'raw'}
 				use:float.tether={'mouseenter'}
-				use:float.ref={() => mode === 'html'}
-				onclick={() => mode = 'html'}
+				use:float.ref={() => viewMode.current === 'html' || viewMode.current === 'raw'}
+				onclick={() => viewMode.set('html')}
 			>
 				{#if highlighter.loading.html}
 					<span class="spinner"></span>
 				{:else}
-					{@render icons.document({ size: 20, opacity: mode === 'html' ? 1 : .75 })}
+					{@render icons.document({ size: 20, opacity: viewMode.current === 'html' || viewMode.current === 'raw' ? 1 : .75 })}
 				{/if}
 				HTML
 			</button>
 			<button
 				class="tab"
-				class:active={mode === 'text'}
+				class:active={viewMode.current === 'text'}
 				use:float.tether={'mouseenter'}
-				use:float.ref={() => mode === 'text'}
-				onclick={() => mode = 'text'}
+				use:float.ref={() => viewMode.current === 'text'}
+				onclick={() => viewMode.set('text')}
 			>
 				{#if highlighter.loading.text}
 					<span class="spinner"></span>
 				{:else}
-					{@render icons.codeText({ size: 20, opacity: mode === 'text' ? 1 : .75 })}
+					{@render icons.codeText({ size: 20, opacity: viewMode.current === 'text' ? 1 : .75 })}
 				{/if}
 				Text
 			</button>
@@ -170,25 +170,27 @@
 				<h3>⚠️ Render Error</h3>
 				<pre>{effectiveData.renderError}</pre>
 			</div>
-		{:else if mode === 'preview'}
+		{:else if viewMode.current === 'preview'}
 			{#if effectiveData.rendered}
 				<EmailPreview html={effectiveData.rendered.html} />
 			{/if}
-		{:else if mode === 'source'}
+		{:else if viewMode.current === 'source'}
 			<CodeView
 				code={effectiveData.source}
 				highlightedHtml={highlighter.state.source}
 			/>
-		{:else if mode === 'html'}
+		{:else if viewMode.current === 'html' || viewMode.current === 'raw'}
 			{#if effectiveData.rendered}
 				<CodeView
 					code={effectiveData.rendered.html}
 					rawCode={effectiveData.rendered.htmlRaw}
 					highlightedHtml={highlighter.state.html}
 					showToggle
+					showRaw={viewMode.isRaw}
+					onToggle={(raw) => viewMode.set(raw ? 'raw' : 'html')}
 				/>
 			{/if}
-		{:else if mode === 'text'}
+		{:else if viewMode.current === 'text'}
 			{#if effectiveData.rendered}
 				<CodeView
 					code={effectiveData.rendered.text}

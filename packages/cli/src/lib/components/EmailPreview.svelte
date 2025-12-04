@@ -11,6 +11,7 @@
 -->
 <script lang="ts">
 	import { createImageCache } from '$lib/image-cache.svelte'
+	import { createPreviewWidth } from '$lib/utils/preview-width.svelte'
 
 	interface Props {
 		html: string
@@ -24,7 +25,8 @@
 		imageCache.processHtml(html)
 	})
 
-	let iframeWidth = $state(80) // percentage
+	const previewWidth = createPreviewWidth()
+	let iframeWidth = $derived(previewWidth.value)
 	let iframeHeight = $state(0)
 	let containerHeight = $state(0)
 	let containerElement: HTMLDivElement | undefined = $state()
@@ -175,13 +177,14 @@
 			const widthChange = edge === 'right' ? deltaPercent * 2 : -deltaPercent * 2
 
 			const newWidth = Math.max(10, Math.min(100, startWidth + widthChange))
-			iframeWidth = newWidth
+			previewWidth.value = newWidth
 		}
 
 		function onMouseUp(e: MouseEvent) {
 			e.preventDefault()
 			isDragging = false
 			resizeEdge = null
+			previewWidth.persist()
 			window.removeEventListener('mousemove', onMouseMove)
 			window.removeEventListener('mouseup', onMouseUp)
 		}

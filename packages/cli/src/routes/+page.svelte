@@ -12,7 +12,7 @@
 
 {#if emails.length === 0}
 	<div class="welcome">
-		<h1>📧 svelte-emails</h1>
+		<h1>svelte-emails</h1>
 		<p>No email templates found.</p>
 		<p class="hint">Create a file ending with <code>.email.svelte</code> to get started.</p>
 	</div>

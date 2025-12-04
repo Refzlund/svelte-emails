@@ -14,13 +14,29 @@
 		showToggle?: boolean
 		/** Raw (non-prettified) code to show when toggle is off */
 		rawCode?: string
+		/** Controlled: whether to show raw view */
+		showRaw?: boolean
+		/** Callback when toggle changes */
+		onToggle?: (showRaw: boolean) => void
 	}
 
-	const { code, highlightedHtml, showToggle = false, rawCode }: Props = $props()
+	const { code, highlightedHtml, showToggle = false, rawCode, showRaw, onToggle }: Props = $props()
 
-	let showFormatted = $state(true)
+	// Internal state for uncontrolled mode
+	let internalShowFormatted = $state(true)
+	
+	// Use controlled value if provided, otherwise use internal state
+	const showFormatted = $derived(showRaw !== undefined ? !showRaw : internalShowFormatted)
 
 	const displayCode = $derived(showFormatted ? code : (rawCode ?? code))
+	
+	const handleToggle = (formatted: boolean) => {
+		if (onToggle) {
+			onToggle(!formatted)
+		} else {
+			internalShowFormatted = formatted
+		}
+	}
 </script>
 
 <div class="code-panel">
@@ -29,14 +45,14 @@
 			<button
 				class="toggle-btn"
 				class:active={showFormatted}
-				onclick={() => (showFormatted = true)}
+				onclick={() => handleToggle(true)}
 			>
 				Formatted
 			</button>
 			<button
 				class="toggle-btn"
 				class:active={!showFormatted}
-				onclick={() => (showFormatted = false)}
+				onclick={() => handleToggle(false)}
 			>
 				Raw
 			</button>
