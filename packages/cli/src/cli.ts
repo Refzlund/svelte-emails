@@ -11,13 +11,16 @@ interface CLIOptions {
 	port: number
 	open: boolean
 	cwd: string
+	/** Library development mode - watches bundled examples/documentation */
+	dev: boolean
 }
 
 function parseArgs(args: string[]): CLIOptions {
 	const options: CLIOptions = {
 		port: 33411,
 		open: false,
-		cwd: process.cwd()
+		cwd: process.cwd(),
+		dev: false
 	}
 
 	for (let i = 0; i < args.length; i++) {
@@ -32,6 +35,9 @@ function parseArgs(args: string[]): CLIOptions {
 		} else if (arg === '--cwd') {
 			options.cwd = resolve(nextArg)
 			i++
+		} else if (arg === '--dev') {
+			// Internal flag for library development
+			options.dev = true
 		} else if (arg === '--help' || arg === '-h') {
 			printHelp()
 			process.exit(0)
@@ -97,7 +103,9 @@ async function main() {
 		shell: process.platform === 'win32',
 		env: {
 			...process.env,
-			SVELTE_EMAILS_CWD: options.cwd
+			SVELTE_EMAILS_CWD: options.cwd,
+			// Enable watching bundled examples/documentation in library dev mode
+			SVELTE_EMAILS_DEV: options.dev ? '1' : undefined
 		}
 	})
 

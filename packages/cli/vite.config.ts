@@ -19,6 +19,12 @@ function getEmailsCwd(): string {
 	return resolve(__dirname, '../../apps/dev');
 }
 
+// Check if we're running in library development mode
+// Set SVELTE_EMAILS_DEV=1 to enable watching bundled examples/documentation
+function isLibraryDevelopment(): boolean {
+	return process.env.SVELTE_EMAILS_DEV === '1';
+}
+
 // Find the root of the installed package (handles bunx temp directories)
 function getPackageRoot(): string {
 	// Go up from cli-app to the package root
@@ -35,7 +41,12 @@ function getSvelteEmailsPath(): string {
 export default defineConfig({
 	plugins: [
 		// emailListPlugin MUST come before sveltekit so its middleware runs first
-		emailListPlugin({ cwd: getEmailsCwd() }),
+		emailListPlugin({
+			cwd: getEmailsCwd(),
+			// Watch bundled examples/documentation only during library development
+			// (when running `bun dev` in CLI package, not via `bunx svelte-emails`)
+			watchBundled: isLibraryDevelopment()
+		}),
 		sveltekit(),
 		devtoolsJson()
 	],

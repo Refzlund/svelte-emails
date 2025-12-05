@@ -1,16 +1,23 @@
 import { isRunnableDevEnvironment, type Plugin, type ViteDevServer } from 'vite'
 import { watch, type FSWatcher } from 'chokidar'
-import { discoverAll, extractPreviewText, extractCategory } from './discovery.js'
+import { discoverAll, extractPreviewText, extractCategory, getCliSrcDir } from './discovery.js'
 import { readFile } from 'node:fs/promises'
 import type { ServerResponse } from 'node:http'
 import type { EmailFile, ViewMode } from './types.js'
 import { normalizePath, toSafeEmails, toSafeEmail, invalidateModule, debounce } from './utils.js'
+import { join } from 'node:path'
 
 const VIRTUAL_MODULE_ID = 'virtual:email-list'
 const RESOLVED_VIRTUAL_MODULE_ID = '\0' + VIRTUAL_MODULE_ID
 
 export interface EmailListPluginOptions {
 	cwd: string
+	/**
+	 * Watch bundled examples/documentation folders for changes.
+	 * Only enable this during library development (e.g., `bun dev` in the CLI package).
+	 * When false (default), examples/docs are treated as static bundled content.
+	 */
+	watchBundled?: boolean
 }
 
 /**
@@ -112,9 +119,19 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 			initialDirs.forEach((dir) => watchedDirs.add(dir))
 
 			// If no emails found, watch the project root
-			const watchPaths = initialDirs.length > 0 
+			let watchPaths = initialDirs.length > 0 
 				? initialDirs
 				: [normalizePath(options.cwd)]
+
+			// If watchBundled is enabled, also watch examples and documentation directories
+			if (options.watchBundled) {
+				const cliSrcDir = getCliSrcDir()
+				const examplesDir = normalizePath(join(cliSrcDir, 'examples'))
+				const documentationDir = normalizePath(join(cliSrcDir, 'documentation'))
+				watchPaths = [...watchPaths, examplesDir, documentationDir]
+				console.log(`   [svelte-emails] Watching bundled examples: ${examplesDir}`)
+				console.log(`   [svelte-emails] Watching bundled documentation: ${documentationDir}`)
+			}
 
 			// Setup file watcher - only watch specific directories for performance
 			watcher = watch(watchPaths, {
@@ -262,8 +279,12 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 			}, 50)
 
 			watcher.on('all', (event, filePath) => {
-				// Only watch for .email.svelte files (examples/docs are in CLI package, not user's project)
-				if (filePath.endsWith('.email.svelte')) {
+				// Watch for .email.svelte files (user's emails)
+				// When watchBundled is enabled, also watch .svelte files (examples/docs)
+				const isEmailFile = filePath.endsWith('.email.svelte')
+				const isBundledSvelteFile = options.watchBundled && filePath.endsWith('.svelte')
+				
+				if (isEmailFile || isBundledSvelteFile) {
 					handleFileChange(event, filePath)
 				}
 			})

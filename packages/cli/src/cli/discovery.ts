@@ -235,6 +235,19 @@ export async function discoverEmails(cwd: string, skipPreview = false): Promise<
 }
 
 /**
+ * Get the CLI package's src directory path
+ * This is where examples and documentation are bundled
+ */
+export function getCliSrcDir(): string {
+	// import.meta.url gives us the current file's URL
+	const currentFileUrl = import.meta.url
+	const currentFilePath = new URL(currentFileUrl).pathname
+	// On Windows, pathname starts with /C:/ - need to handle this
+	const normalizedPath = currentFilePath.replace(/^\/([A-Za-z]:)/, '$1')
+	return join(normalizedPath, '..', '..')
+}
+
+/**
  * Discover *.svelte files in a specific subfolder (e.g., src/examples, src/documentation)
  * These are bundled with the CLI package itself, not in the user's project.
  * @param subfolder - Subfolder name (e.g., 'examples', 'documentation')
@@ -247,12 +260,7 @@ export async function discoverSvelteFiles(
 	skipPreview = false
 ): Promise<EmailFile[]> {
 	// Get the CLI package's src directory (where this file lives)
-	// import.meta.url gives us the current file's URL
-	const currentFileUrl = import.meta.url
-	const currentFilePath = new URL(currentFileUrl).pathname
-	// On Windows, pathname starts with /C:/ - need to handle this
-	const normalizedPath = currentFilePath.replace(/^\/([A-Za-z]:)/, '$1')
-	const cliSrcDir = join(normalizedPath, '..', '..')
+	const cliSrcDir = getCliSrcDir()
 	const searchPath = join(cliSrcDir, subfolder)
 	
 	if (!existsSync(searchPath)) {

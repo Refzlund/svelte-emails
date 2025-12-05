@@ -48,7 +48,7 @@
 	let rendered = $state<EmailRenderData['rendered'] | null>(null)
 	let formattedHtml = $state<string | null>(null)
 	let renderError = $state<string | null>(null)
-	let isLoading = $state(true)
+	let isLoading = $state(false)
 	let isRerendering = $state(false)
 
 	/**

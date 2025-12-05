@@ -4,7 +4,7 @@
 		"svelte-emails": "./run-emails.ts"
 	},
 	"scripts": {
-		"dev": "bun run packages/cli/src/cli.ts",
+		"dev": "bun run packages/cli/src/cli.ts --dev",
 		"build": "bun run scripts/build.ts",
 		"link": "cd _dist && bun link && cd ..",
 		"unlink": "cd _dist && bun unlink && cd .."
