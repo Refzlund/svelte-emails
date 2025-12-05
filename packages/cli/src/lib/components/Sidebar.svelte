@@ -14,10 +14,22 @@
 	import { createSidebarState } from './sidebar.svelte.js'
 	import type { SafeEmail } from '../../cli/types.js'
 	import * as icons from '$lib/Icons.svelte'
+	import Tooltip from './Tooltip.svelte'
+	import { registerShortcuts } from '$lib/utils/keyboard-shortcuts'
 
 	const sidebar = createSidebarState()
 
-	onMount(() => sidebar.subscribeToUpdates())
+	onMount(() => {
+		const unsubscribeStore = sidebar.subscribeToUpdates()
+		const unsubscribeShortcuts = registerShortcuts({
+			toggleExamples: () => sidebar.navigateToMode('examples'),
+			toggleDocumentation: () => sidebar.navigateToMode('documentation')
+		})
+		return () => {
+			unsubscribeStore()
+			unsubscribeShortcuts()
+		}
+	})
 </script>
 
 {#snippet emailItem(item: SafeEmail, index: number, inFolder: boolean = false)}
@@ -35,6 +47,26 @@
 			<span class="email-preview">{item.previewText}</span>
 		{/if}
 	</a>
+{/snippet}
+
+{#snippet modeToggleButton(
+	mode: 'examples' | 'documentation',
+	label: string,
+	shortcut: string,
+	icon: typeof icons.sparkleAction
+)}
+	{@const isActive = sidebar.viewMode === mode}
+	<Tooltip text={`Toggle ${label.toLowerCase()}`} {shortcut} placement="right">
+		<button
+			class="mode-toggle"
+			class:active={isActive}
+			onclick={() => sidebar.navigateToMode(mode)}
+		>
+			{@render icon({ size: 24, opacity: isActive ? 1 : .5 })}
+			<span class="mode-label">{label}</span>
+			<kbd class="mode-shortcut">{shortcut}</kbd>
+		</button>
+	</Tooltip>
 {/snippet}
 
 <aside class="sidebar">
@@ -82,22 +114,8 @@
 	</nav>
 
 	<footer class="sidebar-footer">
-		<button
-			class="mode-toggle"
-			class:active={sidebar.viewMode === 'examples'}
-			onclick={() => sidebar.navigateToMode('examples')}
-		>
-			{@render icons.sparkleAction({ size: 24, opacity: sidebar.viewMode === 'examples' ? 1 : .5 })}
-			Examples
-		</button>
-		<button
-			class="mode-toggle"
-			class:active={sidebar.viewMode === 'documentation'}
-			onclick={() => sidebar.navigateToMode('documentation')}
-		>
-			{@render icons.bookInformation({ size: 24, opacity: sidebar.viewMode === 'documentation' ? 1 : .5 })}
-			Documentation
-		</button>
+		{@render modeToggleButton('examples', 'Examples', 'Alt+E', icons.sparkleAction)}
+		{@render modeToggleButton('documentation', 'Documentation', 'Alt+D', icons.bookInformation)}
 	</footer>
 </aside>
 
@@ -289,5 +307,25 @@
 	.sidebar-footer .mode-toggle.active {
 		background: rgba(255, 255, 255, 0.1);
 		color: #fff;
+	}
+
+	.mode-label {
+		flex: 1;
+	}
+
+	.mode-shortcut {
+		font-size: 10px;
+		font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+		padding: 2px 6px;
+		background: rgba(255, 255, 255, 0.08);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 4px;
+		color: rgba(255, 255, 255, 0.4);
+		transition: all 0.15s ease;
+	}
+
+	.mode-toggle:hover .mode-shortcut {
+		background: rgba(255, 255, 255, 0.12);
+		color: rgba(255, 255, 255, 0.6);
 	}
 </style>

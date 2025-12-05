@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { Sidebar } from '$lib/components'
+	import { handleKeyboardShortcut } from '$lib/utils/keyboard-shortcuts'
 
 	let { children } = $props()
 
@@ -14,7 +15,13 @@
 			})
 		}
 	})
+
+	function handleKeydown(e: KeyboardEvent) {
+		handleKeyboardShortcut(e)
+	}
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
 	<title>svelte-emails</title>

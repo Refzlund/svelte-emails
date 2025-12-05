@@ -12,7 +12,9 @@
 	import { EmailPreview } from '$lib/components'
 	import CodeView from './CodeView.svelte'
 	import LoadingBar from './LoadingBar.svelte'
+	import Tooltip from './Tooltip.svelte'
 	import { createViewMode } from '$lib/utils/view-mode.svelte'
+	import { registerShortcuts } from '$lib/utils/keyboard-shortcuts'
 	import * as icons from '$lib/Icons.svelte'
 	import floatingUI from 'floating-runes'
 	import { createEmailViewerState } from './email-viewer.svelte.js'
@@ -50,8 +52,22 @@
 		requestAnimationFrame(() => {
 			enableTransition = true
 		})
+		
 		// Setup content change listener for live reload
-		return viewer.setupContentChangeListener()
+		const unsubscribeViewer = viewer.setupContentChangeListener()
+		
+		// Register keyboard shortcuts for tabs
+		const unsubscribeShortcuts = registerShortcuts({
+			setTab1: () => viewMode.set('preview'),
+			setTab2: () => viewMode.set('source'),
+			setTab3: () => viewMode.set('html'),
+			setTab4: () => viewMode.set('text')
+		})
+		
+		return () => {
+			unsubscribeViewer()
+			unsubscribeShortcuts()
+		}
 	})
 
 	// Highlight manager for off-thread syntax highlighting
@@ -72,32 +88,35 @@
 	tabMode: 'preview' | 'source' | 'html' | 'text',
 	label: string,
 	icon: typeof icons.contentView,
-	tabLoading: boolean
+	tabLoading: boolean,
+	shortcut: string
 )}
 	{@const isHtmlTab = tabMode === 'html'}
 	{@const isActive = isHtmlTab 
 		? (viewMode.value === 'html' || viewMode.value === 'raw')
 		: viewMode.value === tabMode}
-	<button
-		class="tab"
-		class:active={isActive}
-		{@attach node => {
-			if(!fl) return
-			const [c1,c2] = [
-				fl.tether(node, 'mouseenter'),
-				fl.ref(node, () => isActive)
-			]
-			return () => { c1.destroy(); c2.destroy(); }
-		}}
-		onclick={() => viewMode.set(tabMode)}
-	>
-		{#if tabLoading}
-			<span class="spinner"></span>
-		{:else}
-			{@render icon({ size: 20, opacity: isActive ? 1 : .75 })}
-		{/if}
-		{label}
-	</button>
+	<Tooltip text={label} {shortcut} placement="bottom">
+		<button
+			class="tab"
+			class:active={isActive}
+			{@attach node => {
+				if(!fl) return
+				const [c1,c2] = [
+					fl.tether(node, 'mouseenter'),
+					fl.ref(node, () => isActive)
+				]
+				return () => { c1.destroy(); c2.destroy(); }
+			}}
+			onclick={() => viewMode.set(tabMode)}
+		>
+			{#if tabLoading}
+				<span class="spinner"></span>
+			{:else}
+				{@render icon({ size: 20, opacity: isActive ? 1 : .75 })}
+			{/if}
+			{label}
+		</button>
+	</Tooltip>
 {/snippet}
 
 <div class="email-viewer">
@@ -116,10 +135,10 @@
 						use:float={{ tether: false }}
 					></div>
 				{/if}
-				{@render tabButton(float, 'preview', 'Preview', icons.contentView, (viewer.isLoading || viewer.isRerendering) && viewMode.value === 'preview')}
-				{@render tabButton(float, 'source', 'Source', icons.code, highlighter.loading.source)}
-				{@render tabButton(float, 'html', 'HTML', icons.document, highlighter.loading.html)}
-				{@render tabButton(float, 'text', 'Text', icons.codeText, highlighter.loading.text)}
+				{@render tabButton(float, 'preview', 'Preview', icons.contentView, (viewer.isLoading || viewer.isRerendering) && viewMode.value === 'preview', 'Alt+1')}
+				{@render tabButton(float, 'source', 'Source', icons.code, highlighter.loading.source, 'Alt+2')}
+				{@render tabButton(float, 'html', 'HTML', icons.document, highlighter.loading.html, 'Alt+3')}
+				{@render tabButton(float, 'text', 'Text', icons.codeText, highlighter.loading.text, 'Alt+4')}
 			</nav>
 			
 			{#if viewMode.value === 'html' || viewMode.value === 'raw'}

@@ -14,6 +14,22 @@ The CLI provides a development server for previewing `*.email.svelte` templates 
 - **Live reload** when files are added, removed, or modified
 - **SSR rendering** using the `svelte-emails` render function
 - **Syntax highlighting** via Shiki (optional, off-thread worker)
+- **Keyboard shortcuts** for quick navigation
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Alt+E` | Toggle Examples view |
+| `Alt+D` | Toggle Documentation view |
+| `Alt+1` | Switch to Preview tab |
+| `Alt+2` | Switch to Source tab |
+| `Alt+3` | Switch to HTML tab |
+| `Alt+4` | Switch to Text tab |
+
+Shortcuts are displayed in tooltips (hover for 400ms) and as labels on navigation buttons.
 
 ---
 
@@ -75,11 +91,13 @@ packages/cli/
 │   │   │   ├── email-viewer.svelte.ts # Viewer state & data fetching
 │   │   │   ├── EmailPreview.svelte  # Resizable iframe preview
 │   │   │   ├── CodeView.svelte      # Syntax-highlighted code panel
-│   │   │   └── LoadingBar.svelte    # Animated loading indicator
+│   │   │   ├── LoadingBar.svelte    # Animated loading indicator
+│   │   │   └── Tooltip.svelte       # Delayed tooltip with shortcut display
 │   │   ├── utils/
 │   │   │   ├── view-mode.svelte.ts  # URL-synced view mode state
 │   │   │   ├── preview-width.svelte.ts # Persisted preview width
-│   │   │   └── scroll-positions.svelte.ts # Global scroll position cache
+│   │   │   ├── scroll-positions.svelte.ts # Global scroll position cache
+│   │   │   └── keyboard-shortcuts.ts # Global keyboard shortcut manager
 │   │   └── cli/
 │   │       ├── discovery.ts   # Email file discovery
 │   │       ├── types.ts       # Type definitions (EmailFile, SafeEmail, ViewMode)
