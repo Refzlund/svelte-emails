@@ -24,13 +24,10 @@ function notify() {
 function connect() {
 	if (eventSource || !browser) return
 
-	console.log('[svelte-emails] Connecting to SSE...')
 	eventSource = new EventSource('/__svelte-emails/events')
 
 	eventSource.addEventListener('emails', (event) => {
 		const data = JSON.parse(event.data)
-		console.log('[svelte-emails] Received update:', data.event, 
-			`${data.emails?.length || 0} emails, ${data.examples?.length || 0} examples, ${data.documentation?.length || 0} docs`)
 		emails = data.emails || []
 		examples = data.examples || []
 		documentation = data.documentation || []
@@ -40,14 +37,13 @@ function connect() {
 
 	eventSource.addEventListener('content-change', (event) => {
 		const data = JSON.parse(event.data)
-		console.log('[svelte-emails] Content changed:', data.id)
 		lastContentChangeId = data.id
 		lastContentChangeTime = Date.now()
 		notify()
 	})
 
 	eventSource.onopen = () => {
-		console.log('[svelte-emails] SSE connected')
+		// Connected
 	}
 
 	eventSource.onerror = (e) => {

@@ -136,16 +136,25 @@ export function createImageCache() {
 	let isLoading = $state(false)
 	let processedHtml = $state('')
 	let currentRawHtml = ''
+	// Track which raw HTML the processedHtml corresponds to
+	let processedFromRawHtml = ''
 
 	async function processHtml(html: string): Promise<void> {
 		// Track current HTML to handle rapid changes
 		currentRawHtml = html
+		
+		// If the processed HTML doesn't match the new raw HTML, reset it immediately
+		// This prevents stale processed HTML from being used during navigation
+		if (processedFromRawHtml !== html) {
+			processedHtml = ''
+		}
 		
 		const urls = extractImageUrls(html)
 
 		// If no images to cache, return HTML as-is
 		if (urls.length === 0) {
 			processedHtml = html
+			processedFromRawHtml = html
 			return
 		}
 
@@ -157,8 +166,10 @@ export function createImageCache() {
 		if (cachedUrls.length > 0) {
 			const urlMap = new Map(cachedUrls.map((url) => [url, imageCache.get(url)!]))
 			processedHtml = replaceImageUrls(html, urlMap)
+			processedFromRawHtml = html
 		} else {
 			processedHtml = html
+			processedFromRawHtml = html
 		}
 
 		// If all images are cached, we're done
@@ -176,6 +187,7 @@ export function createImageCache() {
 			// Now replace ALL image URLs with cached versions
 			const allUrlMap = new Map(urls.map((url) => [url, imageCache.get(url)!]))
 			processedHtml = replaceImageUrls(html, allUrlMap)
+			processedFromRawHtml = html
 		}
 	}
 

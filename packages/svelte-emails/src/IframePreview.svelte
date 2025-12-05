@@ -55,158 +55,133 @@ for smooth updates without flash, scroll reset, or image reloading.
 	let iframeElement: HTMLIFrameElement | undefined = $state()
 	let heightObserver: ResizeObserver | null = null
 	
-	// Track whether we've done the initial render via srcdoc
-	// svelte-ignore non_reactive_update
-	let isInitialized = false
-	// Track the last rendered HTML to detect changes
-	let lastRenderedHtml = ''
-	// Use srcdoc for initial load (reactive)
+	// Rendering state
 	let srcdocContent: string | undefined = $state(undefined)
+	let loadedHtml = $state('')   // HTML confirmed loaded via onload
+	let pendingHtml = $state('')  // HTML queued while iframe is loading
 
-	/**
-	 * Strip script tags from HTML to prevent browser warnings in sandboxed iframes.
-	 * Email HTML should never contain executable scripts, and code examples
-	 * (like in documentation) contain script tags that would trigger warnings.
-	 */
+	/** Strip script tags to prevent warnings in sandboxed iframes */
 	function stripScriptTags(content: string): string {
-		// Remove script tags (including multiline content)
-		// Using a workaround to avoid Svelte parser interpreting the closing tag
-		const endTag = String.fromCharCode(60) + '/script>'  // <
-		const pattern = new RegExp('<script\\b[^>]*>[\\s\\S]*?' + endTag, 'gi')
-		return content.replace(pattern, '')
+		const endTag = String.fromCharCode(60) + '/script>'
+		return content.replace(new RegExp('<script\\b[^>]*>[\\s\\S]*?' + endTag, 'gi'), '')
 	}
 
-	/**
-	 * Update iframe height based on content
-	 */
+	/** Update iframe height based on content */
 	function updateHeight(doc: Document) {
-		if (doc.documentElement) {
-			const newHeight = doc.documentElement.scrollHeight
-			if (newHeight > 0) {
-				height = newHeight
-			}
-		}
+		const newHeight = doc.documentElement?.scrollHeight
+		if (newHeight && newHeight > 0) height = newHeight
 	}
 
-	/**
-	 * Setup ResizeObserver to track iframe content height
-	 */
+	/** Setup ResizeObserver to track iframe content height */
 	function setupHeightObserver(doc: Document) {
 		heightObserver?.disconnect()
+		requestAnimationFrame(() => updateHeight(doc))
 		
-		const updateHeightCallback = () => updateHeight(doc)
-		
-		requestAnimationFrame(updateHeightCallback)
-		
-		heightObserver = new ResizeObserver(updateHeightCallback)
+		heightObserver = new ResizeObserver(() => updateHeight(doc))
 		if (doc.body) heightObserver.observe(doc.body)
 		if (doc.documentElement) heightObserver.observe(doc.documentElement)
 	}
-
-	/**
-	 * Handle iframe load event (triggered by srcdoc changes)
-	 */
-	function handleIframeLoad() {
-		const iframe = iframeElement
-		if (!iframe) return
-		
-		const doc = iframe.contentDocument
-		if (!doc) return
-		
-		setupHeightObserver(doc)
+	
+	/** Morphdom options for head - preserve charset and viewport meta tags */
+	const headMorphOptions = {
+		onBeforeNodeDiscarded(node: Node) {
+			if (node instanceof HTMLMetaElement) {
+				if (node.hasAttribute('charset') || node.getAttribute('name') === 'viewport') {
+					return false
+				}
+			}
+			return true
+		}
+	}
+	
+	/** Morphdom options for body - preserve images with same src to avoid reload flicker */
+	const bodyMorphOptions = {
+		onBeforeElUpdated(fromEl: Element, toEl: Element) {
+			if (fromEl instanceof HTMLImageElement && toEl instanceof HTMLImageElement && fromEl.src === toEl.src) {
+				// Sync attributes without triggering image reload
+				if (fromEl.alt !== toEl.alt) fromEl.alt = toEl.alt
+				if (fromEl.width !== toEl.width) fromEl.width = toEl.width
+				if (fromEl.height !== toEl.height) fromEl.height = toEl.height
+				const newStyle = toEl.getAttribute('style')
+				if (fromEl.getAttribute('style') !== newStyle) {
+					fromEl.setAttribute('style', newStyle || '')
+				}
+				return false
+			}
+			return true
+		}
+	}
+	
+	/** Apply HTML to iframe document via morphdom */
+	function morphToDocument(doc: Document, newHtml: string) {
+		const newDoc = new DOMParser().parseFromString(newHtml, 'text/html')
+		if (doc.head && newDoc.head) morphdom(doc.head, newDoc.head, headMorphOptions)
+		if (doc.body && newDoc.body) morphdom(doc.body, newDoc.body, bodyMorphOptions)
+		updateHeight(doc)
 	}
 
-	// Update iframe content when HTML changes
-	$effect(() => {
-		if (!html) return
+	/** Handle iframe load event */
+	function handleIframeLoad() {
+		const doc = iframeElement?.contentDocument
+		if (!doc) return
 		
-		// Strip script tags to prevent browser warnings
+		// Mark srcdoc as loaded
+		if (srcdocContent) loadedHtml = srcdocContent
+		
+		setupHeightObserver(doc)
+		
+		// Apply any pending HTML that arrived while loading
+		if (pendingHtml && pendingHtml !== srcdocContent) {
+			morphToDocument(doc, pendingHtml)
+			loadedHtml = pendingHtml
+			pendingHtml = ''
+		}
+	}
+
+	// Sync html prop to iframe
+	$effect(() => {
+		if (!html) {
+			srcdocContent = undefined
+			loadedHtml = ''
+			pendingHtml = ''
+			return
+		}
+		
 		const safeContent = stripScriptTags(html)
 		
-		// Skip if content hasn't changed
-		if (safeContent === lastRenderedHtml) return
-		lastRenderedHtml = safeContent
+		// Skip if already showing this content
+		if (safeContent === loadedHtml && iframeElement?.contentDocument?.body) return
 		
-		if (!isInitialized || !iframeElement) {
-			// First render or no iframe yet: set srcdoc to render the iframe
-			srcdocContent = safeContent
-			isInitialized = true
+		// Use morphdom if iframe has loaded content
+		const doc = iframeElement?.contentDocument
+		if (loadedHtml && doc?.body && doc?.head) {
+			morphToDocument(doc, safeContent)
+			loadedHtml = safeContent
 			return
 		}
 		
-		// Subsequent renders with existing iframe: use morphdom
-		const doc = iframeElement.contentDocument
-		if (!doc || !doc.body || !doc.documentElement) {
-			// Document not ready, update srcdoc instead
-			srcdocContent = safeContent
+		// Queue for morphdom if iframe is currently loading
+		if (srcdocContent && !loadedHtml) {
+			pendingHtml = safeContent
 			return
 		}
 		
-		// Diff with morphdom
-		const parser = new DOMParser()
-		const newDoc = parser.parseFromString(safeContent, 'text/html')
-		
-		// Morph the <head> element (for style changes)
-		if (doc.head && newDoc.head) {
-			morphdom(doc.head, newDoc.head, {
-				onBeforeNodeDiscarded(node) {
-					// Preserve essential meta tags
-					if (node instanceof HTMLMetaElement) {
-						const name = node.getAttribute('name')
-						const charset = node.getAttribute('charset')
-						if (charset || name === 'viewport') return false
-					}
-					return true
-				}
-			})
-		}
-		
-		// Morph the <body> element (main content)
-		if (doc.body && newDoc.body) {
-			morphdom(doc.body, newDoc.body, {
-				onBeforeElUpdated(fromEl, toEl) {
-					// Skip updating images with same src (prevents reload/flicker)
-					if (
-						fromEl instanceof HTMLImageElement &&
-						toEl instanceof HTMLImageElement &&
-						fromEl.src === toEl.src
-					) {
-						// Still update other attributes
-						if (fromEl.alt !== toEl.alt) fromEl.alt = toEl.alt
-						if (fromEl.width !== toEl.width) fromEl.width = toEl.width
-						if (fromEl.height !== toEl.height) fromEl.height = toEl.height
-						if (fromEl.getAttribute('style') !== toEl.getAttribute('style')) {
-							fromEl.setAttribute('style', toEl.getAttribute('style') || '')
-						}
-						return false
-					}
-					return true
-				}
-			})
-		}
-		
-		// Update height after morph
-		updateHeight(doc)
+		// Initial load via srcdoc
+		srcdocContent = safeContent
+		loadedHtml = ''
 	})
 
-	// Reset state when iframe element changes
-	$effect(() => {
-		if (iframeElement) {
-			isInitialized = false
-			lastRenderedHtml = ''
-		}
-		
-		return () => {
-			heightObserver?.disconnect()
-			heightObserver = null
-		}
+	// Cleanup
+	$effect(() => () => {
+		heightObserver?.disconnect()
+		heightObserver = null
 	})
 
-	// Compute combined styles
+	// Combined styles
 	const computedStyle = $derived.by(() => {
 		const heightStyle = height > 0 ? `height: ${height}px;` : 'height: 100%;'
-		const baseStyle = `width: 100%; border: none; ${heightStyle}`
-		return style ? `${baseStyle} ${style}` : baseStyle
+		const base = `width: 100%; border: none; ${heightStyle}`
+		return style ? `${base} ${style}` : base
 	})
 </script>
 

@@ -148,18 +148,12 @@
 		class:resize-left={resizeEdge === 'left'}
 		class:resize-right={resizeEdge === 'right'}
 	>
-		{#if imageCache.isLoading}
-			<div class="loading-indicator" title="Caching images...">
-				<div class="spinner-small"></div>
-			</div>
-		{/if}
 		<Email.IframePreview
 			html={contentHtml}
 			bind:height={iframeHeight}
 			title="Email Preview"
 			style="min-height: {containerHeight}px;"
 			scrolling="no"
-			sandbox=""
 		/>
 	</div>
 </div>
@@ -252,26 +246,6 @@
 	.preview-container.resizing {
 		cursor: ew-resize;
 		user-select: none;
-	}
-
-	.loading-indicator {
-		position: absolute;
-		top: 8px;
-		right: 8px;
-		padding: 6px;
-		background: rgba(255, 255, 255, 0.9);
-		border-radius: 50%;
-		z-index: 5;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-	}
-
-	.spinner-small {
-		width: 16px;
-		height: 16px;
-		border: 2px solid #e5e5e5;
-		border-top-color: #777BDB;
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
 	}
 
 	@keyframes spin {

@@ -76,13 +76,16 @@
 	// Fetch content when itemId changes
 	$effect(() => {
 		const id = itemId
+		
 		if (!id) {
 			isLoading = false
 			return
 		}
 
 		// Check if we already have this item loaded
-		if (email?.id === id) return
+		if (email?.id === id) {
+			return
+		}
 
 		// Check cache first for instant display
 		const cached = getCached(id, mode)
@@ -160,7 +163,6 @@
 				emailStore.lastContentChangeId === itemId &&
 				emailStore.lastContentChangeTime > lastSeenTime
 			) {
-				console.log('[svelte-emails] Reloading due to content change')
 				lastSeenTime = emailStore.lastContentChangeTime
 
 				invalidateCache(itemId!, mode)
