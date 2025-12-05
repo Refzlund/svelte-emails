@@ -2,6 +2,9 @@
  * Client-side image cache that converts remote images to data URLs.
  * Uses a server-side proxy to bypass CORS restrictions.
  * Images are cached in memory and persist until hard reload.
+ * 
+ * Uncached images are replaced with a transparent placeholder to prevent
+ * browser HTTP cache from showing stale/wrong images during loading.
  */
 
 const imageCache = new Map<string, string>() // url -> data URL
@@ -10,6 +13,9 @@ const failedUrls = new Map<string, number>() // url -> timestamp of failure
 
 // Failed URLs can be retried after this time (1 minute)
 const FAILED_URL_TTL = 60 * 1000
+
+// 1x1 transparent PNG placeholder for uncached images
+const PLACEHOLDER_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
 
 // Image URL patterns to cache
 const IMAGE_PATTERNS = [
@@ -108,17 +114,27 @@ function extractImageUrls(html: string): string[] {
 	return [...new Set(urls)] // dedupe
 }
 
+/** Escape special regex characters in a string */
+function escapeRegex(str: string): string {
+	return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 /**
- * Replace image URLs in HTML with cached data URLs
+ * Replace image URLs in HTML with cached data URLs.
+ * Uncached URLs are replaced with a transparent placeholder to prevent
+ * browser HTTP cache from showing stale images during loading.
  */
-function replaceImageUrls(html: string, urlMap: Map<string, string>): string {
+function replaceImageUrls(
+	html: string, 
+	cachedUrlMap: Map<string, string>,
+	allImageUrls: string[]
+): string {
 	let result = html
 
-	for (const [originalUrl, cachedUrl] of urlMap) {
-		// Escape special regex characters in URL
-		const escaped = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-		const regex = new RegExp(escaped, 'g')
-		result = result.replace(regex, cachedUrl)
+	for (const url of allImageUrls) {
+		const replacement = cachedUrlMap.get(url) ?? PLACEHOLDER_DATA_URL
+		const regex = new RegExp(escapeRegex(url), 'g')
+		result = result.replace(regex, replacement)
 	}
 
 	return result
@@ -128,15 +144,17 @@ function replaceImageUrls(html: string, urlMap: Map<string, string>): string {
  * Creates a reactive image cache manager.
  * 
  * Strategy:
- * 1. Show HTML immediately with any already-cached images replaced
+ * 1. Replace cached images with data URLs, uncached with transparent placeholder
  * 2. Fetch uncached images via proxy in background
- * 3. Update HTML once all images are cached (eliminates CORS errors from extensions)
+ * 3. Update HTML once all images are cached
+ * 
+ * The placeholder prevents browser HTTP cache from showing wrong images
+ * (e.g., fpoimg.com/80x80 showing when fpoimg.com/100x40 is expected).
  */
 export function createImageCache() {
 	let isLoading = $state(false)
 	let processedHtml = $state('')
 	let currentRawHtml = ''
-	// Track which raw HTML the processedHtml corresponds to
 	let processedFromRawHtml = ''
 
 	async function processHtml(html: string): Promise<void> {
@@ -162,15 +180,10 @@ export function createImageCache() {
 		const cachedUrls = urls.filter((url) => imageCache.has(url))
 		const uncachedUrls = urls.filter((url) => !imageCache.has(url))
 
-		// Replace any already-cached images immediately
-		if (cachedUrls.length > 0) {
-			const urlMap = new Map(cachedUrls.map((url) => [url, imageCache.get(url)!]))
-			processedHtml = replaceImageUrls(html, urlMap)
-			processedFromRawHtml = html
-		} else {
-			processedHtml = html
-			processedFromRawHtml = html
-		}
+		// Replace images: cached → data URL, uncached → placeholder
+		const urlMap = new Map(cachedUrls.map((url) => [url, imageCache.get(url)!]))
+		processedHtml = replaceImageUrls(html, urlMap, urls)
+		processedFromRawHtml = html
 
 		// If all images are cached, we're done
 		if (uncachedUrls.length === 0) {
@@ -186,7 +199,7 @@ export function createImageCache() {
 		if (currentRawHtml === html) {
 			// Now replace ALL image URLs with cached versions
 			const allUrlMap = new Map(urls.map((url) => [url, imageCache.get(url)!]))
-			processedHtml = replaceImageUrls(html, allUrlMap)
+			processedHtml = replaceImageUrls(html, allUrlMap, urls)
 			processedFromRawHtml = html
 		}
 	}

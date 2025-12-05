@@ -305,7 +305,7 @@ Resizable iframe for rendering email HTML:
 // - Drag left/right edges to resize width
 // - Width persisted to localStorage via createPreviewWidth()
 // - Cursor glow effect on grid background
-// - Image caching as data URLs for instant loading
+// - Image caching as data URLs (uncached show placeholder until loaded)
 // - Auto-height sync with iframe content
 ```
 
