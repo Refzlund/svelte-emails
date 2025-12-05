@@ -78,16 +78,46 @@ Sets up the IR tree collector context and provides bindable output.
 	// Provide collector to children via context
 	setEmailRoot(collector)
 
-	// Render from IR tree when root is available and update bindable output
-	const rendered = $derived.by(() => {
-		if (!root) return null
-		const result = renderTree(root, { placeholders, style })
-		return result
-	})
+	// Rendered output state - updated asynchronously when root changes
+	// Note: renderTree is async to support Shiki syntax highlighting
+	let rendered: RenderOutput | null = $state(null)
 
-	// Update the bindable output when rendered changes
+	// Track the latest render request to handle race conditions
+	let renderVersion = 0
+
+	// Re-render when dependencies change
 	$effect(() => {
-		output = rendered
+		// Capture dependencies for reactive tracking
+		const currentRoot = root
+		const currentPlaceholders = placeholders
+		const currentStyle = style
+		
+		if (!currentRoot) {
+			rendered = null
+			output = null
+			return
+		}
+
+		// Track this render request
+		const thisVersion = ++renderVersion
+		
+		// Perform async render
+		renderTree(currentRoot, { placeholders: currentPlaceholders, style: currentStyle })
+			.then((result) => {
+				// Only update if this is still the latest request
+				if (thisVersion === renderVersion) {
+					rendered = result
+					output = result
+				}
+			})
+			.catch(() => {
+				// Render failures are typically user errors in the email template
+				// The error will surface through the UI or SSR error handling
+				if (thisVersion === renderVersion) {
+					rendered = null
+					output = null
+				}
+			})
 	})
 </script>
 

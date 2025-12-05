@@ -13,7 +13,7 @@
 		"noEmit": true,
 		"target": "esnext",
 		"verbatimModuleSyntax": true,
-		"isolatedModules": true,
+		"isolatedModules": true
 	},
-	"exclude": ["**/node_modules", "./svelte.config.js"]
+	"exclude": ["**/node_modules", "./svelte.config.js", "./dist"]
 }

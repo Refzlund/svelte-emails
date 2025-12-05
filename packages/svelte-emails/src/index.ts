@@ -191,3 +191,7 @@ export type {
 
 // Re-export all style attribute types
 export type * from './style-attributes'
+
+// Re-export Shiki utilities for advanced usage
+export { highlightCode, isShikiAvailable } from './shiki'
+export type { HighlightOptions, HighlightResult } from './shiki'

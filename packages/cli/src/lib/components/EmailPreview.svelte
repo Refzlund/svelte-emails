@@ -35,13 +35,10 @@
 	let resizeEdge: 'left' | 'right' | null = $state(null)
 	let isDragging = $state(false)
 	
-	// Resize state for drag operations
-	let resizeState: {
-		edge: 'left' | 'right'
-		startX: number
-		startWidth: number
-		containerWidth: number
-	} | null = null
+	// Resize drag state
+	let dragStartX = 0
+	let dragStartWidth = 0
+	let dragContainerWidth = 0
 
 	// Track container height for min-height calculation
 	$effect(() => {
@@ -65,65 +62,35 @@
 	let mouseX = $state(0)
 	let mouseY = $state(0)
 
-	/** Unified mouse move handler for both window and iframe events */
 	function handleMouseMove(e: { clientX: number; clientY: number }) {
 		mouseX = e.clientX
 		mouseY = e.clientY
-		if (resizeState) handleResizeMove(e.clientX)
 	}
 	
 	function handleResizeMove(clientX: number) {
-		if (!resizeState) return
-		const { edge, startX, startWidth, containerWidth } = resizeState
-		const deltaX = clientX - startX
+		if (!isDragging) return
+		const deltaX = clientX - dragStartX
 		// Since iframe is centered, dragging either edge should change width symmetrically
-		const deltaPercent = (deltaX / containerWidth) * 100
-		const widthChange = edge === 'right' ? deltaPercent * 2 : -deltaPercent * 2
-		const newWidth = Math.max(10, Math.min(100, startWidth + widthChange))
-		previewWidth.value = newWidth
+		const deltaPercent = (deltaX / dragContainerWidth) * 100
+		const widthChange = resizeEdge === 'right' ? deltaPercent * 2 : -deltaPercent * 2
+		previewWidth.value = Math.max(10, Math.min(100, dragStartWidth + widthChange))
 	}
 	
 	function handleResizeEnd() {
-		if (!resizeState) return
-		resizeState = null
+		if (!isDragging) return
 		isDragging = false
 		resizeEdge = null
 		previewWidth.persist()
 	}
 
-	function handleIframeMouseUp() {
-		handleResizeEnd()
-	}
-
-	function handleResizeHandleEnter(edge: 'left' | 'right') {
-		if (!isDragging) resizeEdge = edge
-	}
-
-	function handleResizeHandleLeave() {
-		if (!isDragging) resizeEdge = null
-	}
-
 	function handleResizeStart(e: MouseEvent, edge: 'left' | 'right') {
 		if (!containerElement) return
-
 		e.preventDefault()
 		isDragging = true
 		resizeEdge = edge
-		
-		// Store resize state for use by both window and iframe events
-		resizeState = {
-			edge,
-			startX: e.clientX,
-			startWidth: iframeWidth,
-			containerWidth: containerElement.getBoundingClientRect().width
-		}
-
-		// Window listeners as fallback (for when mouse stays outside iframe)
-		function onWindowMouseUp() {
-			handleResizeEnd()
-			window.removeEventListener('mouseup', onWindowMouseUp)
-		}
-		window.addEventListener('mouseup', onWindowMouseUp)
+		dragStartX = e.clientX
+		dragStartWidth = iframeWidth
+		dragContainerWidth = containerElement.getBoundingClientRect().width
 	}
 </script>
 
@@ -136,6 +103,15 @@
 	style:--iframe-width="{iframeWidth}%"
 	class:resizing={isDragging}
 >
+	<!-- Transparent overlay to capture mouse events during drag -->
+	{#if isDragging}
+		<div 
+			class="drag-overlay"
+			onmousemove={(e) => handleResizeMove(e.clientX)}
+			onmouseup={handleResizeEnd}
+		></div>
+	{/if}
+	
 	<!-- Glow overlay - fixed position, clipped by container's clip-path -->
 	<div 
 		class="glow-overlay"
@@ -146,13 +122,14 @@
 		class="iframe-wrapper"
 		class:resize-left={resizeEdge === 'left'}
 		class:resize-right={resizeEdge === 'right'}
+		style:min-height={iframeHeight > 0 ? `${iframeHeight}px` : undefined}
 	>
 		<!-- Left resize handle -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div 
 			class="resize-handle resize-handle-left"
-			onmouseenter={() => handleResizeHandleEnter('left')}
-			onmouseleave={handleResizeHandleLeave}
+			onmouseenter={() => !isDragging && (resizeEdge = 'left')}
+			onmouseleave={() => !isDragging && (resizeEdge = null)}
 			onmousedown={(e) => handleResizeStart(e, 'left')}
 		></div>
 		
@@ -163,15 +140,14 @@
 			style="min-height: {containerHeight}px;"
 			scrolling="no"
 			oniframemousemove={handleMouseMove}
-			oniframemouseup={handleIframeMouseUp}
 		/>
 		
 		<!-- Right resize handle -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div 
 			class="resize-handle resize-handle-right"
-			onmouseenter={() => handleResizeHandleEnter('right')}
-			onmouseleave={handleResizeHandleLeave}
+			onmouseenter={() => !isDragging && (resizeEdge = 'right')}
+			onmouseleave={() => !isDragging && (resizeEdge = null)}
 			onmousedown={(e) => handleResizeStart(e, 'right')}
 		></div>
 	</div>
@@ -230,7 +206,6 @@
 		width: var(--iframe-width, 100%);
 		z-index: 4;
 		overflow: visible;
-		min-height: 100%;
 	}
 
 	.iframe-wrapper :global(iframe) {
@@ -248,7 +223,7 @@
 		box-shadow: 6px 0 0 0 #777BDB;
 	}
 
-	/* Resize handles - invisible but capture mouse events */
+	/* Resize handles - positioned at edges of iframe wrapper */
 	.resize-handle {
 		position: absolute;
 		top: 0;
@@ -276,5 +251,16 @@
 	.preview-container.resizing {
 		cursor: ew-resize;
 		user-select: none;
+	}
+
+	/* Transparent overlay during drag to capture all mouse events */
+	.drag-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 9999;
+		cursor: ew-resize;
 	}
 </style>

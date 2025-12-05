@@ -20,31 +20,70 @@ const pendingRequests = new Map<string, {
 	reject: (error: Error) => void
 }>()
 
-function getWorker(type: HighlightType): Worker {
+// Track if shiki is available (checked once on first use)
+let shikiAvailable: boolean | null = null
+let shikiCheckPromise: Promise<boolean> | null = null
+
+/**
+ * Check if shiki is available by attempting to import it.
+ * Result is cached after first check.
+ */
+async function isShikiAvailable(): Promise<boolean> {
+	if (shikiAvailable !== null) return shikiAvailable
+	if (shikiCheckPromise) return shikiCheckPromise
+	
+	shikiCheckPromise = (async () => {
+		try {
+			// Try to import shiki - this will fail if not installed
+			await import('shiki/core')
+			shikiAvailable = true
+			return true
+		} catch {
+			shikiAvailable = false
+			console.info(
+				'[svelte-emails] Shiki is not installed. Syntax highlighting is disabled. ' +
+				'Install it with: npm install shiki @shikijs/langs @shikijs/themes'
+			)
+			return false
+		}
+	})()
+	
+	return shikiCheckPromise
+}
+
+function getWorker(type: HighlightType): Worker | null {
+	// If we know shiki isn't available, don't try to create workers
+	if (shikiAvailable === false) return null
+	
 	let worker = workers.get(type)
 	if (!worker) {
-		worker = new Worker(
-			new URL('./highlight-worker.ts', import.meta.url),
-			{ type: 'module' }
-		)
-		worker.onmessage = (e: MessageEvent<HighlightResponse>) => {
-			const pending = pendingRequests.get(e.data.id)
-			if (pending) {
-				pending.resolve(e.data.html)
-				pendingRequests.delete(e.data.id)
-			}
-		}
-		worker.onerror = (e) => {
-			console.error('[highlight-worker] Error:', e)
-			// Reject all pending requests for this worker
-			for (const [id, pending] of pendingRequests) {
-				if (id.startsWith(`${type}:`)) {
-					pending.reject(new Error(`Worker error: ${e.message}`))
-					pendingRequests.delete(id)
+		try {
+			worker = new Worker(
+				new URL('./highlight-worker.ts', import.meta.url),
+				{ type: 'module' }
+			)
+			worker.onmessage = (e: MessageEvent<HighlightResponse>) => {
+				const pending = pendingRequests.get(e.data.id)
+				if (pending) {
+					pending.resolve(e.data.html)
+					pendingRequests.delete(e.data.id)
 				}
 			}
+			worker.onerror = (e) => {
+				console.error('[highlight-worker] Error:', e)
+				// Reject all pending requests for this worker
+				for (const [id, pending] of pendingRequests) {
+					if (id.startsWith(`${type}:`)) {
+						pending.reject(new Error(`Worker error: ${e.message}`))
+						pendingRequests.delete(id)
+					}
+				}
+			}
+			workers.set(type, worker)
+		} catch (err) {
+			console.warn('[highlight] Failed to create worker:', err)
+			return null
 		}
-		workers.set(type, worker)
 	}
 	return worker
 }
@@ -85,7 +124,11 @@ export function createHighlightManager() {
 		code: string,
 		lang: HighlightLang,
 		emailId: string
-	): Promise<string> {
+	): Promise<string | null> {
+		// Check if shiki is available first
+		const available = await isShikiAvailable()
+		if (!available) return null
+		
 		const cacheKey = getCacheKey(emailId, type)
 		const version = generateVersion(code)
 
@@ -95,9 +138,12 @@ export function createHighlightManager() {
 			return cached.html
 		}
 
+		// Get worker (may be null if shiki failed to load)
+		const worker = getWorker(type)
+		if (!worker) return null
+
 		// Request highlighting from worker
 		const requestId = `${cacheKey}:${Date.now()}`
-		const worker = getWorker(type)
 
 		return new Promise((resolve, reject) => {
 			pendingRequests.set(requestId, {

@@ -872,6 +872,59 @@ render(MyEmail, {
 
 Variables are HTML-escaped automatically. Missing variables remain as `[[var]]` in output.
 
+### Syntax Highlighting (Code Blocks)
+
+Code blocks (`Text.Codeblock`) and inline code (`Text.Code`) support optional syntax highlighting via [Shiki](https://shiki.style/).
+
+**Installation (optional):**
+```bash
+npm install shiki
+# or
+bun add shiki
+```
+
+**Usage:**
+```svelte
+<!-- Highlighted code block -->
+<Text.Codeblock
+  highlight="typescript"
+  content={`const greeting: string = "Hello, World!"`}
+/>
+
+<!-- Highlighted inline code -->
+<Text.Code highlight="bash" content="npm install svelte-emails" />
+
+<!-- With custom theme (defaults to github-light) -->
+<Text.Codeblock
+  highlight="javascript"
+  theme="nord"
+  content={`function greet(name) { return "Hi " + name }`}
+/>
+```
+
+**Features:**
+- **Lazy loading:** Shiki is loaded on-demand when `highlight` is used
+- **Optional dependency:** Works without Shiki (falls back to plain code)
+- **Email-safe output:** Produces inline CSS styles, no external dependencies
+- **Multiple themes:** Any [Shiki theme](https://shiki.style/themes) is supported
+
+**How it works:**
+1. Components set `highlight` and `theme` props on the IR node
+2. `renderTree()` pre-processes the tree to find highlighted code nodes
+3. Shiki's `codeToHtml()` highlights code in parallel (async)
+4. Results are cached and used during synchronous HTML rendering
+5. For inline code, wrapper elements are stripped to preserve inline flow
+
+**Fallback behavior:**
+- If Shiki is not installed, code is HTML-escaped (no highlighting)
+- If a language is not recognized, Shiki falls back gracefully
+- Console warning is shown when highlight is used without Shiki installed
+
+**Email client compatibility:**
+Shiki outputs HTML with inline `style` attributes on `<span>` elements, which has excellent email client support (~98%). The output contains only:
+- `<span>` elements with inline `color` styles
+- Standard `<pre>` and `<code>` wrappers (for codeblock)
+
 ---
 
 ## Rendering Pipeline

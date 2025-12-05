@@ -185,6 +185,12 @@ export interface RenderContext {
 	headers: Record<string, string>
 	/** Style configuration */
 	style: StyleConfig
+	/**
+	 * Cache of pre-highlighted code content.
+	 * Maps node content hash to highlighted HTML.
+	 * Populated by preprocessHighlighting() before rendering.
+	 */
+	highlightCache?: Map<string, string>
 }
 
 // ============================================================================

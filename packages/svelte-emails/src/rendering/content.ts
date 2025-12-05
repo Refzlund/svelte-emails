@@ -159,10 +159,14 @@ function parseInlineFormatting(content: string, context: RenderContext): string 
 	result = result.replace(/(?<=\s|^)_([^_]+)_(?=\s|$)/g, '<sub>$1</sub>')
 
 	// Inline code: `text` — apply Code styles from config
+	// Content inside backticks must be HTML-escaped to prevent XSS and incorrect rendering
 	const codeStyle = buildCodeStyle(context)
 	result = result.replace(
 		/`([^`]+)`/g,
-		codeStyle ? `<code style="${codeStyle}">$1</code>` : '<code>$1</code>'
+		(_, code: string) => {
+			const escaped = escapeHtml(code)
+			return codeStyle ? `<code style="${codeStyle}">${escaped}</code>` : `<code>${escaped}</code>`
+		}
 	)
 
 	// Colored text: (#hex)text(/)

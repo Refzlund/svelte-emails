@@ -173,11 +173,14 @@ const TEXT_VARIANTS: Record<Mail.TextNode['variant'], TextVariantInfo> = {
 /**
  * Render an IR tree to HTML and plain text output.
  * 
+ * This function is async to support Shiki syntax highlighting.
+ * If no nodes use highlighting, the async overhead is minimal.
+ * 
  * @param root - The root EmailNode of the IR tree
  * @param options - Render options (variables, style config, etc.)
- * @returns Object containing html, text, and headers outputs
+ * @returns Promise resolving to object containing html, text, and headers outputs
  */
-export function renderTree(root: Mail.EmailNode, options: RenderOptions = {}): RenderOutput {
+export async function renderTree(root: Mail.EmailNode, options: RenderOptions = {}): Promise<RenderOutput> {
 	// Merge styles in order: basePreset -> Email.style -> render options.style
 	// This allows Email to set defaults that can be overridden at render time
 	const style = merge(merge(basePreset, root.style), options.style) as StyleConfig
@@ -187,6 +190,12 @@ export function renderTree(root: Mail.EmailNode, options: RenderOptions = {}): R
 		footnotes: [],
 		headers: {},
 		style
+	}
+
+	// Pre-process: collect and highlight all code nodes with syntax highlighting
+	const highlightCache = await preprocessHighlighting(root)
+	if (highlightCache.size > 0) {
+		context.highlightCache = highlightCache
 	}
 
 	// Get root size for rem-to-px conversion
@@ -213,6 +222,95 @@ export function renderTree(root: Mail.EmailNode, options: RenderOptions = {}): R
 	const text = renderNodeToText(root, context)
 
 	return { html, text, headers: context.headers }
+}
+
+// ============================================================================
+// Syntax Highlighting Pre-processor
+// ============================================================================
+
+/**
+ * Generate a cache key for a highlighted code node.
+ * Uses content, language, and theme to create a unique key.
+ */
+function getHighlightCacheKey(content: string, lang: string, theme?: string): string {
+	return `${lang}:${theme ?? 'default'}:${content}`
+}
+
+/**
+ * Pre-process the IR tree to collect and highlight all code nodes.
+ * Returns a Map of cache keys to highlighted HTML.
+ * 
+ * This is called before rendering to handle async Shiki operations.
+ * The results are cached so the synchronous renderer can access them.
+ */
+async function preprocessHighlighting(root: Mail.IRNode): Promise<Map<string, string>> {
+	const cache = new Map<string, string>()
+	const nodesToHighlight: Array<{ content: string; lang: string; theme?: string; key: string }> = []
+
+	// Collect all nodes that need highlighting
+	function collectNodes(node: Mail.IRNode): void {
+		if (node.type === 'text' && (node.variant === 'code' || node.variant === 'codeblock') && node.highlight) {
+			const key = getHighlightCacheKey(node.content, node.highlight, node.highlightTheme)
+			if (!nodesToHighlight.some((n) => n.key === key)) {
+				nodesToHighlight.push({
+					content: node.content,
+					lang: node.highlight,
+					theme: node.highlightTheme,
+					key
+				})
+			}
+		}
+
+		// Recurse into children for container nodes
+		if ('children' in node && Array.isArray(node.children)) {
+			for (const child of node.children) {
+				collectNodes(child)
+			}
+		}
+	}
+
+	collectNodes(root)
+
+	// If no nodes need highlighting, return empty cache
+	if (nodesToHighlight.length === 0) {
+		return cache
+	}
+
+	// Lazy-load Shiki and highlight all code in parallel
+	try {
+		const { highlightCode } = await import('./shiki')
+		
+		const results = await Promise.all(
+			nodesToHighlight.map(async (node) => {
+				try {
+					const result = await highlightCode(node.content, {
+						lang: node.lang,
+						theme: node.theme
+					})
+					return { key: node.key, html: result.html }
+				} catch (err) {
+					// On error, fall back to plain escaped content
+					console.warn(`Shiki highlighting failed for language "${node.lang}":`, err)
+					return { key: node.key, html: null }
+				}
+			})
+		)
+
+		// Populate cache with successful results
+		for (const result of results) {
+			if (result.html) {
+				cache.set(result.key, result.html)
+			}
+		}
+	} catch {
+		// Shiki not installed - return empty cache, renderer will use plain escaping
+		console.warn(
+			'Shiki is not installed. Syntax highlighting is disabled. ' +
+			'Install it with: npm install shiki'
+		)
+	}
+
+	return cache
 }
 
 // ============================================================================
@@ -798,17 +896,20 @@ function renderDivAsGrid(
 // ============================================================================
 
 /**
- * Render a Text node with markdown parsing.
+ * Render a Text node with markdown parsing or syntax highlighting.
  * 
  * IMPLEMENTATION:
  * 1. Apply variant-specific styling from StyleConfig
  * 2. Parse attributes with inherited styles
  * 3. Interpolate variables in content: [[var]] → value
- * 4. Parse markdown syntax: **bold**, *italic*, etc. (unless escapeContent)
- * 5. Output appropriate tag based on variant
+ * 4. For code/codeblock with highlight: use pre-highlighted content from cache
+ * 5. For regular code/codeblock: escape HTML and preserve whitespace
+ * 6. For other variants: parse markdown syntax
+ * 7. Output appropriate tag based on variant
  * 
  * @see ARCHITECTURE.md "Content Parsing" for markdown syntax
  * @see ARCHITECTURE.md "Variable Interpolation" for [[var]] syntax
+ * @see ARCHITECTURE.md "Syntax Highlighting" for Shiki integration
  */
 function renderTextNode(
 	node: Mail.TextNode,
@@ -823,13 +924,26 @@ function renderTextNode(
 	const variantStyles = getTextVariantStyles(node.variant, context, rootSize)
 	const mergedCss = { ...variantInfo.browserResets, ...variantStyles, ...parsed.css }
 
-	// Process content: variables first, then markdown (unless escapeContent)
-	let content = interpolatePlaceholders(node.content, context)
+	// Process content
+	let content: string
+
 	if (variantInfo.escapeContent) {
-		// For code/codeblock: escape HTML and preserve whitespace
-		content = escapeHtml(content)
+		// For code/codeblock: check for syntax highlighting first
+		const cacheKey = node.highlight && context.highlightCache
+			? getHighlightCacheKey(node.content, node.highlight, node.highlightTheme)
+			: null
+		const highlightedHtml = cacheKey ? context.highlightCache?.get(cacheKey) : undefined
+		
+		if (highlightedHtml) {
+			// Use pre-highlighted content from cache
+			content = highlightedHtml
+		} else {
+			// Fall back to plain escaped content
+			content = escapeHtml(interpolatePlaceholders(node.content, context))
+		}
 	} else {
-		content = parseMarkdown(content, context)
+		// For other variants: variables first, then markdown
+		content = parseMarkdown(interpolatePlaceholders(node.content, context), context)
 	}
 
 	const inlineStyle = toInlineCSS(mergedCss, inherited)
@@ -839,12 +953,18 @@ function renderTextNode(
 	// Block elements cannot be inside <p> tags - use <div> instead
 	// Skip this check for code/codeblock since they escape content
 	const hasBlockElements = !variantInfo.escapeContent && /<(?:ul|ol|table|blockquote|pre|div|hr)[>\s]/i.test(content)
-	let tag = hasBlockElements ? 'div' : variantInfo.tag
+	const tag = hasBlockElements ? 'div' : variantInfo.tag
 
-	// For codeblock, wrap content in <code> inside <pre>
+	// Build HTML output
 	let html: string
 	if (node.variant === 'codeblock') {
+		// For codeblock: wrap in <pre><code>
+		// When highlighted, Shiki already outputs <pre><code> structure, but we've stripped it
+		// to get just the spans. So we re-wrap with our styled <pre>.
 		html = `<pre${styleAttr}><code>${content}</code></pre>`
+	} else if (node.variant === 'code') {
+		// For inline code: just <code> tag
+		html = `<code${styleAttr}>${content}</code>`
 	} else {
 		html = `<${tag}${styleAttr}>${content}</${tag}>`
 	}

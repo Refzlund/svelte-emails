@@ -23,7 +23,13 @@
 		"build": "svelte-package -i src -o dist && bun scripts/fix-esm-imports.ts"
 	},
 	"peerDependencies": {
-		"svelte": "^5.0.0"
+		"svelte": "^5.0.0",
+		"shiki": "^3.0.0"
+	},
+	"peerDependenciesMeta": {
+		"shiki": {
+			"optional": true
+		}
 	},
 	"devDependencies": {
 		"@sveltejs/kit": "catalog:",

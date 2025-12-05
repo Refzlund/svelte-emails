@@ -13,7 +13,38 @@ The CLI provides a development server for previewing `*.email.svelte` templates 
 - **Resizable preview** — drag edges to resize, persisted to localStorage
 - **Live reload** when files are added, removed, or modified
 - **SSR rendering** using the `svelte-emails` render function
-- **Syntax highlighting** via Shiki (off-thread worker)
+- **Syntax highlighting** via Shiki (optional, off-thread worker)
+
+---
+
+## Optional Dependencies
+
+### Shiki (Syntax Highlighting)
+
+Shiki provides syntax highlighting in the Source, HTML, and Text tabs. **It is optional** — the CLI works without it, displaying plain code instead.
+
+**Installation:**
+```bash
+npm install shiki @shikijs/langs @shikijs/themes
+# or
+bun add shiki @shikijs/langs @shikijs/themes
+```
+
+**How it works:**
+1. On first use, `highlight.svelte.ts` checks if Shiki is available via dynamic import
+2. If available, Web Workers are created for parallel highlighting
+3. If not available, code is displayed without syntax highlighting (plain text with HTML escaping)
+
+**Behavior without Shiki:**
+- Source tab shows plain Svelte code (no colors)
+- HTML tab shows plain HTML (no colors)
+- Text tab shows plain markdown (no colors)
+- Console displays: `[svelte-emails] Shiki is not installed. Syntax highlighting is disabled.`
+
+**Files involved:**
+- `highlight.svelte.ts` — Checks Shiki availability, manages worker pool
+- `highlight-worker.ts` — Web Worker that performs highlighting (graceful fallback)
+- `CodeView.svelte` — Renders either highlighted HTML or plain `<pre><code>`
 
 ---
 
@@ -39,7 +70,7 @@ packages/cli/
 │   │   ├── Icons.svelte       # SVG icons as Svelte snippets
 │   │   ├── components/
 │   │   │   ├── Sidebar.svelte       # Navigation sidebar
-│   │   │   ├── sidebar.svelte.ts    # Sidebar state & navigation logic
+│   │   │   ├── Sidebar.svelte.ts    # Sidebar state & navigation logic
 │   │   │   ├── EmailViewer.svelte   # Shared viewer for all modes
 │   │   │   ├── EmailPreview.svelte  # Resizable iframe preview
 │   │   │   ├── CodeView.svelte      # Syntax-highlighted code panel
@@ -262,11 +293,11 @@ export interface EmailRenderData {
   renderError: string | null
 }
 
-export function getCached(emailId: string): CachedData | undefined
-export function setCache(emailId: string, data: EmailRenderData): void
-export function setCacheFormattedHtml(emailId: string, html: string): void
-export function invalidateCache(emailId?: string): void
-export function prefetchAdjacentEmails(currentId: string, emailIds: string[], count?: number): void
+export function getCached(emailId: string, mode?: ViewMode): CachedData | undefined
+export function setCache(emailId: string, data: EmailRenderData, mode?: ViewMode): void
+export function setCacheFormattedHtml(emailId: string, html: string, mode?: ViewMode): void
+export function invalidateCache(emailId?: string, mode?: ViewMode): void
+export function prefetchAdjacentEmails(currentId: string, emailIds: string[], count?: number, mode?: ViewMode): void
 ```
 
 **Key features:**
@@ -283,14 +314,19 @@ Off-thread syntax highlighting using Web Workers.
 export interface HighlightState {
   source: string | null
   html: string | null
-  htmlRaw: string | null
   text: string | null
+}
+
+export interface LoadingState {
+  source: boolean
+  html: boolean
+  text: boolean
 }
 
 export function createHighlightManager(): {
   state: HighlightState
   loading: LoadingState
-  highlight(emailId, source, html, htmlRaw, text): Promise<void>
+  highlight(emailId, source, html, text): Promise<void>
   clear(): void
 }
 ```
@@ -308,12 +344,12 @@ export function createHighlightManager(): {
 - Minimal layout that renders `<Sidebar />` component
 - Handles service worker cleanup on mount
 
-#### Sidebar Component (`Sidebar.svelte` + `sidebar.svelte.ts`)
+#### Sidebar Component (`Sidebar.svelte` + `Sidebar.svelte.ts`)
 
 Navigation sidebar with email/example/documentation list:
 
 ```typescript
-// sidebar.svelte.ts - Extracted state logic
+// Sidebar.svelte.ts - Extracted state logic
 const sidebar = createSidebarState()
 
 sidebar.viewMode        // 'emails' | 'examples' | 'documentation'
@@ -369,10 +405,9 @@ interface Props {
   code: string                   // Primary code to display
   highlightedHtml: string | null // Pre-highlighted HTML from Shiki
   showToggle?: boolean           // Show Formatted/Raw toggle
-  rawCode?: string               // Alternative code for raw view
-  highlightedRawHtml?: string | null // Highlighted HTML for raw view
+  rawCode?: string               // Alternative code for raw view (when toggle is off)
   showRaw?: boolean              // Controlled: current state
-  onToggle?: (raw) => void       // Callback when toggled
+  onToggle?: (showRaw) => void   // Callback when toggled
 }
 ```
 
@@ -764,10 +799,13 @@ export default defineConfig({
 
 ## Dependencies
 
-| Package | Purpose |
-|---------|---------|
-| `fast-glob` | File discovery with gitignore support |
-| `chokidar` | File system watching |
-| `@sveltejs/kit` | Application framework |
-| `vite` | Dev server and bundling |
-| `svelte-emails` | Email rendering (workspace dependency) |
+| Package | Purpose | Required |
+|---------|---------|----------|
+| `fast-glob` | File discovery with gitignore support | Yes |
+| `chokidar` | File system watching | Yes |
+| `@sveltejs/kit` | Application framework | Yes |
+| `vite` | Dev server and bundling | Yes |
+| `svelte-emails` | Email rendering (workspace dependency) | Yes |
+| `shiki` | Syntax highlighting | Optional |
+| `@shikijs/langs` | Language definitions for Shiki | Optional |
+| `@shikijs/themes` | Theme definitions for Shiki | Optional |

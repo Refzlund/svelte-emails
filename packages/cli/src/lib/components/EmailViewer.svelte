@@ -196,11 +196,44 @@
 	const relativePath = $derived(email?.relativePath ?? itemId ?? 'Loading...')
 </script>
 
+{#snippet tabButton(
+	fl: ReturnType<typeof floatingUI> | null,
+	tabMode: 'preview' | 'source' | 'html' | 'text',
+	label: string,
+	icon: typeof icons.contentView,
+	tabLoading: boolean
+)}
+	{@const isHtmlTab = tabMode === 'html'}
+	{@const isActive = isHtmlTab 
+		? (viewMode.value === 'html' || viewMode.value === 'raw')
+		: viewMode.value === tabMode}
+	<button
+		class="tab"
+		class:active={isActive}
+		{@attach node => {
+			if(!fl) return
+			const [c1,c2] = [
+				fl.tether(node, 'mouseenter'),
+				fl.ref(node, () => isActive)
+			]
+			return () => { c1.destroy(); c2.destroy(); }
+		}}
+		onclick={() => viewMode.set(tabMode)}
+	>
+		{#if tabLoading}
+			<span class="spinner"></span>
+		{:else}
+			{@render icon({ size: 20, opacity: isActive ? 1 : .75 })}
+		{/if}
+		{label}
+	</button>
+{/snippet}
+
 <div class="email-viewer">
 	<!-- Header with tabs and file path -->
 	<header class="viewer-header">
-		{#if float}
-			<nav class="tabs" use:float.untether={'pointerleave'}>
+		<nav class="tabs" use:float?.untether={'pointerleave'}>
+			{#if float}
 				<div
 					class="tab-indicator"
 					class:active={float.referenced}
@@ -210,116 +243,13 @@
 					style:opacity={float.referenced ? 1 : 0}
 					use:float={{ tether: false }}
 				></div>
-				<button
-					class="tab"
-					class:active={viewMode.value === 'preview'}
-					use:float.tether={'mouseenter'}
-					use:float.ref={() => viewMode.value === 'preview'}
-					onclick={() => viewMode.set('preview')}
-				>
-					{#if (isLoading || isRerendering) && viewMode.value === 'preview'}
-						<span class="spinner"></span>
-					{:else}
-						{@render icons.contentView({ size: 20, opacity: viewMode.value === 'preview' ? 1 : .75 })}
-					{/if}
-					Preview
-				</button>
-				<button
-					class="tab"
-					class:active={viewMode.value === 'source'}
-					use:float.tether={'mouseenter'}
-					use:float.ref={() => viewMode.value === 'source'}
-					onclick={() => viewMode.set('source')}
-				>
-					{#if highlighter.loading.source}
-						<span class="spinner"></span>
-					{:else}
-						{@render icons.code({ size: 20, opacity: viewMode.value === 'source' ? 1 : .75 })}
-					{/if}
-					Source
-				</button>
-				<button
-					class="tab"
-					class:active={viewMode.value === 'html' || viewMode.value === 'raw'}
-					use:float.tether={'mouseenter'}
-					use:float.ref={() => viewMode.value === 'html' || viewMode.value === 'raw'}
-					onclick={() => viewMode.set('html')}
-				>
-					{#if highlighter.loading.html}
-						<span class="spinner"></span>
-					{:else}
-						{@render icons.document({ size: 20, opacity: viewMode.value === 'html' || viewMode.value === 'raw' ? 1 : .75 })}
-					{/if}
-					HTML
-				</button>
-				<button
-					class="tab"
-					class:active={viewMode.value === 'text'}
-					use:float.tether={'mouseenter'}
-					use:float.ref={() => viewMode.value === 'text'}
-					onclick={() => viewMode.set('text')}
-				>
-					{#if highlighter.loading.text}
-						<span class="spinner"></span>
-					{:else}
-						{@render icons.codeText({ size: 20, opacity: viewMode.value === 'text' ? 1 : .75 })}
-					{/if}
-					Text
-				</button>
-			</nav>
-		{:else}
-			<!-- SSR fallback without floating actions -->
-			<nav class="tabs">
-				<button
-					class="tab"
-					class:active={viewMode.value === 'preview'}
-					onclick={() => viewMode.set('preview')}
-				>
-					{#if (isLoading || isRerendering) && viewMode.value === 'preview'}
-						<span class="spinner"></span>
-					{:else}
-						{@render icons.contentView({ size: 20, opacity: viewMode.value === 'preview' ? 1 : .75 })}
-					{/if}
-					Preview
-				</button>
-				<button
-					class="tab"
-					class:active={viewMode.value === 'source'}
-					onclick={() => viewMode.set('source')}
-				>
-					{#if highlighter.loading.source}
-						<span class="spinner"></span>
-					{:else}
-						{@render icons.code({ size: 20, opacity: viewMode.value === 'source' ? 1 : .75 })}
-					{/if}
-					Source
-				</button>
-				<button
-					class="tab"
-					class:active={viewMode.value === 'html' || viewMode.value === 'raw'}
-					onclick={() => viewMode.set('html')}
-				>
-					{#if highlighter.loading.html}
-						<span class="spinner"></span>
-					{:else}
-						{@render icons.document({ size: 20, opacity: viewMode.value === 'html' || viewMode.value === 'raw' ? 1 : .75 })}
-					{/if}
-					HTML
-				</button>
-				<button
-					class="tab"
-					class:active={viewMode.value === 'text'}
-					onclick={() => viewMode.set('text')}
-				>
-					{#if highlighter.loading.text}
-						<span class="spinner"></span>
-					{:else}
-						{@render icons.codeText({ size: 20, opacity: viewMode.value === 'text' ? 1 : .75 })}
-					{/if}
-					Text
-				</button>
-			</nav>
-		{/if}
+			{/if}
+			{@render tabButton(float, 'preview', 'Preview', icons.contentView, (isLoading || isRerendering) && viewMode.value === 'preview')}
+			{@render tabButton(float, 'source', 'Source', icons.code, highlighter.loading.source)}
+			{@render tabButton(float, 'html', 'HTML', icons.document, highlighter.loading.html)}
+			{@render tabButton(float, 'text', 'Text', icons.codeText, highlighter.loading.text)}
+		</nav>
+		
 
 		<div class="file-path">
 			{relativePath}

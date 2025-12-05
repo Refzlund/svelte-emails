@@ -85,6 +85,18 @@ export namespace Mail {
 	export interface TextNode extends BaseNode<'text'> {
 		content: string
 		variant: 'default' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'paragraph' | 'small' | 'code' | 'codeblock'
+		/** 
+		 * Language for syntax highlighting (e.g., 'typescript', 'javascript', 'html').
+		 * Requires `shiki` to be installed as a peer dependency.
+		 * Only applies to 'code' and 'codeblock' variants.
+		 */
+		highlight?: string
+		/**
+		 * Theme for syntax highlighting.
+		 * Defaults to 'github-light' for email readability.
+		 * @see https://shiki.style/themes for available themes
+		 */
+		highlightTheme?: string
 	}
 
 	/**

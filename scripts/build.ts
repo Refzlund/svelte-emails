@@ -250,17 +250,22 @@ export default defineConfig({
 		peerDependencies: {
 			svelte: '^5.0.0'
 		},
+		peerDependenciesMeta: {
+			shiki: { optional: true }
+		},
 		dependencies: {
 			'fast-glob': cliPackage.dependencies['fast-glob'],
 			'chokidar': cliPackage.dependencies['chokidar'],
-			// Syntax highlighting for code view
-			'shiki': cliPackage.dependencies['shiki'],
-			'@shikijs/langs': cliPackage.dependencies['@shikijs/langs'],
-			'@shikijs/themes': cliPackage.dependencies['@shikijs/themes'],
 			// CLI dev mode needs these
 			'@sveltejs/kit': '^2.48.5',
 			'@sveltejs/vite-plugin-svelte': '^6.2.1',
 			'vite': '^7.2.2'
+		},
+		optionalDependencies: {
+			// Syntax highlighting for code view (optional)
+			'shiki': cliPackage.optionalDependencies?.['shiki'] ?? '^3.19.0',
+			'@shikijs/langs': cliPackage.optionalDependencies?.['@shikijs/langs'] ?? '^3.19.0',
+			'@shikijs/themes': cliPackage.optionalDependencies?.['@shikijs/themes'] ?? '^3.19.0'
 		},
 		keywords: [
 			'svelte',
