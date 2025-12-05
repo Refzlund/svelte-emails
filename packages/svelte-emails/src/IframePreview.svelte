@@ -11,19 +11,34 @@ for smooth updates without flash, scroll reset, or image reloading.
 - Scroll position is preserved across updates
 - Form state is preserved
 - Auto-sizing height based on content
+- Scroll anchoring during resize (when `scrollContainer` and `heightTarget` provided)
 - Mouse events inside iframe can be forwarded to parent via `oniframemousemove` and `oniframemouseup`
 
-@example
+@example Basic usage
 ```svelte
 <IframePreview html={emailHtml} />
 ```
 
-@example With mouse tracking for effects
+@example With mouse tracking for visual effects
 ```svelte
 <IframePreview 
 	html={emailHtml} 
 	oniframemousemove={(e) => { mouseX = e.clientX; mouseY = e.clientY }}
 />
+```
+
+@example With scroll anchoring for resizable containers
+```svelte
+<div class="scroll-container" bind:this={scrollContainer}>
+	<div class="wrapper" bind:this={wrapper}>
+		<IframePreview 
+			html={emailHtml}
+			bind:height={iframeHeight}
+			scrollContainer={scrollContainer}
+			heightTarget={wrapper}
+		/>
+	</div>
+</div>
 ```
 -->
 <script lang='ts' module>
@@ -37,6 +52,18 @@ for smooth updates without flash, scroll reset, or image reloading.
 		height?: number
 		/** Optional snippet to render while loading (before first content) */
 		pending?: Snippet
+		/** 
+		 * Scroll container element for scroll anchoring during width changes.
+		 * When provided with `heightTarget`, the component tracks an anchor element
+		 * near the viewport top and preserves its visual position during resize.
+		 */
+		scrollContainer?: HTMLElement
+		/**
+		 * Target element for direct height updates during scroll anchoring.
+		 * When provided with `scrollContainer`, enables jitter-free resize behavior
+		 * by synchronously updating height and scroll position.
+		 */
+		heightTarget?: HTMLElement
 		/** Callback for mouse move events inside the iframe (viewport coordinates) */
 		oniframemousemove?: (event: { clientX: number; clientY: number }) => void
 		/** Callback for mouse up events inside the iframe (viewport coordinates) */
@@ -51,6 +78,8 @@ for smooth updates without flash, scroll reset, or image reloading.
 		html,
 		height = $bindable(0),
 		pending,
+		scrollContainer,
+		heightTarget,
 		class: className,
 		style,
 		oniframemousemove,
@@ -60,6 +89,10 @@ for smooth updates without flash, scroll reset, or image reloading.
 
 	let iframeElement: HTMLIFrameElement | undefined = $state()
 	let heightObserver: ResizeObserver | null = null
+	let widthObserver: ResizeObserver | null = null
+	
+	// Track anchor element position before width changes trigger reflow
+	let anchorData: { element: Element; offsetFromViewportTop: number } | null = null
 	
 	// Rendering state
 	let srcdocContent: string | undefined = $state(undefined)
@@ -72,10 +105,67 @@ for smooth updates without flash, scroll reset, or image reloading.
 		return content.replace(new RegExp('<script\\b[^>]*>[\\s\\S]*?' + endTag, 'gi'), '')
 	}
 
-	/** Update iframe height based on content */
+	/** Selector for anchor candidate elements */
+	const ANCHOR_SELECTOR = 'h1, h2, h3, h4, h5, h6, p, div, table, img, section, article, header, footer'
+
+	/** 
+	 * Find a stable anchor element near the top of the visible viewport.
+	 * Used for scroll anchoring during width changes.
+	 */
+	function findAnchorElement(doc: Document, scrollTop: number): { element: Element; offsetFromViewportTop: number } | null {
+		const body = doc.body
+		if (!body) return null
+		
+		let bestMatch: { element: Element; offsetFromViewportTop: number } | null = null
+		let bestDistance = Infinity
+		
+		for (const el of body.querySelectorAll(ANCHOR_SELECTOR)) {
+			const rect = el.getBoundingClientRect()
+			if (rect.height < 10) continue
+			
+			const distance = Math.abs(rect.top - scrollTop)
+			if (rect.top >= scrollTop - 50 && distance < bestDistance) {
+				bestDistance = distance
+				bestMatch = { element: el, offsetFromViewportTop: rect.top - scrollTop }
+			}
+		}
+		
+		return bestMatch
+	}
+
+	/** Snapshot anchor element position before width changes cause reflow */
+	function snapshotAnchorPosition(doc: Document) {
+		if (!scrollContainer) return
+		anchorData = findAnchorElement(doc, scrollContainer.scrollTop)
+	}
+
+	/** Update iframe height based on content, with scroll anchoring if configured */
 	function updateHeight(doc: Document) {
-		const newHeight = doc.documentElement?.scrollHeight
-		if (newHeight && newHeight > 0) height = newHeight
+		if (!iframeElement) return
+		
+		const body = doc.body
+		if (!body) return
+		
+		const bodyStyle = doc.defaultView?.getComputedStyle(body)
+		const marginTop = parseFloat(bodyStyle?.marginTop || '0')
+		const marginBottom = parseFloat(bodyStyle?.marginBottom || '0')
+		const newHeight = body.scrollHeight + marginTop + marginBottom
+		
+		if (newHeight === height || newHeight <= 0) return
+		
+		// Apply scroll anchoring when configured
+		if (scrollContainer && heightTarget && anchorData) {
+			const anchorTopNow = anchorData.element.getBoundingClientRect().top
+			const newScrollTop = anchorTopNow - anchorData.offsetFromViewportTop
+			
+			heightTarget.style.height = `${newHeight}px`
+			void scrollContainer.offsetHeight // Force synchronous layout
+			scrollContainer.scrollTop = Math.max(0, newScrollTop)
+		} else if (heightTarget) {
+			heightTarget.style.height = `${newHeight}px`
+		}
+		
+		height = newHeight
 	}
 
 	/** Setup ResizeObserver to track iframe content height */
@@ -86,6 +176,24 @@ for smooth updates without flash, scroll reset, or image reloading.
 		heightObserver = new ResizeObserver(() => updateHeight(doc))
 		if (doc.body) heightObserver.observe(doc.body)
 		if (doc.documentElement) heightObserver.observe(doc.documentElement)
+	}
+
+	/** Setup ResizeObserver on heightTarget to snapshot anchor before width changes */
+	function setupWidthObserver(doc: Document) {
+		widthObserver?.disconnect()
+		if (!heightTarget) return
+		
+		let lastWidth = heightTarget.getBoundingClientRect().width
+		
+		widthObserver = new ResizeObserver((entries) => {
+			const newWidth = entries[0]?.contentRect.width
+			if (newWidth && newWidth !== lastWidth) {
+				snapshotAnchorPosition(doc)
+				lastWidth = newWidth
+			}
+		})
+		
+		widthObserver.observe(heightTarget)
 	}
 
 	/** Setup mouse event forwarding from iframe to parent */
@@ -158,6 +266,7 @@ for smooth updates without flash, scroll reset, or image reloading.
 		if (srcdocContent) loadedHtml = srcdocContent
 		
 		setupHeightObserver(doc)
+		setupWidthObserver(doc)
 		setupMouseForwarding(doc)
 		
 		// Apply any pending HTML that arrived while loading
@@ -205,6 +314,8 @@ for smooth updates without flash, scroll reset, or image reloading.
 	$effect(() => () => {
 		heightObserver?.disconnect()
 		heightObserver = null
+		widthObserver?.disconnect()
+		widthObserver = null
 	})
 
 	// Combined styles

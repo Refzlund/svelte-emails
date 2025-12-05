@@ -30,8 +30,8 @@
 	const previewWidth = createPreviewWidth()
 	let iframeWidth = $derived(previewWidth.value)
 	let iframeHeight = $state(0)
-	let containerHeight = $state(0)
 	let containerElement: HTMLDivElement | undefined = $state()
+	let wrapperElement: HTMLDivElement | undefined = $state()
 	let resizeEdge: 'left' | 'right' | null = $state(null)
 	let isDragging = $state(false)
 	
@@ -39,21 +39,6 @@
 	let dragStartX = 0
 	let dragStartWidth = 0
 	let dragContainerWidth = 0
-
-	// Track container height for min-height calculation
-	$effect(() => {
-		if (!containerElement) return
-		
-		const updateContainerHeight = () => {
-			containerHeight = containerElement!.clientHeight
-		}
-		
-		updateContainerHeight()
-		const resizeObserver = new ResizeObserver(updateContainerHeight)
-		resizeObserver.observe(containerElement)
-		
-		return () => resizeObserver.disconnect()
-	})
 
 	// Derive the content to display (with cached images)
 	const contentHtml = $derived(imageCache.processedHtml || html)
@@ -68,7 +53,8 @@
 	}
 	
 	function handleResizeMove(clientX: number) {
-		if (!isDragging) return
+		if (!isDragging || !containerElement) return
+		
 		const deltaX = clientX - dragStartX
 		// Since iframe is centered, dragging either edge should change width symmetrically
 		const deltaPercent = (deltaX / dragContainerWidth) * 100
@@ -96,6 +82,16 @@
 
 <svelte:window onmousemove={handleMouseMove} />
 
+{#snippet resizeHandle(edge: 'left' | 'right')}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div 
+		class="resize-handle resize-handle-{edge}"
+		onmouseenter={() => !isDragging && (resizeEdge = edge)}
+		onmouseleave={() => !isDragging && (resizeEdge = null)}
+		onmousedown={(e) => handleResizeStart(e, edge)}
+	></div>
+{/snippet}
+
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="preview-container"
@@ -120,36 +116,24 @@
 	></div>
 	<div
 		class="iframe-wrapper"
+		bind:this={wrapperElement}
 		class:resize-left={resizeEdge === 'left'}
 		class:resize-right={resizeEdge === 'right'}
-		style:min-height={iframeHeight > 0 ? `${iframeHeight}px` : undefined}
+		style:height={iframeHeight > 0 ? `${iframeHeight}px` : undefined}
 	>
-		<!-- Left resize handle -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div 
-			class="resize-handle resize-handle-left"
-			onmouseenter={() => !isDragging && (resizeEdge = 'left')}
-			onmouseleave={() => !isDragging && (resizeEdge = null)}
-			onmousedown={(e) => handleResizeStart(e, 'left')}
-		></div>
+		{@render resizeHandle('left')}
 		
 		<Email.IframePreview
 			html={contentHtml}
 			bind:height={iframeHeight}
+			scrollContainer={containerElement}
+			heightTarget={wrapperElement}
 			title="Email Preview"
-			style="min-height: {containerHeight}px;"
 			scrolling="no"
 			oniframemousemove={handleMouseMove}
 		/>
 		
-		<!-- Right resize handle -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div 
-			class="resize-handle resize-handle-right"
-			onmouseenter={() => !isDragging && (resizeEdge = 'right')}
-			onmouseleave={() => !isDragging && (resizeEdge = null)}
-			onmousedown={(e) => handleResizeStart(e, 'right')}
-		></div>
+		{@render resizeHandle('right')}
 	</div>
 </div>
 
@@ -158,6 +142,7 @@
 		position: relative;
 		display: flex;
 		justify-content: center;
+		align-items: flex-start;
 		height: 100%;
 		overflow-y: auto;
 		overflow-x: hidden;
