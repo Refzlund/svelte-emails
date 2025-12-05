@@ -78,7 +78,7 @@ export namespace Mail {
 	 */
 	export interface TextNode extends BaseNode<'text'> {
 		content: string
-		variant: 'default' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'paragraph' | 'small'
+		variant: 'default' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'paragraph' | 'small' | 'code' | 'codeblock'
 	}
 
 	/**

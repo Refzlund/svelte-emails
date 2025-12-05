@@ -522,9 +522,15 @@ For tabular data with proper semantics:
 <Text.Paragraph content='Paragraph with line handling' />
 <Text.H1 content='Heading 1' />  <!-- H1 through H6 -->
 <Text.Small content='Small text' />
+<Text.Code content='inline code' />
+<Text.Codeblock content={`
+function example() {
+  return 'multiline code block';
+}
+`} />
 ```
 
-All text components support the `content` prop with markdown syntax (see [Content Parsing](#content-parsing)).
+All text components support the `content` prop with markdown syntax (see [Content Parsing](#content-parsing)), except `Text.Code` and `Text.Codeblock` which HTML-escape their content for displaying code.
 
 ### Other Components
 

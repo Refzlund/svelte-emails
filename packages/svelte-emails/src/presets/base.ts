@@ -115,7 +115,11 @@ export const base: StyleConfig = {
 		borderRadius: '8px',
 		fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
 		size: '0.875rem',
-		lineHeight: 1.5
+		lineHeight: 1.5,
+		// Whitespace handling for proper code display
+		whiteSpace: 'pre-wrap',
+		wordWrap: 'break-word',
+		overflowWrap: 'break-word'
 	},
 	Highlight: {
 		color: 'inherit',

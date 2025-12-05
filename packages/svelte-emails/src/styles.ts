@@ -189,6 +189,12 @@ export interface CodeblockStyle {
 	size?: string
 	/** Line height */
 	lineHeight?: string | number
+	/** White space handling (default: pre-wrap) */
+	whiteSpace?: string
+	/** Word wrap (default: break-word) */
+	wordWrap?: string
+	/** Overflow wrap (default: break-word) */
+	overflowWrap?: string
 }
 
 /**

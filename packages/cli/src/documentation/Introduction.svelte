@@ -32,7 +32,7 @@
 	}
 
 	// Code examples as variables to avoid parsing issues
-	const codeInstall = 'npm install svelte-emails'
+	const codeInstall = 'bun add -D svelte-emails'
 	
 	const codeExample = `<script>
   import { Email, Div, Text } from 'svelte-emails'
@@ -139,9 +139,7 @@
 		<Spacer h-3 />
 		
 		<!-- Code Block -->
-		<Div bg={colors.code} p-4 rounded-md>
-			<Text content={codeInstall} text={colors.white} font-mono text-sm />
-		</Div>
+		<Text.Codeblock content={codeInstall} />
 
 		<Spacer h-4 />
 		<Text.Paragraph 
@@ -150,15 +148,7 @@
 		/>
 		<Spacer h-3 />
 
-		<Div bg={colors.code} p-4 rounded-md>
-			<Text 
-				content={codeExample}
-				text={colors.white}
-				font-mono
-				text-sm
-				whitespace-pre
-			/>
-		</Div>
+		<Text.Codeblock content={codeExample} />
 	</Div>
 
 	<Divider border={colors.border} />
@@ -249,15 +239,7 @@
 		/>
 		<Spacer h-3 />
 
-		<Div bg={colors.code} p-4 rounded-md>
-			<Text 
-				content={codeLayout}
-				text={colors.white}
-				font-mono
-				text-sm
-				whitespace-pre
-			/>
-		</Div>
+		<Text.Codeblock content={codeLayout} />
 	</Div>
 
 	<Divider border={colors.border} />

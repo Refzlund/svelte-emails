@@ -155,7 +155,11 @@ export const CONFIG_MAPPINGS = {
 		borderRadius: 'border-radius',
 		fontFamily: 'font-family',
 		size: 'font-size',
-		lineHeight: 'line-height'
+		lineHeight: 'line-height',
+		// Whitespace handling is hardcoded here since it's always needed for codeblocks
+		whiteSpace: 'white-space',
+		wordWrap: 'word-wrap',
+		overflowWrap: 'overflow-wrap'
 	},
 
 	/** Button config → CSS object (camelCase) */

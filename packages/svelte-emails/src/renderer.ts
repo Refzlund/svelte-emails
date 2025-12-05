@@ -83,10 +83,14 @@ interface TextVariantInfo {
 	tag: string
 	/** Key in StyleConfig.Text for variant-specific config */
 	configKey: 'H1' | 'H2' | 'H3' | 'H4' | 'H5' | 'H6' | 'Paragraph' | 'Small' | null
+	/** Key in StyleConfig for Code/Codeblock (top-level, not under Text) */
+	topLevelConfigKey?: 'Code' | 'Codeblock'
 	/** Markdown prefix for plain text output */
 	markdownPrefix: string
 	/** CSS resets for browser defaults on this element */
 	browserResets: Record<string, string>
+	/** Whether content should be escaped (no markdown parsing) */
+	escapeContent?: boolean
 }
 
 const TEXT_VARIANTS: Record<Mail.TextNode['variant'], TextVariantInfo> = {
@@ -137,6 +141,22 @@ const TEXT_VARIANTS: Record<Mail.TextNode['variant'], TextVariantInfo> = {
 		configKey: 'Small',
 		markdownPrefix: '',
 		browserResets: { fontSize: 'inherit' }
+	},
+	code: {
+		tag: 'code',
+		configKey: null,
+		topLevelConfigKey: 'Code',
+		markdownPrefix: '',
+		browserResets: {},
+		escapeContent: true
+	},
+	codeblock: {
+		tag: 'pre',
+		configKey: null,
+		topLevelConfigKey: 'Codeblock',
+		markdownPrefix: '',
+		browserResets: { margin: '0', padding: '0' },
+		escapeContent: true
 	},
 	default: {
 		tag: 'span',
@@ -783,7 +803,7 @@ function renderDivAsGrid(
  * 1. Apply variant-specific styling from StyleConfig
  * 2. Parse attributes with inherited styles
  * 3. Interpolate variables in content: [[var]] → value
- * 4. Parse markdown syntax: **bold**, *italic*, etc.
+ * 4. Parse markdown syntax: **bold**, *italic*, etc. (unless escapeContent)
  * 5. Output appropriate tag based on variant
  * 
  * @see ARCHITECTURE.md "Content Parsing" for markdown syntax
@@ -802,19 +822,31 @@ function renderTextNode(
 	const variantStyles = getTextVariantStyles(node.variant, context, rootSize)
 	const mergedCss = { ...variantInfo.browserResets, ...variantStyles, ...parsed.css }
 
-	// Process content: variables first, then markdown
+	// Process content: variables first, then markdown (unless escapeContent)
 	let content = interpolatePlaceholders(node.content, context)
-	content = parseMarkdown(content, context)
+	if (variantInfo.escapeContent) {
+		// For code/codeblock: escape HTML and preserve whitespace
+		content = escapeHtml(content)
+	} else {
+		content = parseMarkdown(content, context)
+	}
 
 	const inlineStyle = toInlineCSS(mergedCss, inherited)
 	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
 
 	// Check if content contains block-level elements (lists, tables, etc.)
 	// Block elements cannot be inside <p> tags - use <div> instead
-	const hasBlockElements = /<(?:ul|ol|table|blockquote|pre|div|hr)[>\s]/i.test(content)
-	const tag = hasBlockElements ? 'div' : variantInfo.tag
+	// Skip this check for code/codeblock since they escape content
+	const hasBlockElements = !variantInfo.escapeContent && /<(?:ul|ol|table|blockquote|pre|div|hr)[>\s]/i.test(content)
+	let tag = hasBlockElements ? 'div' : variantInfo.tag
 
-	const html = `<${tag}${styleAttr}>${content}</${tag}>`
+	// For codeblock, wrap content in <code> inside <pre>
+	let html: string
+	if (node.variant === 'codeblock') {
+		html = `<pre${styleAttr}><code>${content}</code></pre>`
+	} else {
+		html = `<${tag}${styleAttr}>${content}</${tag}>`
+	}
 
 	return applyWrappers(html, parsed)
 }
@@ -830,6 +862,31 @@ function getTextVariantStyles(
 ): Record<string, string> {
 	const textConfig = context.style.Text
 	const css: Record<string, string> = {}
+	const variantInfo = TEXT_VARIANTS[variant]
+	
+	// Handle top-level config (Code, Codeblock)
+	if (variantInfo.topLevelConfigKey) {
+		const config = context.style[variantInfo.topLevelConfigKey]
+		if (!config) return css
+
+		if (config.color) css.color = config.color
+		if (config.background) css.backgroundColor = config.background
+		if (config.padding) css.padding = config.padding
+		if (config.borderRadius) css.borderRadius = config.borderRadius
+		if (config.fontFamily) css.fontFamily = config.fontFamily
+		if (config.size) css.fontSize = remToPx(config.size, rootSize)
+		if ('lineHeight' in config && config.lineHeight !== undefined) {
+			css.lineHeight = typeof config.lineHeight === 'number'
+				? String(config.lineHeight)
+				: config.lineHeight
+		}
+		// Whitespace properties (for codeblock)
+		if ('whiteSpace' in config && config.whiteSpace) css.whiteSpace = config.whiteSpace
+		if ('wordWrap' in config && config.wordWrap) css.wordWrap = config.wordWrap
+		if ('overflowWrap' in config && config.overflowWrap) css.overflowWrap = config.overflowWrap
+
+		return css
+	}
 
 	if (!textConfig) return css
 
@@ -839,7 +896,6 @@ function getTextVariantStyles(
 	}
 
 	// Get variant-specific config using TEXT_VARIANTS lookup
-	const variantInfo = TEXT_VARIANTS[variant]
 	if (!variantInfo.configKey) return css
 
 	const variantConfig = textConfig[variantInfo.configKey]
@@ -1520,6 +1576,14 @@ function renderContainerToText(
 function renderTextNodeToText(node: Mail.TextNode, context: RenderContext): string {
 	// Interpolate variables
 	let content = interpolatePlaceholders(node.content, context)
+	
+	// For code variants, don't strip markdown syntax - return raw content
+	if (node.variant === 'code') {
+		return `\`${content}\``
+	}
+	if (node.variant === 'codeblock') {
+		return `\`\`\`\n${content}\n\`\`\``
+	}
 	
 	// Strip HTML-specific markdown syntax while preserving standard markdown
 	content = stripHtmlSpecificMarkdown(content)

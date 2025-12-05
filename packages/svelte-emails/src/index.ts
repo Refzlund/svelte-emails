@@ -11,6 +11,8 @@ import _TextH5 from './Elements/Text/H5.svelte'
 import _TextH6 from './Elements/Text/H6.svelte'
 import _TextParagraph from './Elements/Text/Paragraph.svelte'
 import _TextSmall from './Elements/Text/Small.svelte'
+import _TextCode from './Elements/Text/Code.svelte'
+import _TextCodeblock from './Elements/Text/Codeblock.svelte'
 import Button from './Elements/Button.svelte'
 import Link from './Elements/Link.svelte'
 import Img from './Elements/Img.svelte'
@@ -45,6 +47,8 @@ const Email = Object.assign(_Email, {
 // <Text.H6 content='...' />
 // <Text.Paragraph content='...' />
 // <Text.Small content='...' />
+// <Text.Code content='...' />
+// <Text.Codeblock content='...' />
 const Text = Object.assign(_Text, {
 	H1: _TextH1,
 	H2: _TextH2,
@@ -53,7 +57,9 @@ const Text = Object.assign(_Text, {
 	H5: _TextH5,
 	H6: _TextH6,
 	Paragraph: _TextParagraph,
-	Small: _TextSmall
+	Small: _TextSmall,
+	Code: _TextCode,
+	Codeblock: _TextCodeblock
 })
 // <Table> ...
 // <Table.Row> ...
