@@ -32,9 +32,16 @@
 	let iframeHeight = $state(0)
 	let containerHeight = $state(0)
 	let containerElement: HTMLDivElement | undefined = $state()
-	let iframeWrapperElement: HTMLDivElement | undefined = $state()
 	let resizeEdge: 'left' | 'right' | null = $state(null)
 	let isDragging = $state(false)
+	
+	// Resize state for drag operations
+	let resizeState: {
+		edge: 'left' | 'right'
+		startX: number
+		startWidth: number
+		containerWidth: number
+	} | null = null
 
 	// Track container height for min-height calculation
 	$effect(() => {
@@ -58,69 +65,65 @@
 	let mouseX = $state(0)
 	let mouseY = $state(0)
 
-	function handleMouseMove(e: MouseEvent) {
-		if (!containerElement || !iframeWrapperElement) return
-		// Use viewport coordinates for the fixed glow overlay
+	/** Unified mouse move handler for both window and iframe events */
+	function handleMouseMove(e: { clientX: number; clientY: number }) {
 		mouseX = e.clientX
 		mouseY = e.clientY
-
-		// Detect edge proximity using iframe wrapper bounds (always current)
-		if (!isDragging) {
-			const wrapperRect = iframeWrapperElement.getBoundingClientRect()
-			const edgeThreshold = 8
-
-			// Check if mouse is within the iframe wrapper bounds
-			const isInsideWrapper = 
-				e.clientX > wrapperRect.left + edgeThreshold &&
-				e.clientX < wrapperRect.right - edgeThreshold &&
-				e.clientY >= wrapperRect.top &&
-				e.clientY <= wrapperRect.bottom
-
-			if (isInsideWrapper) {
-				// Mouse is inside the iframe content area, not near edges
-				resizeEdge = null
-			} else if (Math.abs(e.clientX - wrapperRect.left) < edgeThreshold) {
-				resizeEdge = 'left'
-			} else if (Math.abs(e.clientX - wrapperRect.right) < edgeThreshold) {
-				resizeEdge = 'right'
-			} else {
-				resizeEdge = null
-			}
-		}
+		if (resizeState) handleResizeMove(e.clientX)
+	}
+	
+	function handleResizeMove(clientX: number) {
+		if (!resizeState) return
+		const { edge, startX, startWidth, containerWidth } = resizeState
+		const deltaX = clientX - startX
+		// Since iframe is centered, dragging either edge should change width symmetrically
+		const deltaPercent = (deltaX / containerWidth) * 100
+		const widthChange = edge === 'right' ? deltaPercent * 2 : -deltaPercent * 2
+		const newWidth = Math.max(10, Math.min(100, startWidth + widthChange))
+		previewWidth.value = newWidth
+	}
+	
+	function handleResizeEnd() {
+		if (!resizeState) return
+		resizeState = null
+		isDragging = false
+		resizeEdge = null
+		previewWidth.persist()
 	}
 
-	function handleMouseDown(e: MouseEvent) {
-		if (!resizeEdge || !containerElement) return
+	function handleIframeMouseUp() {
+		handleResizeEnd()
+	}
+
+	function handleResizeHandleEnter(edge: 'left' | 'right') {
+		if (!isDragging) resizeEdge = edge
+	}
+
+	function handleResizeHandleLeave() {
+		if (!isDragging) resizeEdge = null
+	}
+
+	function handleResizeStart(e: MouseEvent, edge: 'left' | 'right') {
+		if (!containerElement) return
 
 		e.preventDefault()
 		isDragging = true
-		const startX = e.clientX
-		const startWidth = iframeWidth
-		const containerWidth = containerElement.getBoundingClientRect().width
-		const edge = resizeEdge
-
-		function onMouseMove(e: MouseEvent) {
-			e.preventDefault()
-			const deltaX = e.clientX - startX
-			// Since iframe is centered, dragging either edge should change width symmetrically
-			const deltaPercent = (deltaX / containerWidth) * 100
-			const widthChange = edge === 'right' ? deltaPercent * 2 : -deltaPercent * 2
-
-			const newWidth = Math.max(10, Math.min(100, startWidth + widthChange))
-			previewWidth.value = newWidth
+		resizeEdge = edge
+		
+		// Store resize state for use by both window and iframe events
+		resizeState = {
+			edge,
+			startX: e.clientX,
+			startWidth: iframeWidth,
+			containerWidth: containerElement.getBoundingClientRect().width
 		}
 
-		function onMouseUp(e: MouseEvent) {
-			e.preventDefault()
-			isDragging = false
-			resizeEdge = null
-			previewWidth.persist()
-			window.removeEventListener('mousemove', onMouseMove)
-			window.removeEventListener('mouseup', onMouseUp)
+		// Window listeners as fallback (for when mouse stays outside iframe)
+		function onWindowMouseUp() {
+			handleResizeEnd()
+			window.removeEventListener('mouseup', onWindowMouseUp)
 		}
-
-		window.addEventListener('mousemove', onMouseMove)
-		window.addEventListener('mouseup', onMouseUp)
+		window.addEventListener('mouseup', onWindowMouseUp)
 	}
 </script>
 
@@ -132,9 +135,6 @@
 	bind:this={containerElement}
 	style:--iframe-width="{iframeWidth}%"
 	class:resizing={isDragging}
-	class:resize-active={resizeEdge !== null}
-	onmousedown={handleMouseDown}
-	onmouseleave={() => { if (!isDragging) resizeEdge = null }}
 >
 	<!-- Glow overlay - fixed position, clipped by container's clip-path -->
 	<div 
@@ -144,17 +144,36 @@
 	></div>
 	<div
 		class="iframe-wrapper"
-		bind:this={iframeWrapperElement}
 		class:resize-left={resizeEdge === 'left'}
 		class:resize-right={resizeEdge === 'right'}
 	>
+		<!-- Left resize handle -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div 
+			class="resize-handle resize-handle-left"
+			onmouseenter={() => handleResizeHandleEnter('left')}
+			onmouseleave={handleResizeHandleLeave}
+			onmousedown={(e) => handleResizeStart(e, 'left')}
+		></div>
+		
 		<Email.IframePreview
 			html={contentHtml}
 			bind:height={iframeHeight}
 			title="Email Preview"
 			style="min-height: {containerHeight}px;"
 			scrolling="no"
+			oniframemousemove={handleMouseMove}
+			oniframemouseup={handleIframeMouseUp}
 		/>
+		
+		<!-- Right resize handle -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div 
+			class="resize-handle resize-handle-right"
+			onmouseenter={() => handleResizeHandleEnter('right')}
+			onmouseleave={handleResizeHandleLeave}
+			onmousedown={(e) => handleResizeStart(e, 'right')}
+		></div>
 	</div>
 </div>
 
@@ -229,26 +248,33 @@
 		box-shadow: 6px 0 0 0 #777BDB;
 	}
 
-	.preview-container.resize-active {
+	/* Resize handles - invisible but capture mouse events */
+	.resize-handle {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 12px;
 		cursor: ew-resize;
+		z-index: 10;
+	}
+
+	.resize-handle-left {
+		left: -6px;
+	}
+
+	.resize-handle-right {
+		right: -6px;
 	}
 
 	.preview-container :global(iframe) {
 		display: block;
 		width: 100%;
 		border: none;
-		/* Disable pointer events so mouse events pass through to parent */
-		/* This allows the glow effect and resize detection to work smoothly */
-		pointer-events: none;
 		z-index: 1;
 	}
 
 	.preview-container.resizing {
 		cursor: ew-resize;
 		user-select: none;
-	}
-
-	@keyframes spin {
-		to { transform: rotate(360deg); }
 	}
 </style>

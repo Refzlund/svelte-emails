@@ -11,18 +11,18 @@ for smooth updates without flash, scroll reset, or image reloading.
 - Scroll position is preserved across updates
 - Form state is preserved
 - Auto-sizing height based on content
+- Mouse events inside iframe can be forwarded to parent via `oniframemousemove` and `oniframemouseup`
 
 @example
 ```svelte
 <IframePreview html={emailHtml} />
 ```
 
-@example With custom class
+@example With mouse tracking for effects
 ```svelte
 <IframePreview 
 	html={emailHtml} 
-	class="my-preview"
-	sandbox="allow-scripts"
+	oniframemousemove={(e) => { mouseX = e.clientX; mouseY = e.clientY }}
 />
 ```
 -->
@@ -37,6 +37,10 @@ for smooth updates without flash, scroll reset, or image reloading.
 		height?: number
 		/** Optional snippet to render while loading (before first content) */
 		pending?: Snippet
+		/** Callback for mouse move events inside the iframe (viewport coordinates) */
+		oniframemousemove?: (event: { clientX: number; clientY: number }) => void
+		/** Callback for mouse up events inside the iframe (viewport coordinates) */
+		oniframemouseup?: (event: { clientX: number; clientY: number }) => void
 	}
 </script>
 
@@ -49,6 +53,8 @@ for smooth updates without flash, scroll reset, or image reloading.
 		pending,
 		class: className,
 		style,
+		oniframemousemove,
+		oniframemouseup,
 		...restProps
 	}: IframePreviewProps = $props()
 
@@ -80,6 +86,29 @@ for smooth updates without flash, scroll reset, or image reloading.
 		heightObserver = new ResizeObserver(() => updateHeight(doc))
 		if (doc.body) heightObserver.observe(doc.body)
 		if (doc.documentElement) heightObserver.observe(doc.documentElement)
+	}
+
+	/** Setup mouse event forwarding from iframe to parent */
+	function setupMouseForwarding(doc: Document) {
+		// Helper to convert iframe coords to viewport coords
+		function toViewportCoords(e: MouseEvent) {
+			if (!iframeElement) return null
+			const rect = iframeElement.getBoundingClientRect()
+			return {
+				clientX: rect.left + e.clientX,
+				clientY: rect.top + e.clientY
+			}
+		}
+		
+		doc.addEventListener('mousemove', (e: MouseEvent) => {
+			const coords = toViewportCoords(e)
+			if (coords) oniframemousemove?.(coords)
+		})
+		
+		doc.addEventListener('mouseup', (e: MouseEvent) => {
+			const coords = toViewportCoords(e)
+			if (coords) oniframemouseup?.(coords)
+		})
 	}
 	
 	/** Morphdom options for head - preserve charset and viewport meta tags */
@@ -129,6 +158,7 @@ for smooth updates without flash, scroll reset, or image reloading.
 		if (srcdocContent) loadedHtml = srcdocContent
 		
 		setupHeightObserver(doc)
+		setupMouseForwarding(doc)
 		
 		// Apply any pending HTML that arrived while loading
 		if (pendingHtml && pendingHtml !== srcdocContent) {
