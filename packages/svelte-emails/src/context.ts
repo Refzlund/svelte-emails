@@ -52,6 +52,12 @@ export namespace Mail {
 		maxWidth?: number
 		/** Mobile breakpoint in pixels for responsive styles (defaults to 480) */
 		mobileBreakpoint?: number
+		/**
+		 * Style configuration for this email.
+		 * Merged between base preset and render options:
+		 * `merge(presets.base, Email.style, render.opts.style)`
+		 */
+		style?: import('./styles').StyleConfig
 		children: IRNode[]
 	}
 

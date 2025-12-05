@@ -85,6 +85,18 @@
 	body-bg={colors.background}
 	bg={colors.white}
 	max-w-[700px]
+	style={{
+		Codeblock: {
+			background: '#1f2937',
+			color: '#f9fafb',
+			padding: '12px',
+			fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+			size: '0.875rem',
+			border: {
+				radius: '6px'
+			}
+		}
+	}}
 >
 	<!-- Header -->
 	<Div p-6 bg={colors.primary}>
@@ -215,7 +227,7 @@
 		/>
 		<Spacer h-4 />
 
-		<Div bg={colors.codeBg} p-4 rounded-md border={colors.border} border-1>
+		<Div bg={colors.codeBg} p-4 rounded-md border={colors.border}>
 			<Text.H5 content="**Spacing**" text={colors.text} />
 			<Text content={spacingExamples} text={colors.textMuted} font-mono text-sm />
 			
@@ -249,7 +261,7 @@
 		<Text.H2 content="5. Best Practices" text={colors.text} />
 		<Spacer h-3 />
 		
-		<Div bg={colors.primaryDark} bg-opacity-10 p-4 rounded-md border-l={colors.primary} border-4>
+		<Div bg={colors.primaryDark} bg-opacity-10 p-4 border-l={colors.primary} border-8 border-opacity-25>
 			<Text.H5 content="⚠️ Important Constraints" text={colors.text} />
 			<Spacer h-2 />
 			<Text.Paragraph 

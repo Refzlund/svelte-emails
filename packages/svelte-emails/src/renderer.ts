@@ -178,8 +178,9 @@ const TEXT_VARIANTS: Record<Mail.TextNode['variant'], TextVariantInfo> = {
  * @returns Object containing html, text, and headers outputs
  */
 export function renderTree(root: Mail.EmailNode, options: RenderOptions = {}): RenderOutput {
-	// Merge user style with base preset for complete defaults
-	const style = merge(basePreset, options.style) as StyleConfig
+	// Merge styles in order: basePreset -> Email.style -> render options.style
+	// This allows Email to set defaults that can be overridden at render time
+	const style = merge(merge(basePreset, root.style), options.style) as StyleConfig
 
 	const context: RenderContext = {
 		placeholders: options.placeholders ?? {},
@@ -872,6 +873,7 @@ function getTextVariantStyles(
 		if (config.color) css.color = config.color
 		if (config.background) css.backgroundColor = config.background
 		if (config.padding) css.padding = config.padding
+		// Legacy borderRadius (deprecated, use border.radius)
 		if (config.borderRadius) css.borderRadius = config.borderRadius
 		if (config.fontFamily) css.fontFamily = config.fontFamily
 		if (config.size) css.fontSize = remToPx(config.size, rootSize)
@@ -884,6 +886,28 @@ function getTextVariantStyles(
 		if ('whiteSpace' in config && config.whiteSpace) css.whiteSpace = config.whiteSpace
 		if ('wordWrap' in config && config.wordWrap) css.wordWrap = config.wordWrap
 		if ('overflowWrap' in config && config.overflowWrap) css.overflowWrap = config.overflowWrap
+		// Border object (for code and codeblock)
+		if ('border' in config && config.border) {
+			const border = config.border
+			const borderStyle = border.style ?? 'solid'
+			
+			if (border.width && border.color) {
+				// Check if width is directional or uniform
+				if (typeof border.width === 'object') {
+					// Directional widths
+					const { top, right, bottom, left } = border.width
+					if (top) css.borderTop = `${top} ${borderStyle} ${border.color}`
+					if (right) css.borderRight = `${right} ${borderStyle} ${border.color}`
+					if (bottom) css.borderBottom = `${bottom} ${borderStyle} ${border.color}`
+					if (left) css.borderLeft = `${left} ${borderStyle} ${border.color}`
+				} else {
+					// Uniform width
+					css.border = `${border.width} ${borderStyle} ${border.color}`
+				}
+			}
+			// border.radius overrides legacy borderRadius
+			if (border.radius) css.borderRadius = border.radius
+		}
 
 		return css
 	}

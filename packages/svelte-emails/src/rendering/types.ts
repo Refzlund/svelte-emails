@@ -157,6 +157,16 @@ export interface ParsedAttrs {
 	borderOpacity?: number
 	/** Responsive visibility mode */
 	responsive?: 'mobile-only' | 'desktop-only'
+	/** 
+	 * Tracks which border sides have been explicitly colored (for directional border logic).
+	 * When directional colors are set, uniform border-width applies only to those sides.
+	 */
+	borderSidesWithColor?: Set<'top' | 'right' | 'bottom' | 'left'>
+	/**
+	 * Uniform border width from border-N (stored separately for post-processing).
+	 * Applied to directional sides if any, otherwise all sides.
+	 */
+	uniformBorderWidth?: string
 }
 
 // ============================================================================

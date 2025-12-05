@@ -181,6 +181,9 @@ export type {
 	DividerStyle,
 	CodeStyle,
 	CodeblockStyle,
+	CodeblockBorderStyle,
+	BorderStyle,
+	DirectionalWidth,
 	HighlightStyle,
 	UnsubscribeStyle,
 	TableStyle

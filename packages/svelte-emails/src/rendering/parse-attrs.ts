@@ -198,15 +198,70 @@ export function parseAttrs(
 	}
 
 	// Apply inherited border color with opacity if border-opacity-* was used 
-	// but no explicit border-[#color] was specified
+	// but no explicit border-[#color] was specified.
+	// ONLY apply to sides that don't already have a directional color set.
 	if (result.borderOpacity !== undefined && !result.css.borderColor) {
-		// Use inherited border color (which defaults to text color)
-		const inheritedBorderColor = inherited.borderColor ?? inherited.color ?? '#000000'
-		const finalOpacity = result.borderOpacity * effectiveInherited.opacity
-		if (finalOpacity < 1) {
-			result.css.borderColor = blendColor(inheritedBorderColor, inherited.backgroundColor, finalOpacity)
+		const sides = result.borderSidesWithColor
+		
+		// Only apply uniform borderColor if NO directional colors are set
+		// (If directional colors exist, they already have opacity applied)
+		if (!sides || sides.size === 0) {
+			// Use inherited border color (which defaults to text color)
+			const inheritedBorderColor = inherited.borderColor ?? inherited.color ?? '#000000'
+			const finalOpacity = result.borderOpacity * effectiveInherited.opacity
+			if (finalOpacity < 1) {
+				result.css.borderColor = blendColor(inheritedBorderColor, inherited.backgroundColor, finalOpacity)
+			} else {
+				result.css.borderColor = inheritedBorderColor
+			}
+		}
+	}
+
+	// Post-process uniform border width and style:
+	// If directional colors are set, apply width/style only to those sides.
+	// If no directional colors, apply to all sides (normal behavior).
+	const sides = result.borderSidesWithColor
+	
+	if (result.uniformBorderWidth) {
+		const width = result.uniformBorderWidth
+
+		if (sides && sides.size > 0) {
+			// Apply width only to sides that have directional colors
+			if (sides.has('top') && !result.css.borderTopWidth) {
+				result.css.borderTopWidth = width
+			}
+			if (sides.has('right') && !result.css.borderRightWidth) {
+				result.css.borderRightWidth = width
+			}
+			if (sides.has('bottom') && !result.css.borderBottomWidth) {
+				result.css.borderBottomWidth = width
+			}
+			if (sides.has('left') && !result.css.borderLeftWidth) {
+				result.css.borderLeftWidth = width
+			}
 		} else {
-			result.css.borderColor = inheritedBorderColor
+			// No directional colors - apply to all sides via shorthand
+			result.css.borderWidth = width
+		}
+	}
+
+	// If we have a uniform border style but directional colors, convert to directional styles
+	if (result.css.borderStyle && sides && sides.size > 0) {
+		const style = result.css.borderStyle
+		delete result.css.borderStyle // Remove uniform style
+		
+		// Apply style only to sides with colors
+		if (sides.has('top') && !result.css.borderTopStyle) {
+			result.css.borderTopStyle = style
+		}
+		if (sides.has('right') && !result.css.borderRightStyle) {
+			result.css.borderRightStyle = style
+		}
+		if (sides.has('bottom') && !result.css.borderBottomStyle) {
+			result.css.borderBottomStyle = style
+		}
+		if (sides.has('left') && !result.css.borderLeftStyle) {
+			result.css.borderLeftStyle = style
 		}
 	}
 
@@ -889,6 +944,12 @@ function parseTypography(
 
 /**
  * Parse border attributes: border-*, rounded-*
+ * 
+ * Border width/color interaction:
+ * - `border-N` sets uniform width (stored in uniformBorderWidth for post-processing)
+ * - `border-l={color}` sets directional color AND marks that side as active
+ * - Post-processing applies uniform width to active sides only (or all sides if none marked)
+ * 
  * Note: border-radius is not supported in Outlook Windows.
  */
 function parseBorder(
@@ -897,62 +958,119 @@ function parseBorder(
 	inherited: InheritedStyles,
 	rootSize: number
 ): boolean {
-	// Border width shortcuts
+	// Helper to mark a side as having a directional color
+	const markSide = (side: 'top' | 'right' | 'bottom' | 'left') => {
+		if (!result.borderSidesWithColor) result.borderSidesWithColor = new Set()
+		result.borderSidesWithColor.add(side)
+	}
+
+	// Border width shortcut: border (1px default)
 	if (attr === 'border') {
-		result.css.borderWidth = '1px'
-		result.css.borderStyle = 'solid'
+		result.uniformBorderWidth = '1px'
+		if (!result.css.borderStyle) result.css.borderStyle = 'solid'
 		return true
 	}
 
 	// Border width scale: border-{0|1|2|4|8}
 	let match = attr.match(BORDER_WIDTH_SCALE_RE)
 	if (match) {
-		result.css.borderWidth = BORDER_WIDTHS[match[1]] || `${match[1]}px`
-		// Only set solid as default if no explicit border style was specified
+		result.uniformBorderWidth = BORDER_WIDTHS[match[1]] || `${match[1]}px`
 		if (match[1] !== '0' && !result.css.borderStyle) result.css.borderStyle = 'solid'
 		return true
 	}
 
-	// Border width arbitrary: border-[value]
+	// Border width arbitrary: border-[Npx] (non-color value)
 	match = attr.match(BORDER_WIDTH_ARBITRARY_RE)
 	if (match) {
-		result.css.borderWidth = match[1].includes('px') ? match[1] : `${match[1]}px`
-		// Only set solid as default if no explicit border style was specified
+		result.uniformBorderWidth = match[1].includes('px') ? match[1] : `${match[1]}px`
 		if (!result.css.borderStyle) result.css.borderStyle = 'solid'
 		return true
 	}
 
-	// Border per-side: border-{t|r|b|l}
+	// Border per-side: border-{t|r|b|l} (can be width or color)
 	match = attr.match(BORDER_SIDE_RE)
 	if (match) {
-		const sideMap = { t: 'Top', r: 'Right', b: 'Bottom', l: 'Left' }
-		const side = sideMap[match[1] as keyof typeof sideMap]
-		const value = match[3] || (match[2] ? BORDER_WIDTHS[match[2]] : '1px')
-		result.css[`border${side}Width`] = value
-		// Only set solid as default if no explicit border style was specified
-		if (value !== '0' && !result.css[`border${side}Style`]) result.css[`border${side}Style`] = 'solid'
+		const sideMapUpper = { t: 'Top', r: 'Right', b: 'Bottom', l: 'Left' } as const
+		const sideMapLower = { t: 'top', r: 'right', b: 'bottom', l: 'left' } as const
+		const side = sideMapUpper[match[1] as keyof typeof sideMapUpper]
+		const sideLower = sideMapLower[match[1] as keyof typeof sideMapLower]
+		const arbitraryValue = match[3] // value inside brackets, e.g., '#10b981' or '2px'
+
+		// Check if the value is a color (starts with #) or a width
+		if (arbitraryValue && arbitraryValue.startsWith('#')) {
+			// It's a color: border-l-[#hex] or border-l={color}
+			// This marks the side as active for directional border
+			markSide(sideLower)
+			
+			const { color, opacity } = parseColorWithOpacity(arbitraryValue)
+			const modifierOpacity = result.borderOpacity ?? 1
+			const finalOpacity = opacity * modifierOpacity * inherited.opacity
+			if (finalOpacity < 1) {
+				result.css[`border${side}Color`] = blendColor(color, inherited.backgroundColor, finalOpacity)
+			} else {
+				result.css[`border${side}Color`] = color
+			}
+			// Only set solid as default if no explicit border style was specified
+			if (!result.css[`border${side}Style`]) result.css[`border${side}Style`] = 'solid'
+		} else {
+			// It's a width: border-l-2, border-l-[3px], or just border-l (default 1px)
+			// Explicit directional width overrides uniform width for this side
+			const value = arbitraryValue || (match[2] ? BORDER_WIDTHS[match[2]] : '1px')
+			result.css[`border${side}Width`] = value
+			// Only set solid as default if no explicit border style was specified
+			if (value !== '0' && !result.css[`border${side}Style`]) result.css[`border${side}Style`] = 'solid'
+		}
 		return true
 	}
 
-	// Border x/y: border-{x|y}
+	// Border x/y: border-{x|y} (can be width or color)
 	match = attr.match(BORDER_AXIS_RE)
 	if (match) {
-		const value = match[3] || (match[2] ? BORDER_WIDTHS[match[2]] : '1px')
-		if (match[1] === 'x') {
-			result.css.borderLeftWidth = value
-			result.css.borderRightWidth = value
-			// Only set solid as default if no explicit border style was specified
-			if (value !== '0') {
+		const arbitraryValue = match[3] // value inside brackets
+
+		// Check if the value is a color (starts with #) or a width
+		if (arbitraryValue && arbitraryValue.startsWith('#')) {
+			// It's a color: border-x-[#hex] or border-x={color}
+			const { color, opacity } = parseColorWithOpacity(arbitraryValue)
+			const modifierOpacity = result.borderOpacity ?? 1
+			const finalOpacity = opacity * modifierOpacity * inherited.opacity
+			const blendedColor = finalOpacity < 1
+				? blendColor(color, inherited.backgroundColor, finalOpacity)
+				: color
+
+			if (match[1] === 'x') {
+				markSide('left')
+				markSide('right')
+				result.css.borderLeftColor = blendedColor
+				result.css.borderRightColor = blendedColor
 				if (!result.css.borderLeftStyle) result.css.borderLeftStyle = 'solid'
 				if (!result.css.borderRightStyle) result.css.borderRightStyle = 'solid'
-			}
-		} else {
-			result.css.borderTopWidth = value
-			result.css.borderBottomWidth = value
-			// Only set solid as default if no explicit border style was specified
-			if (value !== '0') {
+			} else {
+				markSide('top')
+				markSide('bottom')
+				result.css.borderTopColor = blendedColor
+				result.css.borderBottomColor = blendedColor
 				if (!result.css.borderTopStyle) result.css.borderTopStyle = 'solid'
 				if (!result.css.borderBottomStyle) result.css.borderBottomStyle = 'solid'
+			}
+		} else {
+			// It's a width: border-x-2, border-x-[3px], or just border-x (default 1px)
+			// Explicit directional width
+			const value = arbitraryValue || (match[2] ? BORDER_WIDTHS[match[2]] : '1px')
+			if (match[1] === 'x') {
+				result.css.borderLeftWidth = value
+				result.css.borderRightWidth = value
+				if (value !== '0') {
+					if (!result.css.borderLeftStyle) result.css.borderLeftStyle = 'solid'
+					if (!result.css.borderRightStyle) result.css.borderRightStyle = 'solid'
+				}
+			} else {
+				result.css.borderTopWidth = value
+				result.css.borderBottomWidth = value
+				if (value !== '0') {
+					if (!result.css.borderTopStyle) result.css.borderTopStyle = 'solid'
+					if (!result.css.borderBottomStyle) result.css.borderBottomStyle = 'solid'
+				}
 			}
 		}
 		return true

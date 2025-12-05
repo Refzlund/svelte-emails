@@ -104,22 +104,28 @@ export const base: StyleConfig = {
 		color: '#1f2937',
 		background: '#f3f4f6',
 		padding: '2px 6px',
-		borderRadius: '4px',
 		fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-		size: '0.875em'
+		size: '0.875em',
+		// Border configuration
+		border: {
+			radius: '4px'
+		}
 	},
 	Codeblock: {
 		color: '#1f2937',
 		background: '#f3f4f6',
 		padding: '16px',
-		borderRadius: '8px',
 		fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
 		size: '0.875rem',
 		lineHeight: 1.5,
 		// Whitespace handling for proper code display
 		whiteSpace: 'pre-wrap',
 		wordWrap: 'break-word',
-		overflowWrap: 'break-word'
+		overflowWrap: 'break-word',
+		// Border configuration
+		border: {
+			radius: '8px'
+		}
 	},
 	Highlight: {
 		color: 'inherit',

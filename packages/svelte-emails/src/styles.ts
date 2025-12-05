@@ -8,6 +8,43 @@
  */
 
 // ============================================================================
+// Shared Types
+// ============================================================================
+
+/**
+ * Directional border width configuration.
+ * Allows specifying different widths for each side.
+ */
+export interface DirectionalWidth {
+	/** Top border width */
+	top?: string
+	/** Right border width */
+	right?: string
+	/** Bottom border width */
+	bottom?: string
+	/** Left border width */
+	left?: string
+}
+
+/**
+ * Border style configuration.
+ * Reusable interface for components that support borders.
+ */
+export interface BorderStyle {
+	/** Border color */
+	color?: string
+	/** 
+	 * Border width - can be a single value or directional object.
+	 * @example '1px' or { top: '2px', bottom: '1px' }
+	 */
+	width?: string | DirectionalWidth
+	/** Border style (solid, dashed, dotted) */
+	style?: 'solid' | 'dashed' | 'dotted'
+	/** Border radius (e.g., '8px', '0.5rem') */
+	radius?: string
+}
+
+// ============================================================================
 // Style Configuration Types
 // ============================================================================
 
@@ -163,13 +200,20 @@ export interface CodeStyle {
 	background?: string
 	/** Padding */
 	padding?: string
-	/** Border radius */
+	/** @deprecated Use border.radius instead */
 	borderRadius?: string
+	/** Border configuration */
+	border?: BorderStyle
 	/** Font family */
 	fontFamily?: string
 	/** Font size */
 	size?: string
 }
+
+/**
+ * @deprecated Use BorderStyle instead
+ */
+export type CodeblockBorderStyle = BorderStyle
 
 /**
  * Code block style configuration.
@@ -181,8 +225,10 @@ export interface CodeblockStyle {
 	background?: string
 	/** Padding */
 	padding?: string
-	/** Border radius */
+	/** @deprecated Use border.radius instead */
 	borderRadius?: string
+	/** Border configuration */
+	border?: BorderStyle
 	/** Font family */
 	fontFamily?: string
 	/** Font size */

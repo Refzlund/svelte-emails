@@ -321,6 +321,7 @@ Components register via Svelte context using stable `Symbol.for()` keys (require
   bg-[#ffffff]
   max-w-[700px]
   mobile-threshold-[425px]
+  style={{ Codeblock: { border: { radius: '8px' } } }}
 >
   ...
 </Email>
@@ -333,10 +334,13 @@ Components register via Svelte context using stable `Symbol.for()` keys (require
 | `bg-[#hex]` | Content container background | `#ffffff` |
 | `max-w-[Npx]` | Content container max-width | `600px` |
 | `mobile-threshold-[Npx]` | Breakpoint for responsive styles | `480px` |
+| `style` | StyleConfig overrides for this email | `{}` |
 
 The `body-bg-*` is the root color for opacity blending throughout the email.
 
 The `mobile-threshold` controls when `responsive` columns stack, and when `mobile-only`/`desktop-only` toggle visibility. Use lower values for tighter responsiveness (stacks later), higher for looser (stacks earlier).
+
+The `style` prop allows setting component-level defaults for this email. Styles are merged in order: `presets.base` → `Email.style` → `render().style`, so email-level styles override presets but can be further overridden at render time.
 
 ### Div (Container / Grid)
 
@@ -704,7 +708,14 @@ Max-width presets: `sm` (384px), `md` (448px), `lg` (512px), `xl` (576px), `2xl`
 <Div border-2 border-dashed rounded-lg />
 <Div border="2px" rounded="8px" />  <!-- value syntax -->
 <Div border-opacity-50 />       <!-- Border color opacity -->
+
+<!-- Directional borders (colors control which sides get the border) -->
+<Div border-l={color} border-4 />       <!-- Left border only -->
+<Div border-x={color} border-2 />       <!-- Left + right borders -->
+<Div border-t={color} border-b="#ccc" border-1 />  <!-- Top + bottom -->
 ```
+
+**Directional border behavior:** When using directional color attributes (`border-l`, `border-t`, etc.), the `border-N` width is applied **only to sides with colors set**. This allows creating partial borders without extra CSS.
 
 Rounded: `none`, `sm`, `(default)`, `md`, `lg`, `xl`, `2xl`, `3xl`, `full`, `[10px]`
 
@@ -1108,27 +1119,37 @@ const style = merge(presets.base, {
 ### Preset Structure
 
 ```ts
-interface StylePreset {
+// Reusable border configuration
+interface BorderStyle {
+  color?: string
+  width?: string | { top?: string; right?: string; bottom?: string; left?: string }
+  style?: 'solid' | 'dashed' | 'dotted'
+  radius?: string
+}
+
+interface StyleConfig {
   root: {
     color: string
     background: string
     size: number         // Root font size in px (default: 16)
     lineHeight: string | number
     fontFamily: string
+    monoFontFamily: string
   }
   Text: {
     color: string
     H1: { size, weight, lineHeight, rule?: { color, thickness, spacing } }
-    // H2-H6, Paragraph, Small
+    // H2-H6, Paragraph, Small, Span
   }
   Link: { color, textDecoration }
   Button: { color, background, padding, borderRadius, fontWeight }
   Spacer: { size }
   Divider: { color, thickness, style }
-  Code: { color, background, padding, borderRadius, fontFamily, size }
-  Codeblock: { ... }
+  Code: { color, background, padding, fontFamily, size, border?: BorderStyle }
+  Codeblock: { color, background, padding, fontFamily, size, lineHeight, border?: BorderStyle }
   Highlight: { color, background }
   Unsubscribe: { color, size }
+  Table: { borderColor, borderWidth, headerBackground, ... }
 }
 ```
 

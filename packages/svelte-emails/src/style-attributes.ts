@@ -95,6 +95,18 @@ export type BorderValueAttributes = ValueAttributes<never>
  * These can be either boolean (enable border) or string (set border color/width).
  * - Boolean: `<Div border>` - enables default border
  * - String: `<Div border={colors.border}>` - sets border color
+ * 
+ * **Directional border behavior:**
+ * When using directional colors (e.g., `border-l={color}`), the uniform width
+ * from `border-N` is applied **only to sides with colors set**. This allows
+ * creating partial borders without specifying width on each side.
+ * 
+ * @example
+ * ```svelte
+ * <Div border-l={color} border-4 />       <!-- Left border only -->
+ * <Div border-x={color} border-2 />       <!-- Left + right borders -->
+ * <Div border-t="#ccc" border-b="#ccc" border-1 />  <!-- Top + bottom -->
+ * ```
  */
 export type BorderDualAttributes = {
 	border?: boolean | string

@@ -49,17 +49,24 @@ This affects `responsive` columns, `mobile-only`, and `desktop-only` elements.
 <script lang='ts'>
 	import type { Snippet } from 'svelte'
 	import type { EmailAttributes } from './style-attributes'
+	import type { StyleConfig } from './styles'
 	import { setEmailParent, normalizeAttrs, type Mail, type Collector, EMAIL_ROOT_CONTEXT_KEY } from './context'
 	import { getContext } from 'svelte'
 
 	export interface Props extends EmailAttributes {
 		/** Preview text shown in email client inbox (before opening) */
 		preview?: string
+		/**
+		 * Style configuration for this email.
+		 * These styles are merged between base preset and render options:
+		 * `merge(presets.base, Email.style, render.opts.style)`
+		 */
+		style?: StyleConfig
 		/** Email content */
 		children?: Snippet
 	}
 
-	const { preview = '', children, ...attrs }: Props = $props()
+	const { preview = '', style, children, ...attrs }: Props = $props()
 
 	// Get collector from Svelte context
 	// In SSR: render() passes collector via context Map
@@ -133,7 +140,8 @@ This affects `responsive` columns, `mobile-only`, and `desktop-only` elements.
 		get preview() { return preview },
 		get bodyBackground() { return bodyBackground },
 		get maxWidth() { return maxWidth },
-		get mobileBreakpoint() { return mobileBreakpoint }
+		get mobileBreakpoint() { return mobileBreakpoint },
+		get style() { return style }
 	})
 	
 	// Register with collector
