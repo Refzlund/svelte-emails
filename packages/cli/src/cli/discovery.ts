@@ -1,6 +1,6 @@
 import fg from 'fast-glob'
 import { readFileSync, existsSync } from 'node:fs'
-import { basename, relative, join } from 'node:path'
+import { basename, relative, join, dirname } from 'node:path'
 import type { EmailFile, ViewMode } from './types.js'
 
 export type { EmailFile, ViewMode }
@@ -39,17 +39,24 @@ function extractName(filename: string): string {
  * - Expressions: attr={someVar.method()} -> returns raw expression
  */
 function extractEmailAttribute(content: string, attrName: string): string {
-	// Find <Email tag start
-	const emailTagMatch = content.match(/<Email\b/)
+	// Skip the script section to avoid matching <Email> in string literals
+	// Look for closing </script> tag and search from there
+	const scriptEndMatch = content.match(/<\/script>/i)
+	const searchContent = scriptEndMatch 
+		? content.slice(scriptEndMatch.index! + scriptEndMatch[0].length)
+		: content
+	
+	// Find <Email tag start in the markup section
+	const emailTagMatch = searchContent.match(/<Email\b/)
 	if (!emailTagMatch) return ''
 	
 	const startIdx = emailTagMatch.index!
 	// Find the matching > considering multiline tags
 	let depth = 0
 	let endIdx = startIdx
-	for (let i = startIdx; i < content.length; i++) {
-		if (content[i] === '<') depth++
-		else if (content[i] === '>') {
+	for (let i = startIdx; i < searchContent.length; i++) {
+		if (searchContent[i] === '<') depth++
+		else if (searchContent[i] === '>') {
 			if (depth === 1) {
 				endIdx = i
 				break
@@ -58,7 +65,7 @@ function extractEmailAttribute(content: string, attrName: string): string {
 		}
 	}
 	
-	const emailTag = content.slice(startIdx, endIdx + 1)
+	const emailTag = searchContent.slice(startIdx, endIdx + 1)
 	
 	// Pattern for attr="value" (double quotes can contain single quotes)
 	const doubleQuotePattern = new RegExp(`${attrName}="([^"]*)"`)
@@ -295,6 +302,13 @@ export async function discoverSvelteFiles(
 			} catch {
 				// Ignore read errors
 			}
+		}
+
+		// For bundled files, use folder name as category if not specified in <Email>
+		// e.g., "1. Getting Started/Introduction.svelte" -> category: "1. Getting Started"
+		// Handle both forward slashes (Unix) and backslashes (Windows)
+		if (!category && (relativePath.includes('/') || relativePath.includes('\\'))) {
+			category = dirname(relativePath).replace(/\\/g, '/')
 		}
 
 		items.push({

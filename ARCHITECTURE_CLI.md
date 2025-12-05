@@ -22,10 +22,15 @@ The CLI provides a development server for previewing `*.email.svelte` templates 
 ```
 packages/cli/
 ├── src/
-│   ├── cli.ts                 # CLI entry point (future)
+│   ├── cli.ts                 # CLI entry point
 │   ├── app.html               # SvelteKit HTML template
 │   ├── app.d.ts               # Type declarations
 │   ├── hooks.client.ts        # Client-side hooks (console warning suppression)
+│   ├── documentation/         # Bundled documentation pages
+│   │   └── 1. Getting Started/
+│   │       └── Introduction.svelte
+│   ├── examples/              # Bundled example emails
+│   │   └── Newsletter.svelte
 │   ├── lib/
 │   │   ├── email-store.ts     # Client-side SSE state management
 │   │   ├── page-cache.ts      # Client-side cache for instant navigation
@@ -33,6 +38,9 @@ packages/cli/
 │   │   ├── highlight.svelte.ts # Off-thread syntax highlighting with caching
 │   │   ├── Icons.svelte       # SVG icons as Svelte snippets
 │   │   ├── components/
+│   │   │   ├── Sidebar.svelte       # Navigation sidebar
+│   │   │   ├── sidebar.svelte.ts    # Sidebar state & navigation logic
+│   │   │   ├── EmailViewer.svelte   # Shared viewer for all modes
 │   │   │   ├── EmailPreview.svelte  # Resizable iframe preview
 │   │   │   ├── CodeView.svelte      # Syntax-highlighted code panel
 │   │   │   └── LoadingBar.svelte    # Animated loading indicator
@@ -45,11 +53,11 @@ packages/cli/
 │   │       ├── utils.ts       # Utility functions (path normalization, debounce)
 │   │       └── vite-plugin.ts # Core Vite plugin
 │   └── routes/
-│       ├── +layout.svelte     # Main layout with sidebar + shallow routing
+│       ├── +layout.svelte     # Main layout (uses Sidebar component)
 │       ├── +page.svelte       # Index redirect
-│       └── [email]/
-│           ├── +page.svelte   # Email viewer with tabs
-│           └── +page.ts       # Client-side load function
+│       ├── [email]/           # Email viewer routes
+│       ├── examples/[file]/   # Example viewer routes
+│       └── documentation/[file]/ # Documentation viewer routes
 ├── static/
 │   └── theme.css              # CSS variables and theme
 ├── vite.config.ts             # Vite configuration
@@ -97,6 +105,21 @@ Emails can be grouped into collapsible folders in the sidebar using the `categor
 - Folders and their contents are sorted alphabetically
 - Emails without a category appear at the top level (uncategorized)
 - Category changes are detected on file save without server restart
+
+#### Folder-Based Categories for Bundled Files
+
+For bundled documentation and examples (in `src/documentation/` and `src/examples/`), 
+categories are automatically inferred from the folder structure:
+
+```
+src/documentation/
+├── 1. Getting Started/
+│   └── Introduction.svelte     # category: "1. Getting Started"
+└── ComponentShowcase.svelte    # category: "" (uncategorized)
+```
+
+This allows organizing bundled content without requiring a `category` attribute in each file.
+The explicit `<Email category="...">` attribute takes precedence if specified.
 
 ### 2. Vite Plugin (`vite-plugin.ts`)
 
@@ -282,19 +305,44 @@ export function createHighlightManager(): {
 
 #### Layout (`+layout.svelte`)
 
-- Renders sidebar with email list
-- Subscribes to `emailStore` for live updates
-- Initial data from `virtual:email-list` (SSR-safe)
-- Footer links to documentation and examples
+- Minimal layout that renders `<Sidebar />` component
+- Handles service worker cleanup on mount
 
-#### Email Viewer (`[email]/+page.svelte`)
+#### Sidebar Component (`Sidebar.svelte` + `sidebar.svelte.ts`)
+
+Navigation sidebar with email/example/documentation list:
+
+```typescript
+// sidebar.svelte.ts - Extracted state logic
+const sidebar = createSidebarState()
+
+sidebar.viewMode        // 'emails' | 'examples' | 'documentation'
+sidebar.currentList     // Items for current mode
+sidebar.navStructure    // { uncategorized, folders } for rendering
+sidebar.navTitle        // Display title (e.g., "*.email.svelte")
+sidebar.selectedId      // Currently selected item ID
+sidebar.handleItemClick // Navigate with shallow routing
+sidebar.toggleFolder    // Expand/collapse folder
+sidebar.navigateToMode  // Switch between modes
+```
+
+Features:
+- Three view modes: emails (user's templates), examples (bundled), documentation (bundled)
+- Folder grouping via `category` attribute or folder structure
+- Shallow routing for instant navigation
+- SSE subscription for live updates
+- Zebra-striped rows with alternating backgrounds
+
+#### EmailViewer Component (`EmailViewer.svelte`)
+
+Shared viewer for all view modes (emails, examples, documentation):
 
 - Tabbed interface: Preview, Source, HTML, Text
 - HTML tab has Formatted/Raw toggle (Raw shows minified output)
 - Uses `createViewMode()` for URL-synced tab state
 - Listens for `content-change` events to trigger reload
 - Client-side data fetching for instant navigation
-- Prefetches adjacent emails for instant navigation
+- Prefetches adjacent items for instant navigation
 
 #### EmailPreview Component
 

@@ -10,6 +10,9 @@ import { join } from 'node:path'
 const VIRTUAL_MODULE_ID = 'virtual:email-list'
 const RESOLVED_VIRTUAL_MODULE_ID = '\0' + VIRTUAL_MODULE_ID
 
+/** Common watcher ignore patterns */
+const WATCHER_IGNORE = ['**/node_modules/**', '**/.git/**', '**/.svelte-kit/**']
+
 export interface EmailListPluginOptions {
 	cwd: string
 	/**
@@ -20,13 +23,46 @@ export interface EmailListPluginOptions {
 	watchBundled?: boolean
 }
 
-/**
- * All files organized by mode
- */
+/** All files organized by mode */
 interface AllFiles {
 	emails: EmailFile[]
 	examples: EmailFile[]
 	documentation: EmailFile[]
+}
+
+/** Get all file paths from AllFiles */
+function getAllPaths(files: AllFiles): Set<string> {
+	return new Set([
+		...files.emails.map((e) => e.path),
+		...files.examples.map((e) => e.path),
+		...files.documentation.map((e) => e.path)
+	])
+}
+
+/** Get all files as flat array */
+function getAllFilesFlat(files: AllFiles): EmailFile[] {
+	return [...files.emails, ...files.examples, ...files.documentation]
+}
+
+/** Convert AllFiles to safe format for client */
+function toSafeAllFiles(files: AllFiles) {
+	return {
+		emails: toSafeEmails(files.emails),
+		examples: toSafeEmails(files.examples),
+		documentation: toSafeEmails(files.documentation)
+	}
+}
+
+/** Create a chokidar watcher with standard options */
+function createWatcher(paths: string[], depth: number): FSWatcher {
+	return watch(paths, {
+		ignored: WATCHER_IGNORE,
+		ignoreInitial: true,
+		persistent: true,
+		usePolling: false,
+		depth,
+		awaitWriteFinish: { stabilityThreshold: 50, pollInterval: 20 }
+	})
 }
 
 /**
@@ -38,23 +74,25 @@ interface AllFiles {
 export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 	let allFiles: AllFiles = { emails: [], examples: [], documentation: [] }
 	let watcher: FSWatcher | null = null
+	let bundledWatcher: FSWatcher | null = null
 	let discoveryInterval: ReturnType<typeof setInterval> | null = null
 	const sseClients: Set<ServerResponse> = new Set()
 
-	/**
-	 * Broadcast an SSE event to all connected clients
-	 */
+	/** Broadcast an SSE event to all connected clients */
 	function broadcastUpdate(event: string, data: unknown): void {
 		const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
 		for (const client of sseClients) {
 			try {
-				if (!client.writableEnded) {
-					client.write(message)
-				}
+				if (!client.writableEnded) client.write(message)
 			} catch {
 				sseClients.delete(client)
 			}
 		}
+	}
+
+	/** Broadcast email list update */
+	function broadcastEmailList(event: string, path: string): void {
+		broadcastUpdate('emails', { ...toSafeAllFiles(allFiles), event, path })
 	}
 
 	return {
@@ -65,25 +103,18 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 		},
 
 		resolveId(id) {
-			if (id === VIRTUAL_MODULE_ID) {
-				return RESOLVED_VIRTUAL_MODULE_ID
-			}
+			if (id === VIRTUAL_MODULE_ID) return RESOLVED_VIRTUAL_MODULE_ID
 		},
 
 		load(id) {
 			if (id === RESOLVED_VIRTUAL_MODULE_ID) {
-				// Export all modes separately for the virtual module
-				return `export default ${JSON.stringify({
-					emails: toSafeEmails(allFiles.emails),
-					examples: toSafeEmails(allFiles.examples),
-					documentation: toSafeEmails(allFiles.documentation)
-				}, null, 2)}`
+				return `export default ${JSON.stringify(toSafeAllFiles(allFiles), null, 2)}`
 			}
 		},
 
 		async configureServer(server) {
 			// Discover all files if buildStart hasn't completed yet
-			if (allFiles.emails.length === 0 && allFiles.examples.length === 0 && allFiles.documentation.length === 0) {
+			if (getAllFilesFlat(allFiles).length === 0) {
 				allFiles = await discoverAll(options.cwd)
 			}
 
@@ -92,20 +123,18 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 			// Track watched directories to add new ones dynamically
 			const watchedDirs = new Set<string>()
 
-			// Get unique directories containing email files (only user's emails, not CLI's examples/docs)
+			// Get unique directories containing email files (only user's emails)
 			function getEmailDirs(): string[] {
 				const dirs = new Set<string>()
 				for (const file of allFiles.emails) {
-					const dir = normalizePath(file.path.substring(0, file.path.lastIndexOf('/')))
-					dirs.add(dir)
+					dirs.add(normalizePath(file.path.substring(0, file.path.lastIndexOf('/'))))
 				}
 				return Array.from(dirs)
 			}
 
 			// Add directories to the watcher
-			function updateWatchedDirs() {
-				const currentDirs = getEmailDirs()
-				for (const dir of currentDirs) {
+			function updateWatchedDirs(): void {
+				for (const dir of getEmailDirs()) {
 					if (!watchedDirs.has(dir)) {
 						watchedDirs.add(dir)
 						watcher?.add(dir)
@@ -114,95 +143,52 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 				}
 			}
 
-			// Initial directories to watch (only emails from user's project)
+			// Initial directories to watch
 			const initialDirs = getEmailDirs()
 			initialDirs.forEach((dir) => watchedDirs.add(dir))
 
 			// If no emails found, watch the project root
-			let watchPaths = initialDirs.length > 0 
-				? initialDirs
-				: [normalizePath(options.cwd)]
+			const watchPaths = initialDirs.length > 0 ? initialDirs : [normalizePath(options.cwd)]
 
-			// If watchBundled is enabled, also watch examples and documentation directories
+			// Setup file watcher (depth:0 for user dirs, we dynamically add new dirs)
+			watcher = createWatcher(watchPaths, initialDirs.length > 0 ? 0 : 10)
+
+			// If watchBundled is enabled, add separate watcher for bundled content
 			if (options.watchBundled) {
 				const cliSrcDir = getCliSrcDir()
 				const examplesDir = normalizePath(join(cliSrcDir, 'examples'))
 				const documentationDir = normalizePath(join(cliSrcDir, 'documentation'))
-				watchPaths = [...watchPaths, examplesDir, documentationDir]
+
+				bundledWatcher = createWatcher([examplesDir, documentationDir], 10)
+				bundledWatcher.on('all', (event, filePath) => {
+					if (filePath.endsWith('.svelte')) handleFileChange(event, filePath)
+				})
+
 				console.log(`   [svelte-emails] Watching bundled examples: ${examplesDir}`)
 				console.log(`   [svelte-emails] Watching bundled documentation: ${documentationDir}`)
 			}
 
-			// Setup file watcher - only watch specific directories for performance
-			watcher = watch(watchPaths, {
-				ignored: [
-					'**/node_modules/**',
-					'**/.git/**',
-					'**/.svelte-kit/**'
-				],
-				ignoreInitial: true,
-				persistent: true,
-				usePolling: false,
-				depth: initialDirs.length > 0 ? 0 : 10,
-				awaitWriteFinish: {
-					stabilityThreshold: 50,
-					pollInterval: 20
-				}
-			})
-
-			watcher.on('ready', () => {
-				console.log(`   [svelte-emails] Watching for changes`)
-			})
-
-			watcher.on('error', (error) => {
-				console.error(`   [svelte-emails] Watcher error:`, error)
-			})
+			watcher.on('ready', () => console.log(`   [svelte-emails] Watching for changes`))
+			watcher.on('error', (error) => console.error(`   [svelte-emails] Watcher error:`, error))
 
 			// Periodic discovery to find new files in new directories
-			let lastFilePaths = new Set([
-				...allFiles.emails.map((e) => e.path),
-				...allFiles.examples.map((e) => e.path),
-				...allFiles.documentation.map((e) => e.path)
-			])
+			let lastFilePaths = getAllPaths(allFiles)
 
 			discoveryInterval = setInterval(async () => {
 				try {
-					// Use fast discovery (skip file reads) for periodic checks
 					const newAllFiles = await discoverAll(options.cwd, true)
-					const newPaths = new Set([
-						...newAllFiles.emails.map((e) => e.path),
-						...newAllFiles.examples.map((e) => e.path),
-						...newAllFiles.documentation.map((e) => e.path)
-					])
-					
-					// Check if there are any new or removed files
-					const hasNewFiles = [...newPaths].some((p) => !lastFilePaths.has(p))
-					const hasRemovedFiles = [...lastFilePaths].some((p) => !newPaths.has(p))
-					
-					if (hasNewFiles || hasRemovedFiles) {
-						// Do a full discovery with preview text for the UI
-						const fullFiles = await discoverAll(options.cwd, false)
-						console.log(`   [svelte-emails] Discovered ${fullFiles.emails.length} email(s), ${fullFiles.examples.length} example(s), ${fullFiles.documentation.length} doc(s)`)
-						allFiles = fullFiles
-						lastFilePaths = new Set([
-							...fullFiles.emails.map((e) => e.path),
-							...fullFiles.examples.map((e) => e.path),
-							...fullFiles.documentation.map((e) => e.path)
-						])
-						
-						// Add any new directories to the watcher
+					const newPaths = getAllPaths(newAllFiles)
+
+					const hasChanges = [...newPaths].some((p) => !lastFilePaths.has(p)) ||
+						[...lastFilePaths].some((p) => !newPaths.has(p))
+
+					if (hasChanges) {
+						allFiles = await discoverAll(options.cwd, false)
+						lastFilePaths = getAllPaths(allFiles)
+						console.log(`   [svelte-emails] Discovered ${allFiles.emails.length} email(s), ${allFiles.examples.length} example(s), ${allFiles.documentation.length} doc(s)`)
+
 						updateWatchedDirs()
-						
-						// Broadcast to clients
-						broadcastUpdate('emails', {
-							emails: toSafeEmails(allFiles.emails),
-							examples: toSafeEmails(allFiles.examples),
-							documentation: toSafeEmails(allFiles.documentation),
-							event: 'discovery',
-							path: ''
-						})
-						
-						// Invalidate virtual module
+						broadcastEmailList('discovery', '')
 						invalidateModule(server, RESOLVED_VIRTUAL_MODULE_ID)
 					}
 				} catch {
@@ -216,124 +202,73 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 				console.log(`   [svelte-emails] [${event}] ${normalizedPath}`)
 
 				if (event === 'add' || event === 'unlink') {
-					// File added or removed - do full re-discovery
 					allFiles = await discoverAll(options.cwd, false)
-					lastFilePaths = new Set([
-						...allFiles.emails.map((e) => e.path),
-						...allFiles.examples.map((e) => e.path),
-						...allFiles.documentation.map((e) => e.path)
-					])
-					
-					// Update watched dirs for new files
-					if (event === 'add') {
-						updateWatchedDirs()
-					}
+					lastFilePaths = getAllPaths(allFiles)
+					if (event === 'add') updateWatchedDirs()
 				}
 
-				// For content changes, update the file's metadata (preview, category)
 				if (event === 'change') {
-					const allFilesFlat = [...allFiles.emails, ...allFiles.examples, ...allFiles.documentation]
-					const changedFile = allFilesFlat.find((e) => normalizePath(e.path) === normalizedPath)
+					const changedFile = getAllFilesFlat(allFiles).find((e) => normalizePath(e.path) === normalizedPath)
 					if (changedFile) {
 						try {
-							// Re-read the file to update preview and category
 							const content = await readFile(changedFile.path, 'utf-8')
 							const newPreview = extractPreviewText(content)
 							const newCategory = extractCategory(content)
-							
-							// Check if metadata changed
-							const metadataChanged = changedFile.previewText !== newPreview || changedFile.category !== newCategory
-							
-							if (metadataChanged) {
-								// Update the file's metadata in place
+
+							if (changedFile.previewText !== newPreview || changedFile.category !== newCategory) {
 								changedFile.previewText = newPreview
 								changedFile.category = newCategory
 								console.log(`   [svelte-emails] Updated metadata for ${changedFile.name}`)
 							}
-						} catch {
-							// Ignore read errors
-						}
+						} catch { /* Ignore read errors */ }
 
-						// Invalidate both path formats (Windows compatibility)
 						invalidateModule(server, changedFile.path)
 						invalidateModule(server, normalizedPath)
-
-						broadcastUpdate('content-change', {
-							id: changedFile.id,
-							path: changedFile.relativePath
-						})
+						broadcastUpdate('content-change', { id: changedFile.id, path: changedFile.relativePath })
 					}
 				}
 
-				// Broadcast updated list to all SSE clients
-				broadcastUpdate('emails', {
-					emails: toSafeEmails(allFiles.emails),
-					examples: toSafeEmails(allFiles.examples),
-					documentation: toSafeEmails(allFiles.documentation),
-					event,
-					path: normalizedPath
-				})
-
-				// Invalidate virtual module for fresh imports
+				broadcastEmailList(event, normalizedPath)
 				invalidateModule(server, RESOLVED_VIRTUAL_MODULE_ID)
 			}, 50)
 
 			watcher.on('all', (event, filePath) => {
-				// Watch for .email.svelte files (user's emails)
-				// When watchBundled is enabled, also watch .svelte files (examples/docs)
 				const isEmailFile = filePath.endsWith('.email.svelte')
 				const isBundledSvelteFile = options.watchBundled && filePath.endsWith('.svelte')
-				
-				if (isEmailFile || isBundledSvelteFile) {
-					handleFileChange(event, filePath)
-				}
+				if (isEmailFile || isBundledSvelteFile) handleFileChange(event, filePath)
 			})
 
 			// Return middleware configurator
 			return () => {
 				server.middlewares.use((req, res, next) => {
-					// SSE endpoint
-					if (req.url?.startsWith('/__svelte-emails/events')) {
+					const url = req.url
+					if (!url?.startsWith('/__svelte-emails/')) return next()
+
+					if (url.startsWith('/__svelte-emails/events')) {
 						res.setHeader('Content-Type', 'text/event-stream')
 						res.setHeader('Cache-Control', 'no-cache')
 						res.setHeader('Connection', 'keep-alive')
 						res.setHeader('Access-Control-Allow-Origin', '*')
 						res.flushHeaders()
-
-						// Send initial state
-						res.write(`event: emails\ndata: ${JSON.stringify({
-							emails: toSafeEmails(allFiles.emails),
-							examples: toSafeEmails(allFiles.examples),
-							documentation: toSafeEmails(allFiles.documentation),
-							event: 'init',
-							path: ''
-						})}\n\n`)
-
+						res.write(`event: emails\ndata: ${JSON.stringify({ ...toSafeAllFiles(allFiles), event: 'init', path: '' })}\n\n`)
 						sseClients.add(res)
 						req.on('close', () => sseClients.delete(res))
 						return
 					}
 
-					// API: Get email list
-					if (req.url?.startsWith('/__svelte-emails/list')) {
+					if (url.startsWith('/__svelte-emails/list')) {
 						res.setHeader('Content-Type', 'application/json')
-						res.end(JSON.stringify({
-							emails: toSafeEmails(allFiles.emails),
-							examples: toSafeEmails(allFiles.examples),
-							documentation: toSafeEmails(allFiles.documentation)
-						}))
+						res.end(JSON.stringify(toSafeAllFiles(allFiles)))
 						return
 					}
 
-					// API: Render email
-					if (req.url?.startsWith('/__svelte-emails/render')) {
-						handleRenderRequest(req.url, res, server)
+					if (url.startsWith('/__svelte-emails/render')) {
+						handleRenderRequest(url, res, server)
 						return
 					}
 
-					// API: Proxy image (bypasses CORS)
-					if (req.url?.startsWith('/__svelte-emails/proxy-image')) {
-						handleImageProxy(req.url, res)
+					if (url.startsWith('/__svelte-emails/proxy-image')) {
+						handleImageProxy(url, res)
 						return
 					}
 
@@ -343,100 +278,63 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 		},
 
 		async closeBundle() {
-			if (discoveryInterval) {
-				clearInterval(discoveryInterval)
-			}
-			if (watcher) {
-				await watcher.close()
-			}
+			if (discoveryInterval) clearInterval(discoveryInterval)
+			await watcher?.close()
+			await bundledWatcher?.close()
 		}
 	}
 
-	/**
-	 * Handle /render API requests
-	 */
-	async function handleRenderRequest(
-		url: string,
-		res: ServerResponse,
-		server: ViteDevServer
-	): Promise<void> {
+	/** Handle /render API requests */
+	async function handleRenderRequest(url: string, res: ServerResponse, server: ViteDevServer): Promise<void> {
 		const parsedUrl = new URL(url, 'http://localhost')
 		const emailId = parsedUrl.searchParams.get('id')
 		const mode = parsedUrl.searchParams.get('mode') as ViewMode | null
 
 		if (!emailId) {
 			res.statusCode = 400
-			res.end(JSON.stringify({ error: 'Missing email id' }))
-			return
+			return void res.end(JSON.stringify({ error: 'Missing email id' }))
 		}
 
-		// Search in specific mode if provided, otherwise search all modes
-		let searchList: EmailFile[]
-		if (mode) {
-			searchList = mode === 'emails' ? allFiles.emails 
-				: mode === 'examples' ? allFiles.examples 
-				: allFiles.documentation
-		} else {
-			searchList = [...allFiles.emails, ...allFiles.examples, ...allFiles.documentation]
-		}
+		const searchList = mode
+			? (mode === 'emails' ? allFiles.emails : mode === 'examples' ? allFiles.examples : allFiles.documentation)
+			: getAllFilesFlat(allFiles)
 		const email = searchList.find((e) => e.id === emailId)
 
 		if (!email) {
 			res.statusCode = 404
-			res.end(JSON.stringify({ error: `Email not found: ${emailId}` }))
-			return
+			return void res.end(JSON.stringify({ error: `Email not found: ${emailId}` }))
 		}
 
-		// Verify we have a runnable SSR environment
 		const ssrEnv = server.environments.ssr
 		if (!isRunnableDevEnvironment(ssrEnv)) {
 			res.statusCode = 500
-			res.end(JSON.stringify({ error: 'SSR environment is not runnable' }))
-			return
+			return void res.end(JSON.stringify({ error: 'SSR environment is not runnable' }))
 		}
 
 		try {
-			// Start reading source file immediately (parallel with module imports)
 			const sourcePromise = readFile(email.path, 'utf-8')
-
-			// Import both modules in parallel. Vite's module runner ensures they
-			// share the same module graph state, so render() and the email component
-			// will use the same Svelte instance (required for SSR context to work).
 			const [mod, svelteEmailsModule] = await Promise.all([
 				ssrEnv.runner.import(email.path),
-				ssrEnv.runner.import('svelte-emails') as Promise<{
-					render: Function
-					formatHtml: Function
-				}>
+				ssrEnv.runner.import('svelte-emails') as Promise<{ render: Function; formatHtml: Function }>
 			])
-			const EmailComponent = mod.default
 
-			// Render the email and wait for source in parallel
 			const [rendered, source] = await Promise.all([
-				svelteEmailsModule.render(EmailComponent, { placeholders: {} }),
+				svelteEmailsModule.render(mod.default, { placeholders: {} }),
 				sourcePromise
 			])
 
-			// Send raw HTML - formatting is done client-side in a Web Worker
-			// This reduces server response time significantly for complex emails
 			res.setHeader('Content-Type', 'application/json')
 			res.end(JSON.stringify({
 				email: toSafeEmail(email),
 				source,
-				rendered: {
-					...rendered,
-					html: rendered.html,  // Raw HTML (formatting done client-side)
-					htmlRaw: rendered.html
-				},
+				rendered: { ...rendered, html: rendered.html, htmlRaw: rendered.html },
 				renderError: null
 			}))
 		} catch (err) {
 			console.error(`[svelte-emails] Error when handling request for ${emailId}`, err)
 
 			let source = ''
-			try {
-				source = await readFile(email.path, 'utf-8')
-			} catch { /* ignore */ }
+			try { source = await readFile(email.path, 'utf-8') } catch { /* ignore */ }
 
 			res.setHeader('Content-Type', 'application/json')
 			res.end(JSON.stringify({
@@ -448,38 +346,27 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 		}
 	}
 
-	/**
-	 * Handle image proxy requests (bypasses CORS)
-	 */
-	async function handleImageProxy(
-		url: string,
-		res: ServerResponse
-	): Promise<void> {
-		const parsedUrl = new URL(url, 'http://localhost')
-		const imageUrl = parsedUrl.searchParams.get('url')
+	/** Handle image proxy requests (bypasses CORS) */
+	async function handleImageProxy(url: string, res: ServerResponse): Promise<void> {
+		const imageUrl = new URL(url, 'http://localhost').searchParams.get('url')
 
 		if (!imageUrl) {
 			res.statusCode = 400
-			res.end(JSON.stringify({ error: 'Missing url parameter' }))
-			return
+			return void res.end(JSON.stringify({ error: 'Missing url parameter' }))
 		}
 
 		try {
 			const response = await fetch(imageUrl)
-			
+
 			if (!response.ok) {
 				res.statusCode = response.status
-				res.end(JSON.stringify({ error: `Failed to fetch: ${response.status}` }))
-				return
+				return void res.end(JSON.stringify({ error: `Failed to fetch: ${response.status}` }))
 			}
 
-			const contentType = response.headers.get('content-type') || 'application/octet-stream'
-			const buffer = await response.arrayBuffer()
-
-			res.setHeader('Content-Type', contentType)
-			res.setHeader('Cache-Control', 'public, max-age=31536000') // 1 year
+			res.setHeader('Content-Type', response.headers.get('content-type') || 'application/octet-stream')
+			res.setHeader('Cache-Control', 'public, max-age=31536000')
 			res.setHeader('Access-Control-Allow-Origin', '*')
-			res.end(Buffer.from(buffer))
+			res.end(Buffer.from(await response.arrayBuffer()))
 		} catch (err) {
 			console.error(`[svelte-emails] Image proxy error for ${imageUrl}:`, err)
 			res.statusCode = 500

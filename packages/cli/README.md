@@ -1,38 +1,50 @@
-# sv
+# @svelte-emails/cli
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Development server for previewing `*.email.svelte` templates.
 
-## Creating a project
+## Usage
 
-If you're seeing this, you've probably already done this step. Congrats!
+```bash
+# Run from your project directory
+bunx svelte-emails
 
-```sh
-# create a new project in the current directory
-npx sv create
+# With options
+bunx svelte-emails --port 3000 --open
 
-# create a new project in my-app
-npx sv create my-app
+# Scan a specific directory
+bunx svelte-emails --cwd ./packages/emails
 ```
 
-## Developing
+## Features
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+- **Live reload** — Changes to `*.email.svelte` files update instantly
+- **Multiple views** — Preview, Source, HTML (formatted/raw), Text
+- **Folder grouping** — Organize emails with `category` attribute or folder structure
+- **Resizable preview** — Drag edges to resize, persisted to localStorage
+- **Syntax highlighting** — Shiki-powered highlighting (off-thread worker)
+- **Image proxy** — Bypasses CORS for external images
 
-```sh
-npm run dev
+## Options
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--port` | `-p` | Port number | 33411 |
+| `--open` | `-o` | Open browser | false |
+| `--cwd` | | Directory to scan | `process.cwd()` |
+| `--help` | `-h` | Show help | |
+
+## Folder Grouping
+
+Emails can be grouped into collapsible folders:
+
+```svelte
+<Email category="Receipts" preview="Order confirmation">
+  <!-- Email content -->
+</Email>
 ```
 
-## Building
+Emails with the same `category` appear in a folder. Emails without a category appear at the top level.
 
-To create a production version of your app:
+## Architecture
 
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+See [ARCHITECTURE_CLI.md](../../ARCHITECTURE_CLI.md) for detailed documentation on the internal architecture.
