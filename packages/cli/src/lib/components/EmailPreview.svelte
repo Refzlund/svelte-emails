@@ -7,19 +7,27 @@
 
 @example
 ```svelte
-<EmailPreview html={renderedHtml} />
+<EmailPreview html={renderedHtml} emailId="my-email" />
 ```
 -->
 <script lang="ts">
 	import { createImageCache } from '$lib/image-cache.svelte'
 	import { createPreviewWidth } from '$lib/utils/preview-width.svelte'
+	import { saveScrollPosition, getScrollPosition, shouldRestore } from '$lib/utils/scroll-positions.svelte'
 	import { Email } from 'svelte-emails'
 
 	interface Props {
 		html: string
+		/** Email ID for scroll position persistence */
+		emailId?: string
+		/** Mode for namespacing scroll positions (emails, examples, documentation) */
+		mode?: string
 	}
 
-	const { html }: Props = $props()
+	const { html, emailId, mode }: Props = $props()
+
+	/** Combined key for scroll position storage */
+	const scrollKey = $derived(emailId && mode ? `${mode}:${emailId}` : emailId)
 
 	const imageCache = createImageCache()
 
@@ -78,6 +86,43 @@
 		dragStartWidth = iframeWidth
 		dragContainerWidth = containerElement.getBoundingClientRect().width
 	}
+
+	// Save scroll position when scrolling
+	function handleScroll() {
+		if (scrollKey && containerElement) {
+			saveScrollPosition(scrollKey, containerElement.scrollTop)
+		}
+	}
+
+	// Track pending scroll restoration
+	let pendingScrollKey: string | undefined
+
+	// When scrollKey changes, mark it as pending restoration
+	$effect(() => {
+		const key = scrollKey
+		if (!key) return
+		
+		if (shouldRestore(key)) {
+			pendingScrollKey = key
+		}
+	})
+
+	// Restore scroll position when iframe height is ready
+	$effect(() => {
+		const key = pendingScrollKey
+		const height = iframeHeight
+		
+		if (!key || !containerElement || height <= 0) return
+		
+		pendingScrollKey = undefined
+		const savedPosition = getScrollPosition(key)
+		
+		requestAnimationFrame(() => {
+			if (containerElement) {
+				containerElement.scrollTop = savedPosition ?? 0
+			}
+		})
+	})
 </script>
 
 <svelte:window onmousemove={handleMouseMove} />
@@ -98,6 +143,7 @@
 	bind:this={containerElement}
 	style:--iframe-width="{iframeWidth}%"
 	class:resizing={isDragging}
+	onscroll={handleScroll}
 >
 	<!-- Transparent overlay to capture mouse events during drag -->
 	{#if isDragging}

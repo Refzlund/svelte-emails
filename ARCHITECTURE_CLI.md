@@ -77,7 +77,8 @@ packages/cli/
 │   │   │   └── LoadingBar.svelte    # Animated loading indicator
 │   │   ├── utils/
 │   │   │   ├── view-mode.svelte.ts  # URL-synced view mode state
-│   │   │   └── preview-width.svelte.ts # Persisted preview width
+│   │   │   ├── preview-width.svelte.ts # Persisted preview width
+│   │   │   └── scroll-positions.svelte.ts # Global scroll position cache
 │   │   └── cli/
 │   │       ├── discovery.ts   # Email file discovery
 │   │       ├── types.ts       # Type definitions (EmailFile, SafeEmail, ViewMode)
@@ -755,6 +756,20 @@ previewWidth.persist()   // Save to localStorage
 ```
 
 The width is persisted under the key `svelte-emails-preview-width`.
+
+### Scroll Position (`scroll-positions.svelte.ts`)
+
+Global scroll position cache for email previews:
+
+```typescript
+import { saveScrollPosition, getScrollPosition, shouldRestore } from '$lib/utils/scroll-positions.svelte'
+
+saveScrollPosition('emails:my-email', 500)  // Save position
+getScrollPosition('emails:my-email')         // Get position (or undefined)
+shouldRestore('emails:my-email')             // Returns true on first call per key
+```
+
+Keys are formatted as `${mode}:${emailId}` to namespace by view mode (emails, examples, documentation). The state persists in memory across navigation but resets on page refresh.
 
 ---
 

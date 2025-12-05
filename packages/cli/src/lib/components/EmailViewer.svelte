@@ -270,7 +270,7 @@
 			</div>
 		{:else if viewMode.value === 'preview'}
 			{#if rendered}
-				<EmailPreview html={rendered.html} />
+				<EmailPreview html={rendered.html} emailId={itemId} {mode} />
 			{/if}
 		{:else if viewMode.value === 'source'}
 			<CodeView code={source ?? ''} highlightedHtml={highlighter.state.source} />
