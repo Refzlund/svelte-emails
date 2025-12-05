@@ -41,6 +41,8 @@ packages/cli/
 │   │   │   └── preview-width.svelte.ts # Persisted preview width
 │   │   └── cli/
 │   │       ├── discovery.ts   # Email file discovery
+│   │       ├── types.ts       # Type definitions (EmailFile, SafeEmail, ViewMode)
+│   │       ├── utils.ts       # Utility functions (path normalization, debounce)
 │   │       └── vite-plugin.ts # Core Vite plugin
 │   └── routes/
 │       ├── +layout.svelte     # Main layout with sidebar + shallow routing
@@ -69,6 +71,8 @@ interface EmailFile {
   path: string        // Absolute file path
   relativePath: string // Path relative to CWD
   previewText: string  // Extracted from <Email preview="...">
+  category: string     // Extracted from <Email category="..."> (for folder grouping)
+  mode: ViewMode       // 'emails' | 'examples' | 'documentation'
 }
 ```
 
@@ -76,7 +80,23 @@ interface EmailFile {
 - Respects `.gitignore` patterns
 - Ignores `node_modules`, `.svelte-kit`, `dist`, `build`
 - Extracts preview text from `<Email preview="...">` attribute
+- Extracts category from `<Email category="...">` for sidebar folder grouping
 - Converts filenames to human-readable display names (CamelCase → spaces)
+
+#### Folder Grouping via Category
+
+Emails can be grouped into collapsible folders in the sidebar using the `category` attribute:
+
+```svelte
+<Email category="Receipts" preview="Your order confirmation">
+  <!-- Email content -->
+</Email>
+```
+
+- Emails with the same `category` value appear in a collapsible folder
+- Folders and their contents are sorted alphabetically
+- Emails without a category appear at the top level (uncategorized)
+- Category changes are detected on file save without server restart
 
 ### 2. Vite Plugin (`vite-plugin.ts`)
 

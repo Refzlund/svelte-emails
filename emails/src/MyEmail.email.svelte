@@ -44,6 +44,7 @@
 </script>
 
 <Email
+	category='Test'
 	preview='Thanks for your order! Order #{orderNumber}'
 	body-bg-[#f5f5f5]
 	bg-[#ffffff]

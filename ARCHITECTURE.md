@@ -330,6 +330,7 @@ Components register via Svelte context using stable `Symbol.for()` keys (require
 | Attribute | Purpose | Default |
 |-----------|---------|---------|
 | `preview` | Preheader text (shown in inbox list) | `''` |
+| `category` | Folder grouping in CLI navigation (CLI-only) | `''` |
 | `body-bg-[#hex]` | Outer body background (full width) | `#ffffff` |
 | `bg-[#hex]` | Content container background | `#ffffff` |
 | `max-w-[Npx]` | Content container max-width | `600px` |

@@ -1,20 +1,12 @@
 /// <reference types="vite/client" />
 
 declare module 'virtual:email-list' {
-	import type { ViewMode } from './cli/types.js'
-	
-	interface EmailListItem {
-		id: string
-		name: string
-		relativePath: string
-		previewText: string
-		mode: ViewMode
-	}
+	import type { SafeEmail } from './cli/types.js'
 	
 	interface EmailListData {
-		emails: EmailListItem[]
-		examples: EmailListItem[]
-		documentation: EmailListItem[]
+		emails: SafeEmail[]
+		examples: SafeEmail[]
+		documentation: SafeEmail[]
 	}
 	
 	const data: EmailListData

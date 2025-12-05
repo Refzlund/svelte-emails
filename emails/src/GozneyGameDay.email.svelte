@@ -123,6 +123,7 @@
 </script>
 
 <Email
+	category='Test'
 	preview="Ready for Game Day? Fire up your Gozney 🔥"
 	body-bg={colors.bg}
 	bg={colors.white}

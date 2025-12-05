@@ -1,7 +1,7 @@
 import { browser } from '$app/environment'
 import type { SafeEmail, ViewMode } from '../cli/types.js'
 
-export type { SafeEmail as EmailListItem, ViewMode }
+export type { ViewMode }
 
 type Listener = () => void
 

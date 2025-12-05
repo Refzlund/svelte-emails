@@ -1,5 +1,7 @@
 // Frontend exports
-export { emailStore, type EmailListItem } from './email-store.js'
+export { emailStore } from './email-store.js'
+export type { ViewMode } from './email-store.js'
+export type { SafeEmail } from '../cli/types.js'
 export {
 	createHighlightManager,
 	type HighlightLang,

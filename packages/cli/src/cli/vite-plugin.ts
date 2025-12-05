@@ -1,6 +1,6 @@
 import { isRunnableDevEnvironment, type Plugin, type ViteDevServer } from 'vite'
 import { watch, type FSWatcher } from 'chokidar'
-import { discoverAll } from './discovery.js'
+import { discoverAll, extractPreviewText, extractCategory } from './discovery.js'
 import { readFile } from 'node:fs/promises'
 import type { ServerResponse } from 'node:http'
 import type { EmailFile, ViewMode } from './types.js'
@@ -213,6 +213,41 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 					}
 				}
 
+				// For content changes, update the file's metadata (preview, category)
+				if (event === 'change') {
+					const allFilesFlat = [...allFiles.emails, ...allFiles.examples, ...allFiles.documentation]
+					const changedFile = allFilesFlat.find((e) => normalizePath(e.path) === normalizedPath)
+					if (changedFile) {
+						try {
+							// Re-read the file to update preview and category
+							const content = await readFile(changedFile.path, 'utf-8')
+							const newPreview = extractPreviewText(content)
+							const newCategory = extractCategory(content)
+							
+							// Check if metadata changed
+							const metadataChanged = changedFile.previewText !== newPreview || changedFile.category !== newCategory
+							
+							if (metadataChanged) {
+								// Update the file's metadata in place
+								changedFile.previewText = newPreview
+								changedFile.category = newCategory
+								console.log(`   [svelte-emails] Updated metadata for ${changedFile.name}`)
+							}
+						} catch {
+							// Ignore read errors
+						}
+
+						// Invalidate both path formats (Windows compatibility)
+						invalidateModule(server, changedFile.path)
+						invalidateModule(server, normalizedPath)
+
+						broadcastUpdate('content-change', {
+							id: changedFile.id,
+							path: changedFile.relativePath
+						})
+					}
+				}
+
 				// Broadcast updated list to all SSE clients
 				broadcastUpdate('emails', {
 					emails: toSafeEmails(allFiles.emails),
@@ -224,22 +259,6 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 
 				// Invalidate virtual module for fresh imports
 				invalidateModule(server, RESOLVED_VIRTUAL_MODULE_ID)
-
-				// For content changes, invalidate specific module and notify
-				if (event === 'change') {
-					const allFilesFlat = [...allFiles.emails, ...allFiles.examples, ...allFiles.documentation]
-					const changedFile = allFilesFlat.find((e) => normalizePath(e.path) === normalizedPath)
-					if (changedFile) {
-						// Invalidate both path formats (Windows compatibility)
-						invalidateModule(server, changedFile.path)
-						invalidateModule(server, normalizedPath)
-
-						broadcastUpdate('content-change', {
-							id: changedFile.id,
-							path: changedFile.relativePath
-						})
-					}
-				}
 			}, 50)
 
 			watcher.on('all', (event, filePath) => {

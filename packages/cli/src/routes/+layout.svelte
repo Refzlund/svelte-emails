@@ -3,15 +3,19 @@
 	import { pushState, goto } from '$app/navigation'
 	import { onMount } from 'svelte'
 	import initialData from 'virtual:email-list'
-	import { emailStore, type EmailListItem, type ViewMode } from '$lib/email-store'
+	import { emailStore, type ViewMode } from '$lib/email-store'
+	import type { SafeEmail } from '../cli/types'
 	import * as icons from '$lib/Icons.svelte'
 
 	let { children } = $props()
 
 	// Start with virtual module data, then update via store
-	let emails: EmailListItem[] = $state(initialData.emails || [])
-	let examples: EmailListItem[] = $state(initialData.examples || [])
-	let documentation: EmailListItem[] = $state(initialData.documentation || [])
+	let emails: SafeEmail[] = $state(initialData.emails || [])
+	let examples: SafeEmail[] = $state(initialData.examples || [])
+	let documentation: SafeEmail[] = $state(initialData.documentation || [])
+
+	// Track collapsed folders (by category name)
+	let collapsedFolders = $state<Record<string, boolean>>({})
 
 	// Derive view mode from current URL path
 	const viewMode: ViewMode = $derived.by(() => {
@@ -28,6 +32,46 @@
 			case 'examples': return examples
 			case 'documentation': return documentation
 		}
+	})
+
+	// Group items by category and sort alphabetically
+	interface NavFolder {
+		name: string
+		items: SafeEmail[]
+	}
+
+	interface NavStructure {
+		uncategorized: SafeEmail[]
+		folders: NavFolder[]
+	}
+
+	const navStructure: NavStructure = $derived.by(() => {
+		const uncategorized: SafeEmail[] = []
+		const folderMap = new Map<string, SafeEmail[]>()
+
+		for (const item of currentList) {
+			if (item.category) {
+				const existing = folderMap.get(item.category) || []
+				existing.push(item)
+				folderMap.set(item.category, existing)
+			} else {
+				uncategorized.push(item)
+			}
+		}
+
+		// Sort items within each group alphabetically
+		uncategorized.sort((a, b) => a.name.localeCompare(b.name))
+
+		// Convert map to sorted array of folders
+		const folders: NavFolder[] = []
+		for (const [name, items] of folderMap) {
+			items.sort((a, b) => a.name.localeCompare(b.name))
+			folders.push({ name, items })
+		}
+		// Sort folders alphabetically by name
+		folders.sort((a, b) => a.name.localeCompare(b.name))
+
+		return { uncategorized, folders }
 	})
 
 	// Get the title based on view mode
@@ -84,6 +128,11 @@
 		pushState(url.pathname + url.search, { emailId: itemId })
 	}
 
+	// Toggle folder collapsed state
+	function toggleFolder(folderName: string) {
+		collapsedFolders[folderName] = !collapsedFolders[folderName]
+	}
+
 	// Navigate to a specific view mode
 	function navigateToMode(mode: ViewMode) {
 		if (mode === viewMode) {
@@ -106,6 +155,16 @@
 			const prefix = mode === 'emails' ? '/' : `/${mode}`
 			goto(prefix)
 		}
+	}
+
+	// Get alternating row index across all items
+	function getGlobalIndex(folderIndex: number, itemIndex: number, uncategorizedCount: number): number {
+		// Count items before this one
+		let count = uncategorizedCount
+		for (let i = 0; i < folderIndex; i++) {
+			count += navStructure.folders[i].items.length + 1 // +1 for folder header
+		}
+		return count + itemIndex + 1 // +1 for current folder header
 	}
 
 	onMount(() => {
@@ -148,6 +207,23 @@
 	<link rel="icon" href='/svelte-emails.png' />
 </svelte:head>
 
+{#snippet emailItem(item: SafeEmail, index: number, inFolder: boolean = false)}
+	<a
+		href="{urlPrefix}/{item.id}"
+		class="email-item"
+		class:in-folder={inFolder}
+		class:selected={selectedId === item.id}
+		class:even={index % 2 === 0}
+		class:odd={index % 2 === 1}
+		onclick={(e) => handleItemClick(e, item.id)}
+	>
+		<span class="email-name">{item.name}</span>
+		{#if item.previewText}
+			<span class="email-preview">{item.previewText}</span>
+		{/if}
+	</a>
+{/snippet}
+
 <div class="container">
 	<!-- Sidebar -->
 	<aside class="sidebar">
@@ -157,20 +233,33 @@
 		</header>
 
 		<nav class="email-list">
-			{#each currentList as item, i}
-				<a
-					href="{urlPrefix}/{item.id}"
-					class="email-item"
-					class:selected={selectedId === item.id}
-					class:even={i % 2 === 0}
-					class:odd={i % 2 === 1}
-					onclick={(e) => handleItemClick(e, item.id)}
+			<!-- Uncategorized items first -->
+			{#each navStructure.uncategorized as item, i}
+				{@render emailItem(item, i)}
+			{/each}
+
+			<!-- Categorized folders -->
+			{#each navStructure.folders as folder, folderIndex}
+				{@const isCollapsed = collapsedFolders[folder.name] ?? false}
+				<button
+					class="folder-header"
+					class:even={(navStructure.uncategorized.length + folderIndex) % 2 === 0}
+					class:odd={(navStructure.uncategorized.length + folderIndex) % 2 === 1}
+					onclick={() => toggleFolder(folder.name)}
 				>
-					<span class="email-name">{item.name}</span>
-					{#if item.previewText}
-						<span class="email-preview">{item.previewText}</span>
-					{/if}
-				</a>
+					<span class="folder-chevron" class:collapsed={isCollapsed}>
+						{@render icons.chevronRight({ size: 14, opacity: 0.6 })}
+					</span>
+					{@render icons.folder({ size: 18, opacity: 0.7 })}
+					<span class="folder-name">{folder.name}</span>
+					<span class="folder-count">{folder.items.length}</span>
+				</button>
+				{#if !isCollapsed}
+					{#each folder.items as item, itemIndex}
+						{@const globalIdx = getGlobalIndex(folderIndex, itemIndex, navStructure.uncategorized.length)}
+						{@render emailItem(item, globalIdx, true)}
+					{/each}
+				{/if}
 			{/each}
 
 			{#if currentList.length === 0}
@@ -291,6 +380,67 @@
 
 	.email-item.selected .email-preview {
 		opacity: var(--nav-item-preview-opacity-selected);
+	}
+
+	.email-item.in-folder {
+		padding-left: calc(var(--nav-item-padding-x) + 20px);
+	}
+
+	.folder-header {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		padding: var(--nav-item-padding-y) var(--nav-item-padding-x);
+		border: none;
+		background: transparent;
+		color: var(--nav-item-text);
+		font-size: 14px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.15s ease;
+		text-align: left;
+		border-left: var(--nav-item-selected-border-width) solid transparent;
+	}
+
+	.folder-header.even {
+		background: var(--nav-item-even);
+	}
+
+	.folder-header.odd {
+		background: var(--nav-item-odd);
+	}
+
+	.folder-header:hover {
+		background: var(--nav-item-selected);
+	}
+
+	.folder-chevron {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: transform 0.15s ease;
+	}
+
+	.folder-chevron.collapsed {
+		transform: rotate(0deg);
+	}
+
+	.folder-chevron:not(.collapsed) {
+		transform: rotate(90deg);
+	}
+
+	.folder-name {
+		flex: 1;
+		transform: translateY(1px);
+	}
+
+	.folder-count {
+		font-size: 11px;
+		opacity: 0.5;
+		padding: 2px 6px;
+		background: rgba(255, 255, 255, 0.1);
+		border-radius: 10px;
 	}
 
 	.empty-state {

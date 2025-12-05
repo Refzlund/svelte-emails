@@ -31,23 +31,79 @@ function extractName(filename: string): string {
 }
 
 /**
- * Extract preview text from <Email preview="..."> in a Svelte file
+ * Extract an attribute value from <Email> tag, handling various formats
+ * Supports:
+ * - Double quotes: attr="value with 'apostrophes'"
+ * - Single quotes: attr='value'
+ * - Template literals: attr={`value`}
+ * - Expressions: attr={someVar.method()} -> returns raw expression
  */
-function extractPreviewText(content: string): string {
-	// Match <Email ... preview="..." ...> or preview='...' or preview={`...`}
-	const patterns = [
-		/<Email[^>]*\spreview=["']([^"']+)["'][^>]*>/,
-		/<Email[^>]*\spreview=\{[`"']([^`"']+)[`"']\}[^>]*>/
-	]
-
-	for (const pattern of patterns) {
-		const match = content.match(pattern)
-		if (match?.[1]) {
-			return match[1].slice(0, 100) // Limit to 100 chars
+function extractEmailAttribute(content: string, attrName: string): string {
+	// Find <Email tag start
+	const emailTagMatch = content.match(/<Email\b/)
+	if (!emailTagMatch) return ''
+	
+	const startIdx = emailTagMatch.index!
+	// Find the matching > considering multiline tags
+	let depth = 0
+	let endIdx = startIdx
+	for (let i = startIdx; i < content.length; i++) {
+		if (content[i] === '<') depth++
+		else if (content[i] === '>') {
+			if (depth === 1) {
+				endIdx = i
+				break
+			}
+			depth--
 		}
 	}
-
+	
+	const emailTag = content.slice(startIdx, endIdx + 1)
+	
+	// Pattern for attr="value" (double quotes can contain single quotes)
+	const doubleQuotePattern = new RegExp(`${attrName}="([^"]*)"`)
+	const doubleMatch = emailTag.match(doubleQuotePattern)
+	if (doubleMatch?.[1]) {
+		return doubleMatch[1].slice(0, 100)
+	}
+	
+	// Pattern for attr='value' (single quotes can contain double quotes)
+	const singleQuotePattern = new RegExp(`${attrName}='([^']*)'`)
+	const singleMatch = emailTag.match(singleQuotePattern)
+	if (singleMatch?.[1]) {
+		return singleMatch[1].slice(0, 100)
+	}
+	
+	// Pattern for attr={`template literal`}
+	const templatePattern = new RegExp(`${attrName}=\\{\`([^\`]*)\`\\}`)
+	const templateMatch = emailTag.match(templatePattern)
+	if (templateMatch?.[1]) {
+		return templateMatch[1].slice(0, 100)
+	}
+	
+	// Pattern for attr={expression} - return the raw expression
+	const exprPattern = new RegExp(`${attrName}=\\{([^}]+)\\}`)
+	const exprMatch = emailTag.match(exprPattern)
+	if (exprMatch?.[1]) {
+		// Return raw expression wrapped in {}
+		return `{${exprMatch[1].trim()}}`.slice(0, 100)
+	}
+	
 	return ''
+}
+
+/**
+ * Extract preview text from <Email preview="..."> in a Svelte file
+ */
+export function extractPreviewText(content: string): string {
+	return extractEmailAttribute(content, 'preview')
+}
+
+/**
+ * Extract category from <Email category="..."> in a Svelte file
+ */
+export function extractCategory(content: string): string {
+	return extractEmailAttribute(content, 'category')
 }
 
 /**
@@ -149,11 +205,13 @@ export async function discoverEmails(cwd: string, skipPreview = false): Promise<
 	for (const absolutePath of files) {
 		const relativePath = relative(cwd, absolutePath)
 		let previewText = ''
+		let category = ''
 
 		if (!skipPreview) {
 			try {
 				const content = readFileSync(absolutePath, 'utf-8')
 				previewText = extractPreviewText(content)
+				category = extractCategory(content)
 			} catch {
 				// Ignore read errors
 			}
@@ -165,6 +223,7 @@ export async function discoverEmails(cwd: string, skipPreview = false): Promise<
 			path: absolutePath,
 			relativePath,
 			previewText,
+			category,
 			mode: 'emails'
 		})
 	}
@@ -218,11 +277,13 @@ export async function discoverSvelteFiles(
 	for (const absolutePath of files) {
 		const relativePath = relative(searchPath, absolutePath)
 		let previewText = ''
+		let category = ''
 
 		if (!skipPreview) {
 			try {
 				const content = readFileSync(absolutePath, 'utf-8')
 				previewText = extractPreviewText(content)
+				category = extractCategory(content)
 			} catch {
 				// Ignore read errors
 			}
@@ -234,6 +295,7 @@ export async function discoverSvelteFiles(
 			path: absolutePath,
 			relativePath: `${subfolder}/${relativePath}`,
 			previewText,
+			category,
 			mode
 		})
 	}

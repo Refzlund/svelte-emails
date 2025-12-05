@@ -118,6 +118,7 @@
 </script>
 
 <Email
+	category='Test'
 	preview="Great flight prices from {origin} to {destination} starting at ${lowPrice}"
 	body-bg={colors.white}
 	bg={colors.white}

@@ -77,6 +77,7 @@
 </script>
 
 <Email
+	category='Test'
 	preview="Don't just take our word for it — Learn why past attendees love Webflow Conf!"
 	body-bg={colors.bg}
 	bg={colors.white}

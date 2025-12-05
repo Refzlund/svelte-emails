@@ -17,6 +17,8 @@ export interface EmailFile {
 	relativePath: string
 	/** Preview text extracted from <Email preview="..."> */
 	previewText: string
+	/** Category for grouping in navigation (from <Email category="...">) */
+	category: string
 	/** Which view mode this file belongs to */
 	mode: ViewMode
 }
@@ -29,5 +31,6 @@ export interface SafeEmail {
 	name: string
 	relativePath: string
 	previewText: string
+	category: string
 	mode: ViewMode
 }

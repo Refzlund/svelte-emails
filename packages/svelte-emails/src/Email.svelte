@@ -56,6 +56,12 @@ This affects `responsive` columns, `mobile-only`, and `desktop-only` elements.
 	export interface Props extends EmailAttributes {
 		/** Preview text shown in email client inbox (before opening) */
 		preview?: string
+		/** 
+		 * Category for grouping emails in the CLI navigation.
+		 * Emails with the same category appear in a collapsible folder.
+		 * This is a CLI-only feature and does not affect rendered output.
+		 */
+		category?: string
 		/**
 		 * Style configuration for this email.
 		 * These styles are merged between base preset and render options:

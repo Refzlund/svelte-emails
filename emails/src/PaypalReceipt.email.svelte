@@ -67,6 +67,7 @@
 </script>
 
 <Email
+	category='Test'
 	preview="You sent a payment of ${total.toFixed(2)} USD to {merchantName}"
 	body-bg={colors.bg}
 	bg={colors.white}
