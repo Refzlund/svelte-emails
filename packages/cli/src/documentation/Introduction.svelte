@@ -81,6 +81,7 @@
 </script>
 
 <Email
+	category='1. Getting Started'
 	preview="Getting Started with svelte-emails - Build beautiful emails with Svelte"
 	body-bg={colors.background}
 	bg={colors.white}
