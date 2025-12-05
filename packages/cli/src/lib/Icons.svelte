@@ -8,7 +8,9 @@
 		sparkleAction,
 		bookInformation,
 		folder,
-		chevronRight
+		chevronRight,
+		copy,
+		checkmark
 	}
 
 	type Options = {
@@ -83,6 +85,28 @@
 			fill="{opts.fill ?? 'white'}"
 			fill-opacity="{opts.opacity ?? 1}"
 			d="M7.646 4.147a.5.5 0 0 1 .707-.001l5.484 5.465a.55.55 0 0 1 0 .779l-5.484 5.465a.5.5 0 0 1-.706-.708L12.812 10L7.647 4.854a.5.5 0 0 1-.001-.707"
+		/>
+	</svg>
+{/snippet}
+
+{#snippet copy(opts: Options = {})}
+	{@const size = opts.size ?? 16}
+	<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} class={opts.class ?? ''} viewBox="0 0 20 20">
+		<path
+			fill="{opts.fill ?? 'white'}"
+			fill-opacity="{opts.opacity ?? 1}"
+			d="M8 2a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8Zm0 1h6a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm-4 3v10a3 3 0 0 0 3 3h6v-1H7a2 2 0 0 1-2-2V6H4Z"
+		/>
+	</svg>
+{/snippet}
+
+{#snippet checkmark(opts: Options = {})}
+	{@const size = opts.size ?? 16}
+	<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} class={opts.class ?? ''} viewBox="0 0 20 20">
+		<path
+			fill="{opts.fill ?? 'white'}"
+			fill-opacity="{opts.opacity ?? 1}"
+			d="M16.854 5.146a.5.5 0 0 1 0 .708l-9 9a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L7.5 13.793l8.646-8.647a.5.5 0 0 1 .708 0Z"
 		/>
 	</svg>
 {/snippet}

@@ -4,6 +4,12 @@
 	--tabs-bg: #35354B;
 	--tab-active-gradient: linear-gradient(100deg, #5949A2 0%, #564181 100%);
 	
+	/* Toggle switch */
+	--toggle-off-bg: var(--tabs-bg);
+	--toggle-off-thumb: #7B7CB0;
+	--toggle-on-bg: #4F4F7D;
+	--toggle-on-thumb: #9B8ED8;
+	
 	/* Nav sidebar (left side) */
 	--nav-bg: #3F405A;
 	

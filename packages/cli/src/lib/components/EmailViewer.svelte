@@ -5,26 +5,17 @@
 	 * Shared viewer for emails, examples, and documentation.
 	 * Handles fetching, caching, highlighting, and rendering.
 	 */
-	import { page } from '$app/state'
-	import { onMount, untrack } from 'svelte'
+	import { onMount } from 'svelte'
 	import { browser } from '$app/environment'
-	import { emailStore, type ViewMode } from '$lib/email-store'
+	import { type ViewMode } from '$lib/email-store'
 	import { createHighlightManager } from '$lib/highlight.svelte'
 	import { EmailPreview } from '$lib/components'
 	import CodeView from './CodeView.svelte'
 	import LoadingBar from './LoadingBar.svelte'
-	import {
-		getCached,
-		setCache,
-		setCacheFormattedHtml,
-		invalidateCache,
-		prefetchAdjacentEmails,
-		type EmailRenderData
-	} from '$lib/page-cache'
 	import { createViewMode } from '$lib/utils/view-mode.svelte'
-	import { formatHtml } from 'svelte-emails'
 	import * as icons from '$lib/Icons.svelte'
 	import floatingUI from 'floating-runes'
+	import { createEmailViewerState } from './email-viewer.svelte.js'
 
 	interface Props {
 		/** The mode determines which list to use for prefetching */
@@ -42,85 +33,11 @@
 			: 'Rendering documentation...'
 	)
 
-	// Local state for content (fetched client-side for instant navigation)
-	let email = $state<EmailRenderData['email'] | null>(null)
-	let source = $state<string | null>(null)
-	let rendered = $state<EmailRenderData['rendered'] | null>(null)
-	let formattedHtml = $state<string | null>(null)
-	let renderError = $state<string | null>(null)
-	let isLoading = $state(false)
-	let isRerendering = $state(false)
-
-	/**
-	 * Process email render result - format HTML if needed and update state
-	 */
-	function processRenderResult(result: EmailRenderData, id: string) {
-		email = result.email
-		source = result.source
-		rendered = result.rendered
-		renderError = result.renderError
-
-		// Use cached formatted HTML or format now
-		if (result.formattedHtml) {
-			formattedHtml = result.formattedHtml
-		} else if (result.rendered?.html) {
-			const formatted = formatHtml(result.rendered.html)
-			formattedHtml = formatted
-			result.formattedHtml = formatted
-			setCacheFormattedHtml(id, formatted, mode)
-		} else {
-			formattedHtml = null
-		}
-	}
-
-	// Fetch content when itemId changes
-	$effect(() => {
-		const id = itemId
-		
-		if (!id) {
-			isLoading = false
-			return
-		}
-
-		// Check if we already have this item loaded
-		if (email?.id === id) {
-			return
-		}
-
-		// Check cache first for instant display
-		const cached = getCached(id, mode)
-		if (cached) {
-			processRenderResult(cached.data, id)
-			isLoading = false
-			return
-		}
-
-		// Fetch from server
-		isLoading = true
-		renderError = null
-		fetch(`/__svelte-emails/render?id=${encodeURIComponent(id)}&mode=${mode}`)
-			.then(async (res) => {
-				// Check if this is still the current item
-				if (itemId !== id) return
-
-				if (!res.ok) {
-					const err = await res.json().catch(() => ({ error: 'Unknown error' }))
-					renderError = err.error || 'Failed to load'
-					isLoading = false
-					return
-				}
-				const result = await res.json()
-				result.formattedHtml = null
-				processRenderResult(result, id)
-				setCache(id, result, mode)
-				isLoading = false
-			})
-			.catch((err) => {
-				if (itemId !== id) return
-				renderError = err.message || 'Failed to load'
-				isLoading = false
-			})
-	})
+	// Email viewer state with data fetching
+	const viewer = createEmailViewerState(
+		() => mode,
+		() => itemId
+	)
 
 	const viewMode = createViewMode()
 
@@ -133,6 +50,8 @@
 		requestAnimationFrame(() => {
 			enableTransition = true
 		})
+		// Setup content change listener for live reload
+		return viewer.setupContentChangeListener()
 	})
 
 	// Highlight manager for off-thread syntax highlighting
@@ -140,60 +59,12 @@
 
 	// Trigger highlighting when data changes
 	$effect(() => {
-		if (!email || !source) return
-		highlighter.highlight(email.id, source, formattedHtml, rendered?.text ?? null)
-	})
-
-	// Prefetch adjacent items for instant navigation
-	$effect(() => {
-		if (!email) return
-		const list = emailStore.getByMode(mode)
-		const ids = list.map((e) => e.id)
-		if (ids.length > 0) {
-			untrack(() => prefetchAdjacentEmails(email!.id, ids, 2, mode))
-		}
-	})
-
-	// Listen for content changes via shared store
-	onMount(() => {
-		let lastSeenTime = emailStore.lastContentChangeTime
-
-		const unsubscribe = emailStore.subscribe(() => {
-			if (
-				emailStore.lastContentChangeId === itemId &&
-				emailStore.lastContentChangeTime > lastSeenTime
-			) {
-				lastSeenTime = emailStore.lastContentChangeTime
-
-				invalidateCache(itemId!, mode)
-				isRerendering = true
-
-				fetch(`/__svelte-emails/render?id=${encodeURIComponent(itemId!)}&mode=${mode}`)
-					.then(async (res) => {
-						if (!res.ok) {
-							const err = await res.json().catch(() => ({ error: 'Unknown error' }))
-							renderError = err.error || 'Failed to load'
-							isRerendering = false
-							return
-						}
-						const result = await res.json()
-						result.formattedHtml = null
-						processRenderResult(result, itemId!)
-						setCache(itemId!, result, mode)
-						isRerendering = false
-					})
-					.catch((err) => {
-						renderError = err.message || 'Failed to load'
-						isRerendering = false
-					})
-			}
-		})
-
-		return unsubscribe
+		if (!viewer.email || !viewer.source) return
+		highlighter.highlight(viewer.email.id, viewer.source, viewer.formattedHtml, viewer.rendered?.text ?? null)
 	})
 
 	// Derive the relative path for display
-	const relativePath = $derived(email?.relativePath ?? itemId ?? 'Loading...')
+	const relativePath = $derived(viewer.email?.relativePath ?? itemId ?? 'Loading...')
 </script>
 
 {#snippet tabButton(
@@ -232,62 +103,75 @@
 <div class="email-viewer">
 	<!-- Header with tabs and file path -->
 	<header class="viewer-header">
-		<nav class="tabs" use:float?.untether={'pointerleave'}>
-			{#if float}
-				<div
-					class="tab-indicator"
-					class:active={float.referenced}
-					class:transition={enableTransition}
-					style:width={float.referenced ? `${float.referenced.clientWidth}px` : '0'}
-					style:height={float.referenced ? `${float.referenced.offsetHeight}px` : '0'}
-					style:opacity={float.referenced ? 1 : 0}
-					use:float={{ tether: false }}
-				></div>
+		<div class="left">
+			<nav class="tabs" use:float?.untether={'pointerleave'}>
+				{#if float}
+					<div
+						class="tab-indicator"
+						class:active={float.referenced}
+						class:transition={enableTransition}
+						style:width={float.referenced ? `${float.referenced.clientWidth}px` : '0'}
+						style:height={float.referenced ? `${float.referenced.offsetHeight}px` : '0'}
+						style:opacity={float.referenced ? 1 : 0}
+						use:float={{ tether: false }}
+					></div>
+				{/if}
+				{@render tabButton(float, 'preview', 'Preview', icons.contentView, (viewer.isLoading || viewer.isRerendering) && viewMode.value === 'preview')}
+				{@render tabButton(float, 'source', 'Source', icons.code, highlighter.loading.source)}
+				{@render tabButton(float, 'html', 'HTML', icons.document, highlighter.loading.html)}
+				{@render tabButton(float, 'text', 'Text', icons.codeText, highlighter.loading.text)}
+			</nav>
+			
+			{#if viewMode.value === 'html' || viewMode.value === 'raw'}
+				<label class="raw-toggle">
+					<input
+						type="checkbox"
+						checked={viewMode.isRaw}
+						onchange={(e) => viewMode.set(e.currentTarget.checked ? 'raw' : 'html')}
+					/>
+					<span class="toggle-track">
+						<span class="toggle-thumb"></span>
+					</span>
+					<span class="toggle-label">View Raw</span>
+				</label>
 			{/if}
-			{@render tabButton(float, 'preview', 'Preview', icons.contentView, (isLoading || isRerendering) && viewMode.value === 'preview')}
-			{@render tabButton(float, 'source', 'Source', icons.code, highlighter.loading.source)}
-			{@render tabButton(float, 'html', 'HTML', icons.document, highlighter.loading.html)}
-			{@render tabButton(float, 'text', 'Text', icons.codeText, highlighter.loading.text)}
-		</nav>
+		</div>
 		
 
 		<div class="file-path">
 			{relativePath}
 		</div>
-		<LoadingBar visible={isLoading || isRerendering} />
+		<LoadingBar visible={viewer.isLoading || viewer.isRerendering} />
 	</header>
 
 	<!-- Content area -->
 	<div class="viewer-content">
-		{#if isLoading}
+		{#if viewer.isLoading}
 			<div class="loading-panel">
 				<p>{loadingMessage}</p>
 			</div>
-		{:else if renderError}
+		{:else if viewer.renderError}
 			<div class="error-panel">
 				<h3>⚠️ Render Error</h3>
-				<pre>{renderError}</pre>
+				<pre>{viewer.renderError}</pre>
 			</div>
 		{:else if viewMode.value === 'preview'}
-			{#if rendered}
-				<EmailPreview html={rendered.html} emailId={itemId} {mode} />
+			{#if viewer.rendered}
+				<EmailPreview html={viewer.rendered.html} emailId={itemId} {mode} />
 			{/if}
 		{:else if viewMode.value === 'source'}
-			<CodeView code={source ?? ''} highlightedHtml={highlighter.state.source} />
+			<CodeView code={viewer.source ?? ''} highlightedHtml={highlighter.state.source} />
 		{:else if viewMode.value === 'html' || viewMode.value === 'raw'}
-			{#if rendered}
+			{#if viewer.rendered}
 				<CodeView
-					code={formattedHtml ?? rendered.html}
-					rawCode={rendered.html}
-					highlightedHtml={highlighter.state.html}
-					showToggle
-					showRaw={viewMode.isRaw}
-					onToggle={(raw) => viewMode.set(raw ? 'raw' : 'html')}
+					code={viewMode.isRaw ? viewer.rendered.html : (viewer.formattedHtml ?? viewer.rendered.html)}
+					rawCode={viewer.rendered.html}
+					highlightedHtml={viewMode.isRaw ? null : highlighter.state.html}
 				/>
 			{/if}
 		{:else if viewMode.value === 'text'}
-			{#if rendered}
-				<CodeView code={rendered.text} highlightedHtml={highlighter.state.text} />
+			{#if viewer.rendered}
+				<CodeView code={viewer.rendered.text} highlightedHtml={highlighter.state.text} />
 			{/if}
 		{/if}
 	</div>
@@ -309,6 +193,12 @@
 		height: 70px;
 		background: var(--viewer-header-bg);
 		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+
+		.left {
+			display: flex;
+			align-items: center;
+			gap: 16px;
+		}
 	}
 
 	.tabs {
@@ -318,6 +208,60 @@
 		padding: 4px;
 		border-radius: 6px;
 		background-color: var(--tabs-bg);
+	}
+
+	.raw-toggle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		cursor: pointer;
+		user-select: none;
+	}
+
+	.raw-toggle input {
+		position: absolute;
+		opacity: 0;
+		width: 0;
+		height: 0;
+	}
+
+	.toggle-track {
+		position: relative;
+		width: 36px;
+		height: 20px;
+		background: var(--toggle-off-bg);
+		border-radius: 10px;
+		transition: background 0.15s ease;
+	}
+
+	.raw-toggle input:checked + .toggle-track {
+		background: var(--toggle-on-bg);
+	}
+
+	.toggle-thumb {
+		position: absolute;
+		top: 2px;
+		left: 2px;
+		width: 16px;
+		height: 16px;
+		background: var(--toggle-off-thumb);
+		border-radius: 50%;
+		transition: transform 0.15s ease, background 0.15s ease;
+	}
+
+	.raw-toggle input:checked + .toggle-track .toggle-thumb {
+		transform: translateX(16px);
+		background: var(--toggle-on-thumb);
+	}
+
+	.toggle-label {
+		font-size: 13px;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.7);
+	}
+
+	.raw-toggle:hover .toggle-label {
+		color: rgba(255, 255, 255, 0.9);
 	}
 
 	.tab-indicator {

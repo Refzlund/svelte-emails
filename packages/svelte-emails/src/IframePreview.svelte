@@ -176,6 +176,20 @@ for smooth updates without flash, scroll reset, or image reloading.
 		heightObserver = new ResizeObserver(() => updateHeight(doc))
 		if (doc.body) heightObserver.observe(doc.body)
 		if (doc.documentElement) heightObserver.observe(doc.documentElement)
+		
+		// Listen to image load events to recalculate height when images finish loading
+		// This handles the case where images have no dimensions until loaded
+		setupImageLoadListeners(doc)
+	}
+
+	/** Setup load listeners on all images to recalculate height when they load */
+	function setupImageLoadListeners(doc: Document) {
+		const images = doc.querySelectorAll('img')
+		for (const img of images) {
+			if (img.complete) continue
+			img.addEventListener('load', () => updateHeight(doc), { once: true })
+			img.addEventListener('error', () => updateHeight(doc), { once: true })
+		}
 	}
 
 	/** Setup ResizeObserver on heightTarget to snapshot anchor before width changes */
@@ -254,6 +268,8 @@ for smooth updates without flash, scroll reset, or image reloading.
 		const newDoc = new DOMParser().parseFromString(newHtml, 'text/html')
 		if (doc.head && newDoc.head) morphdom(doc.head, newDoc.head, headMorphOptions)
 		if (doc.body && newDoc.body) morphdom(doc.body, newDoc.body, bodyMorphOptions)
+		// Re-setup image listeners for any new images added by morphdom
+		setupImageLoadListeners(doc)
 		updateHeight(doc)
 	}
 
@@ -320,6 +336,8 @@ for smooth updates without flash, scroll reset, or image reloading.
 
 	// Combined styles
 	const computedStyle = $derived.by(() => {
+		// When height is known, use explicit px value
+		// Otherwise use 100% to fill parent container while loading
 		const heightStyle = height > 0 ? `height: ${height}px;` : 'height: 100%;'
 		const base = `width: 100%; border: none; ${heightStyle}`
 		return style ? `${base} ${style}` : base

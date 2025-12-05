@@ -7,70 +7,59 @@
 ```
 -->
 <script lang="ts">
+	import * as icons from '$lib/Icons.svelte'
+
 	interface Props {
 		code: string
 		highlightedHtml: string | null
-		/** Show toggle between formatted and raw view */
-		showToggle?: boolean
-		/** Raw (non-prettified) code to show when toggle is off */
+		/** Raw (non-prettified) code to copy when showing formatted view */
 		rawCode?: string
-		/** Controlled: whether to show raw view */
-		showRaw?: boolean
-		/** Callback when toggle changes */
-		onToggle?: (showRaw: boolean) => void
 	}
 
-	const {
-		code,
-		highlightedHtml,
-		showToggle = false,
-		rawCode,
-		showRaw,
-		onToggle
-	}: Props = $props()
+	const { code, highlightedHtml, rawCode }: Props = $props()
 
-	// Internal state for uncontrolled mode
-	let internalShowFormatted = $state(true)
-	
-	// Use controlled value if provided, otherwise use internal state
-	const showFormatted = $derived(showRaw !== undefined ? !showRaw : internalShowFormatted)
+	// Copy the raw code if provided, otherwise the displayed code
+	const codeToCopy = $derived(rawCode ?? code)
 
-	const displayCode = $derived(showFormatted ? code : (rawCode ?? code))
-	const displayHighlighted = $derived(showFormatted ? highlightedHtml : null)
-	
-	const handleToggle = (formatted: boolean) => {
-		if (onToggle) {
-			onToggle(!formatted)
-		} else {
-			internalShowFormatted = formatted
+	let copied = $state(false)
+	let copyTimeout: ReturnType<typeof setTimeout> | undefined
+
+	async function copyToClipboard() {
+		try {
+			await navigator.clipboard.writeText(codeToCopy)
+			copied = true
+			clearTimeout(copyTimeout)
+			copyTimeout = setTimeout(() => {
+				copied = false
+			}, 2000)
+		} catch (err) {
+			console.error('Failed to copy:', err)
 		}
 	}
 </script>
 
 <div class="code-panel">
-	{#if showToggle}
-		<div class="toggle-bar">
-			<button
-				class="toggle-btn"
-				class:active={showFormatted}
-				onclick={() => handleToggle(true)}
-			>
-				Formatted
-			</button>
-			<button
-				class="toggle-btn"
-				class:active={!showFormatted}
-				onclick={() => handleToggle(false)}
-			>
-				Raw
-			</button>
-		</div>
-	{/if}
+	<div class="toolbar">
+		<button
+			class="copy-btn"
+			class:copied
+			onclick={copyToClipboard}
+			title="Copy to clipboard"
+		>
+			{#if copied}
+				{@render icons.checkmark({ size: 16 })}
+				<span>Copied!</span>
+			{:else}
+				{@render icons.copy({ size: 16 })}
+				<span>Copy</span>
+			{/if}
+		</button>
+	</div>
 
-	{#if displayHighlighted}
-		{@html displayHighlighted}
+	{#if highlightedHtml}
+		{@html highlightedHtml}
 	{:else}
-		<pre><code>{displayCode}</code></pre>
+		<pre><code>{code}</code></pre>
 	{/if}
 </div>
 
@@ -82,7 +71,7 @@
 		position: relative;
 	}
 
-	.toggle-bar {
+	.toolbar {
 		display: flex;
 		gap: 4px;
 		padding: 12px;
@@ -92,7 +81,10 @@
 		z-index: 1;
 	}
 
-	.toggle-btn {
+	.copy-btn {
+		display: flex;
+		align-items: center;
+		gap: 6px;
 		padding: 6px 12px;
 		font-size: 12px;
 		font-family: inherit;
@@ -104,18 +96,20 @@
 		transition: all 0.15s ease;
 	}
 
-	.toggle-btn:hover {
+	.copy-btn:hover {
 		background: #21262d;
 		color: #e6edf3;
 	}
 
-	.toggle-btn.active {
-		background: #21262d;
-		color: #e6edf3;
-		border-color: #8b949e;
+	.copy-btn.copied {
+		background: #238636;
+		border-color: #238636;
+		color: #fff;
 	}
 
-	.code-panel :global(pre) {
+	/* Shared pre/code styles for both plain and highlighted code */
+	.code-panel :global(pre),
+	.code-panel pre {
 		margin: 0;
 		padding: 20px;
 		font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
@@ -124,23 +118,10 @@
 		white-space: pre-wrap;
 		word-wrap: break-word;
 		background: #0d1117 !important;
-	}
-
-	.code-panel :global(code) {
-		font-family: inherit;
-	}
-
-	.code-panel pre {
-		margin: 0;
-		padding: 20px;
-		font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-		font-size: 13px;
-		line-height: 1.5;
 		color: #e6edf3;
-		white-space: pre-wrap;
-		word-wrap: break-word;
 	}
 
+	.code-panel :global(code),
 	.code-panel code {
 		font-family: inherit;
 	}

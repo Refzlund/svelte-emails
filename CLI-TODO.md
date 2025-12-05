@@ -6,14 +6,13 @@ Outstanding questions and future improvements for the `svelte-emails` CLI dev se
 
 ## Open Questions
 
-2. **Placeholders UI** — Should there be an editor for `[[variables]]`?
-3. **Mobile preview** — Iframe resize or actual responsive styles?
 4. **Error handling** — How to display render errors gracefully?
 
 ---
 
 ## Future Improvements
 
-- [ ] Placeholder variable editor panel
-- [ ] Copy HTML/Text to clipboard buttons
+- [ ] Alt+D to toggle documentation page
+- [ ] Alt+E to toggle examples page
+- [ ] Alt+1,2,3,4 to change tabs
 - [ ] Send test email functionality

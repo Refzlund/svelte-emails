@@ -70,8 +70,9 @@ packages/cli/
 │   │   ├── Icons.svelte       # SVG icons as Svelte snippets
 │   │   ├── components/
 │   │   │   ├── Sidebar.svelte       # Navigation sidebar
-│   │   │   ├── Sidebar.svelte.ts    # Sidebar state & navigation logic
+│   │   │   ├── sidebar.svelte.ts    # Sidebar state & navigation logic
 │   │   │   ├── EmailViewer.svelte   # Shared viewer for all modes
+│   │   │   ├── email-viewer.svelte.ts # Viewer state & data fetching
 │   │   │   ├── EmailPreview.svelte  # Resizable iframe preview
 │   │   │   ├── CodeView.svelte      # Syntax-highlighted code panel
 │   │   │   └── LoadingBar.svelte    # Animated loading indicator
@@ -86,15 +87,35 @@ packages/cli/
 │   │       └── vite-plugin.ts # Core Vite plugin
 │   └── routes/
 │       ├── +layout.svelte     # Main layout (uses Sidebar component)
-│       ├── +page.svelte       # Index redirect
-│       ├── [email]/           # Email viewer routes
-│       ├── examples/[file]/   # Example viewer routes
-│       └── documentation/[file]/ # Documentation viewer routes
+│       └── [...params]/       # Unified catch-all route for all views
+│           ├── +page.svelte   # Single page handling emails/examples/documentation
+│           └── +page.ts       # Route parameter parsing
 ├── static/
 │   └── theme.css              # CSS variables and theme
 ├── vite.config.ts             # Vite configuration
 └── package.json
 ```
+
+---
+
+## Routing
+
+The CLI uses a single unified catch-all route (`[...params]`) to handle all views:
+
+| URL Pattern | Mode | Item ID |
+|-------------|------|---------|
+| `/my-email` | `emails` | `my-email` |
+| `/examples/newsletter` | `examples` | `newsletter` |
+| `/documentation/intro` | `documentation` | `intro` |
+| `/` | `emails` | (redirects to first email) |
+| `/examples` | `examples` | (redirects to first example) |
+| `/documentation` | `documentation` | (redirects to first doc) |
+
+**Benefits of unified routing:**
+- Single source of truth for page rendering
+- Consistent state management across mode transitions
+- Image caching persists across mode changes (same component instance)
+- Simplified shallow routing - just push state with `{ emailId, mode }`
 
 ---
 
@@ -345,12 +366,12 @@ export function createHighlightManager(): {
 - Minimal layout that renders `<Sidebar />` component
 - Handles service worker cleanup on mount
 
-#### Sidebar Component (`Sidebar.svelte` + `Sidebar.svelte.ts`)
+#### Sidebar Component (`Sidebar.svelte` + `sidebar.svelte.ts`)
 
 Navigation sidebar with email/example/documentation list:
 
 ```typescript
-// Sidebar.svelte.ts - Extracted state logic
+// sidebar.svelte.ts - Extracted state logic
 const sidebar = createSidebarState()
 
 sidebar.viewMode        // 'emails' | 'examples' | 'documentation'
@@ -370,10 +391,28 @@ Features:
 - SSE subscription for live updates
 - Zebra-striped rows with alternating backgrounds
 
-#### EmailViewer Component (`EmailViewer.svelte`)
+#### EmailViewer Component (`EmailViewer.svelte` + `email-viewer.svelte.ts`)
 
 Shared viewer for all view modes (emails, examples, documentation):
 
+```typescript
+// email-viewer.svelte.ts - Extracted state logic
+const viewer = createEmailViewerState(
+  () => mode,
+  () => itemId
+)
+
+viewer.email           // Current email metadata
+viewer.source          // Source code
+viewer.rendered        // { html, htmlRaw, text }
+viewer.formattedHtml   // Prettified HTML (computed client-side)
+viewer.renderError     // Error message if render failed
+viewer.isLoading       // Initial load in progress
+viewer.isRerendering   // Re-render after file change
+viewer.setupContentChangeListener() // Subscribe to live updates
+```
+
+Features:
 - Tabbed interface: Preview, Source, HTML, Text
 - HTML tab has Formatted/Raw toggle (Raw shows minified output)
 - Uses `createViewMode()` for URL-synced tab state
@@ -399,18 +438,20 @@ giving visual feedback when hovering near the resize edges.
 
 #### CodeView Component
 
-Syntax-highlighted code panel with optional toggle:
+Syntax-highlighted code panel with copy functionality:
 
 ```typescript
 interface Props {
-  code: string                   // Primary code to display
+  code: string                   // Code to display
   highlightedHtml: string | null // Pre-highlighted HTML from Shiki
-  showToggle?: boolean           // Show Formatted/Raw toggle
-  rawCode?: string               // Alternative code for raw view (when toggle is off)
-  showRaw?: boolean              // Controlled: current state
-  onToggle?: (showRaw) => void   // Callback when toggled
+  rawCode?: string               // Code to copy (defaults to code)
 }
 ```
+
+Features:
+- Copy to clipboard button with "Copied!" feedback
+- Falls back to plain `<pre><code>` when Shiki unavailable
+- Copies raw HTML when viewing formatted code
 
 #### LoadingBar Component
 

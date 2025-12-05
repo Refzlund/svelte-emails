@@ -11,7 +11,7 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte'
-	import { createSidebarState } from './Sidebar.svelte.js'
+	import { createSidebarState } from './sidebar.svelte.js'
 	import type { SafeEmail } from '../../cli/types.js'
 	import * as icons from '$lib/Icons.svelte'
 

@@ -115,10 +115,17 @@ export function createSidebarState() {
 		// First check shallow routing state (set by pushState)
 		const stateId = (page.state as any)?.emailId
 		if (stateId) return stateId
-		// For examples/documentation routes, use the 'file' param
-		if (page.params.file) return page.params.file
-		// For email routes, use the 'email' param
-		if (page.params.email) return page.params.email
+		// Extract ID from the [...params] catch-all route
+		const params = page.params.params
+		if (params) {
+			const segments = params.split('/')
+			// For examples/documentation, ID is after the mode prefix
+			if (segments[0] === 'examples' || segments[0] === 'documentation') {
+				return segments.slice(1).join('/') || undefined
+			}
+			// For emails, the whole params is the ID
+			return segments.join('/')
+		}
 		// Default to first item in current list
 		return currentList[0]?.id
 	})
@@ -134,7 +141,7 @@ export function createSidebarState() {
 		if (currentMode) {
 			url.searchParams.set('mode', currentMode)
 		}
-		pushState(url.pathname + url.search, { emailId: itemId })
+		pushState(url.pathname + url.search, { emailId: itemId, mode: viewMode })
 	}
 
 	// Toggle folder collapsed state

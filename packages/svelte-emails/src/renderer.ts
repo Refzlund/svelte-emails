@@ -1207,11 +1207,20 @@ function renderImgNode(
 	// Reset browser defaults for images:
 	// - display: block removes bottom gap (inline images have text baseline gap)
 	// - max-width: 100% prevents overflow
-	// - height: auto maintains aspect ratio
+	// - height: auto maintains aspect ratio (only when no explicit height)
+	// - aspect-ratio preserves dimensions before image loads (when both width and height are set)
 	const resetCss: Record<string, string> = {
 		display: 'block',
-		maxWidth: '100%',
-		height: 'auto'
+		maxWidth: '100%'
+	}
+
+	// When both width and height are specified, use aspect-ratio to prevent layout shift
+	// before the image loads. Otherwise, use height: auto for fluid scaling.
+	if (node.width && node.height) {
+		resetCss.aspectRatio = `${node.width} / ${node.height}`
+		resetCss.height = 'auto'
+	} else if (!node.height) {
+		resetCss.height = 'auto'
 	}
 
 	// Center block images when parent has text-align: center

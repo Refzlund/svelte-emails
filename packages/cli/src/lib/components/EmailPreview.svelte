@@ -165,7 +165,6 @@
 		bind:this={wrapperElement}
 		class:resize-left={resizeEdge === 'left'}
 		class:resize-right={resizeEdge === 'right'}
-		style:height={iframeHeight > 0 ? `${iframeHeight}px` : undefined}
 	>
 		{@render resizeHandle('left')}
 		
@@ -186,9 +185,12 @@
 <style>
 	.preview-container {
 		position: relative;
-		display: flex;
-		justify-content: center;
-		align-items: flex-start;
+		display: grid;
+		/* Center the wrapper horizontally */
+		justify-items: center;
+		align-content: start;
+		/* Ensure grid track is at least full height for small content */
+		grid-template-rows: minmax(100%, auto);
 		height: 100%;
 		overflow-y: auto;
 		overflow-x: hidden;
@@ -235,6 +237,8 @@
 	.iframe-wrapper {
 		position: relative;
 		width: var(--iframe-width, 100%);
+		/* Fill the grid cell height (at least 100% of container) */
+		min-height: 100%;
 		z-index: 4;
 		overflow: visible;
 	}
