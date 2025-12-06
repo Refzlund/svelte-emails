@@ -1,10 +1,10 @@
 import { isRunnableDevEnvironment, type Plugin, type ViteDevServer } from 'vite'
 import { watch, type FSWatcher } from 'chokidar'
-import { discoverAll, extractPreviewText, extractCategory, getCliSrcDir } from './discovery.js'
+import { discoverAll, extractPreviewText, extractCategory, extractOrder, getCliSrcDir } from './discovery.js'
 import { readFile } from 'node:fs/promises'
 import type { ServerResponse } from 'node:http'
 import type { EmailFile, ViewMode } from './types.js'
-import { normalizePath, toSafeEmails, toSafeEmail, invalidateModule, debounce } from './utils.js'
+import { normalizePath, toSafeEmails, toSafeEmail, invalidateModule, debounce, sortByOrder } from './utils.js'
 import { join } from 'node:path'
 
 const VIRTUAL_MODULE_ID = 'virtual:email-list'
@@ -214,10 +214,19 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 							const content = await readFile(changedFile.path, 'utf-8')
 							const newPreview = extractPreviewText(content)
 							const newCategory = extractCategory(content)
+							const newOrder = extractOrder(content)
 
-							if (changedFile.previewText !== newPreview || changedFile.category !== newCategory) {
+							if (changedFile.previewText !== newPreview || changedFile.category !== newCategory || changedFile.order !== newOrder) {
 								changedFile.previewText = newPreview
 								changedFile.category = newCategory
+								changedFile.order = newOrder
+								// Re-sort the list when metadata changes
+								const list = changedFile.mode === 'emails' ? allFiles.emails
+									: changedFile.mode === 'examples' ? allFiles.examples
+									: allFiles.documentation
+								const sorted = sortByOrder(list)
+								list.length = 0
+								list.push(...sorted)
 								console.log(`   [svelte-emails] Updated metadata for ${changedFile.name}`)
 							}
 						} catch { /* Ignore read errors */ }

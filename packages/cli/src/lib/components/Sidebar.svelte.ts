@@ -10,6 +10,7 @@ import { pushState, goto } from '$app/navigation'
 import initialData from 'virtual:email-list'
 import { emailStore } from '../email-store.js'
 import type { SafeEmail, ViewMode } from '../../cli/types.js'
+import { sortByOrder } from '../../cli/utils.js'
 
 export type { ViewMode }
 
@@ -53,7 +54,7 @@ export function createSidebarState() {
 		}
 	})
 
-	// Group items by category and sort alphabetically
+	// Group items by category and sort
 	const navStructure: NavStructure = $derived.by(() => {
 		const uncategorized: SafeEmail[] = []
 		const folderMap = new Map<string, SafeEmail[]>()
@@ -68,19 +69,18 @@ export function createSidebarState() {
 			}
 		}
 
-		// Sort items within each group alphabetically
-		uncategorized.sort((a, b) => a.name.localeCompare(b.name))
+		// Sort items within each group: by order first, then alphabetically
+		const sortedUncategorized = sortByOrder(uncategorized)
 
 		// Convert map to sorted array of folders
 		const folders: NavFolder[] = []
 		for (const [name, items] of folderMap) {
-			items.sort((a, b) => a.name.localeCompare(b.name))
-			folders.push({ name, items })
+			folders.push({ name, items: sortByOrder(items) })
 		}
 		// Sort folders alphabetically by name
 		folders.sort((a, b) => a.name.localeCompare(b.name))
 
-		return { uncategorized, folders }
+		return { uncategorized: sortedUncategorized, folders }
 	})
 
 	// Get the title based on view mode

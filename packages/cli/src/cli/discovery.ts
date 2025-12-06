@@ -2,6 +2,7 @@ import fg from 'fast-glob'
 import { readFileSync, existsSync } from 'node:fs'
 import { basename, relative, join, dirname } from 'node:path'
 import type { EmailFile, ViewMode } from './types.js'
+import { sortByOrder } from './utils.js'
 
 export type { EmailFile, ViewMode }
 
@@ -37,6 +38,7 @@ function extractName(filename: string): string {
  * - Single quotes: attr='value'
  * - Template literals: attr={`value`}
  * - Expressions: attr={someVar.method()} -> returns raw expression
+ * - Bare values: attr=0, attr=123 (unquoted numeric or string values)
  */
 function extractEmailAttribute(content: string, attrName: string): string {
 	// Skip the script section to avoid matching <Email> in string literals
@@ -92,8 +94,16 @@ function extractEmailAttribute(content: string, attrName: string): string {
 	const exprPattern = new RegExp(`${attrName}=\\{([^}]+)\\}`)
 	const exprMatch = emailTag.match(exprPattern)
 	if (exprMatch?.[1]) {
-		// Return raw expression wrapped in {}
-		return `{${exprMatch[1].trim()}}`.slice(0, 100)
+		// Return the expression value (without wrapping in {})
+		return exprMatch[1].trim().slice(0, 100)
+	}
+	
+	// Pattern for attr=bareValue (unquoted, e.g., order=1 or order=0)
+	// Must not be followed by quotes or braces, captures until whitespace or >
+	const barePattern = new RegExp(`${attrName}=([^"'{\\s>][^\\s>]*)`)
+	const bareMatch = emailTag.match(barePattern)
+	if (bareMatch?.[1]) {
+		return bareMatch[1].slice(0, 100)
 	}
 	
 	return ''
@@ -111,6 +121,21 @@ export function extractPreviewText(content: string): string {
  */
 export function extractCategory(content: string): string {
 	return extractEmailAttribute(content, 'category')
+}
+
+/**
+ * Extract order from <Email order=...> in a Svelte file
+ * Returns undefined if not specified or invalid
+ */
+export function extractOrder(content: string): number | undefined {
+	const value = extractEmailAttribute(content, 'order')
+	if (!value) return undefined
+	
+	// Handle numeric values (order={1}, order="1", order='1')
+	const num = parseFloat(value)
+	if (!isNaN(num) && isFinite(num)) return num
+	
+	return undefined
 }
 
 /**
@@ -213,12 +238,14 @@ export async function discoverEmails(cwd: string, skipPreview = false): Promise<
 		const relativePath = relative(cwd, absolutePath)
 		let previewText = ''
 		let category = ''
+		let order: number | undefined
 
 		if (!skipPreview) {
 			try {
 				const content = readFileSync(absolutePath, 'utf-8')
 				previewText = extractPreviewText(content)
 				category = extractCategory(content)
+				order = extractOrder(content)
 			} catch {
 				// Ignore read errors
 			}
@@ -231,14 +258,12 @@ export async function discoverEmails(cwd: string, skipPreview = false): Promise<
 			relativePath,
 			previewText,
 			category,
+			order,
 			mode: 'emails'
 		})
 	}
 
-	// Sort alphabetically by name
-	emails.sort((a, b) => a.name.localeCompare(b.name))
-
-	return emails
+	return sortByOrder(emails)
 }
 
 /**
@@ -293,12 +318,14 @@ export async function discoverSvelteFiles(
 		const relativePath = relative(searchPath, absolutePath)
 		let previewText = ''
 		let category = ''
+		let order: number | undefined
 
 		if (!skipPreview) {
 			try {
 				const content = readFileSync(absolutePath, 'utf-8')
 				previewText = extractPreviewText(content)
 				category = extractCategory(content)
+				order = extractOrder(content)
 			} catch {
 				// Ignore read errors
 			}
@@ -318,14 +345,12 @@ export async function discoverSvelteFiles(
 			relativePath: `${subfolder}/${relativePath}`,
 			previewText,
 			category,
+			order,
 			mode
 		})
 	}
 
-	// Sort alphabetically by name
-	items.sort((a, b) => a.name.localeCompare(b.name))
-
-	return items
+	return sortByOrder(items)
 }
 
 /**

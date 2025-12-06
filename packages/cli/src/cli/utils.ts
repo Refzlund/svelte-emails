@@ -18,6 +18,7 @@ export function toSafeEmail(email: EmailFile): SafeEmail {
 		relativePath: email.relativePath,
 		previewText: email.previewText,
 		category: email.category,
+		order: email.order,
 		mode: email.mode
 	}
 }
@@ -58,4 +59,20 @@ export function debounce<TArgs extends unknown[]>(
 			timeoutId = null
 		}, wait)
 	}
+}
+
+/**
+ * Sort items by order attribute, then alphabetically.
+ * Items with order come first (ascending), then items without order (alphabetically).
+ */
+export function sortByOrder<T extends { order?: number, name: string }>(items: T[]): T[] {
+	return items.slice().sort((a, b) => {
+		const aHasOrder = a.order !== undefined
+		const bHasOrder = b.order !== undefined
+
+		if (aHasOrder && bHasOrder) return a.order! - b.order!
+		if (aHasOrder) return -1
+		if (bHasOrder) return 1
+		return a.name.localeCompare(b.name)
+	})
 }

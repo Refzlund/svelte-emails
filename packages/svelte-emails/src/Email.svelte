@@ -63,6 +63,12 @@ This affects `responsive` columns, `mobile-only`, and `desktop-only` elements.
 		 */
 		category?: string
 		/**
+		 * Order for sorting emails in the CLI navigation.
+		 * Lower values appear first. Emails without order are sorted alphabetically after ordered ones.
+		 * This is a CLI-only feature and does not affect rendered output.
+		 */
+		order?: string | number
+		/**
 		 * Style configuration for this email.
 		 * These styles are merged between base preset and render options:
 		 * `merge(presets.base, Email.style, render.opts.style)`

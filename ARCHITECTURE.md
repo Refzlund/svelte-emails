@@ -331,6 +331,7 @@ Components register via Svelte context using stable `Symbol.for()` keys (require
 |-----------|---------|---------|
 | `preview` | Preheader text (shown in inbox list) | `''` |
 | `category` | Folder grouping in CLI navigation (CLI-only) | `''` |
+| `order` | Sort order in CLI navigation (CLI-only) | `undefined` |
 | `body-bg-[#hex]` | Outer body background (full width) | `#ffffff` |
 | `bg-[#hex]` | Content container background | `#ffffff` |
 | `max-w-[Npx]` | Content container max-width | `600px` |
@@ -338,6 +339,8 @@ Components register via Svelte context using stable `Symbol.for()` keys (require
 | `style` | StyleConfig overrides for this email | `{}` |
 
 The `body-bg-*` is the root color for opacity blending throughout the email.
+
+The `order` attribute controls positioning in the CLI navigation sidebar. Emails with `order` are sorted ascending by their value and appear before emails without `order`. Emails without `order` are sorted alphabetically. Folders remain alphabetically sorted.
 
 The `mobile-threshold` controls when `responsive` columns stack, and when `mobile-only`/`desktop-only` toggle visibility. Use lower values for tighter responsiveness (stacks later), higher for looser (stacks earlier).
 

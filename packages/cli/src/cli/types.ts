@@ -19,6 +19,8 @@ export interface EmailFile {
 	previewText: string
 	/** Category for grouping in navigation (from <Email category="...">) */
 	category: string
+	/** Order for sorting in navigation (from <Email order=...>) */
+	order: number | undefined
 	/** Which view mode this file belongs to */
 	mode: ViewMode
 }
@@ -32,5 +34,6 @@ export interface SafeEmail {
 	relativePath: string
 	previewText: string
 	category: string
+	order: number | undefined
 	mode: ViewMode
 }
