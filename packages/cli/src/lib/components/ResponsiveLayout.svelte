@@ -17,9 +17,9 @@
 	import { browser } from '$app/environment'
 	import { goto } from '$app/navigation'
 	import { base } from '$app/paths'
-	import { page } from '$app/state'
 	import { createResponsiveState } from '$lib/utils/responsive.svelte'
 	import { createViewMode } from '$lib/utils/view-mode.svelte'
+	import { deriveViewMode, deriveItemId } from '$lib/utils/derive-view-mode'
 	import { createHighlightManager } from '$lib/highlight.svelte'
 	import { createEmailViewerState } from './email-viewer.svelte.js'
 	import { emailStore, type ViewMode as EmailViewMode } from '$lib/email-store'
@@ -40,32 +40,9 @@
 	// Responsive state
 	const responsive = createResponsiveState()
 
-	// Derive view mode from URL
-	const emailMode: EmailViewMode = $derived.by(() => {
-		// Remove base path prefix for path matching
-		const path = base ? page.url.pathname.replace(base, '') : page.url.pathname
-		if (path.startsWith('/examples')) return 'examples'
-		if (path.startsWith('/documentation')) return 'documentation'
-		return 'emails'
-	})
-
-	// Derive item ID from URL - check shallow routing state first, then URL params
-	const itemId = $derived.by(() => {
-		// First check shallow routing state (set by pushState for instant navigation)
-		const stateId = (page.state as { emailId?: string })?.emailId
-		if (stateId) return stateId
-		
-		// Fall back to URL params
-		const params = page.params.params
-		if (params) {
-			const segments = params.split('/')
-			if (segments[0] === 'examples' || segments[0] === 'documentation') {
-				return segments.slice(1).join('/') || undefined
-			}
-			return segments.join('/')
-		}
-		return undefined
-	})
+	// Derive view mode and item ID from URL
+	const emailMode: EmailViewMode = $derived.by(() => deriveViewMode())
+	const itemId = $derived.by(() => deriveItemId())
 
 	// Check if we need to redirect to first item
 	const needsRedirect = $derived(!itemId && (

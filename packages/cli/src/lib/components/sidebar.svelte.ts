@@ -5,13 +5,12 @@
  * for better separation of concerns and testability.
  */
 
-import { page } from '$app/state'
 import { pushState, goto } from '$app/navigation'
-import { base } from '$app/paths'
 import initialData from 'virtual:email-list'
 import { emailStore } from '../email-store.js'
 import type { SafeEmail, ViewMode } from '../../cli/types.js'
 import { sortByOrder } from '../../cli/utils.js'
+import { deriveViewMode, deriveItemId, getUrlPrefixForMode } from '../utils/derive-view-mode.js'
 
 export type { ViewMode }
 
@@ -39,13 +38,7 @@ export function createSidebarState() {
 	let collapsedFolders = $state<Record<string, boolean>>({})
 
 	// Derive view mode from current URL path
-	const viewMode: ViewMode = $derived.by(() => {
-		// Remove base path prefix for path matching
-		const path = base ? page.url.pathname.replace(base, '') : page.url.pathname
-		if (path.startsWith('/examples')) return 'examples'
-		if (path.startsWith('/documentation')) return 'documentation'
-		return 'emails'
-	})
+	const viewMode: ViewMode = $derived.by(() => deriveViewMode())
 
 	// Get the current list based on view mode
 	const currentList = $derived.by(() => {
@@ -104,33 +97,10 @@ export function createSidebarState() {
 	})
 
 	// Get the URL prefix for current mode (includes base path for deployments)
-	const urlPrefix = $derived.by(() => {
-		switch (viewMode) {
-			case 'emails': return base
-			case 'examples': return `${base}/examples`
-			case 'documentation': return `${base}/documentation`
-		}
-	})
+	const urlPrefix = $derived.by(() => getUrlPrefixForMode(viewMode))
 
 	// Get selected ID from URL params or shallow routing state
-	const selectedId = $derived.by(() => {
-		// First check shallow routing state (set by pushState)
-		const stateId = (page.state as any)?.emailId
-		if (stateId) return stateId
-		// Extract ID from the [...params] catch-all route
-		const params = page.params.params
-		if (params) {
-			const segments = params.split('/')
-			// For examples/documentation, ID is after the mode prefix
-			if (segments[0] === 'examples' || segments[0] === 'documentation') {
-				return segments.slice(1).join('/') || undefined
-			}
-			// For emails, the whole params is the ID
-			return segments.join('/')
-		}
-		// Default to first item in current list
-		return currentList[0]?.id
-	})
+	const selectedId = $derived.by(() => deriveItemId() ?? currentList[0]?.id)
 
 	// Handle instant navigation via shallow routing
 	function handleItemClick(e: MouseEvent, itemId: string) {
@@ -155,23 +125,23 @@ export function createSidebarState() {
 	function navigateToMode(mode: ViewMode) {
 		if (mode === viewMode) {
 			// Already in this mode, go back to emails
+			const emailsPrefix = getUrlPrefixForMode('emails')
 			if (emails.length > 0) {
-				goto(`${base}/${emails[0].id}`)
+				goto(`${emailsPrefix}/${emails[0].id}`)
 			} else {
-				goto(base || '/')
+				goto(emailsPrefix || '/')
 			}
 			return
 		}
 		
 		// Navigate to the new mode
 		const list = mode === 'emails' ? emails : mode === 'examples' ? examples : documentation
+		const prefix = getUrlPrefixForMode(mode)
 		if (list.length > 0) {
-			const prefix = mode === 'emails' ? base : `${base}/${mode}`
 			goto(`${prefix}/${list[0].id}`)
 		} else {
 			// Navigate to mode root even if empty
-			const prefix = mode === 'emails' ? (base || '/') : `${base}/${mode}`
-			goto(prefix)
+			goto(prefix || '/')
 		}
 	}
 

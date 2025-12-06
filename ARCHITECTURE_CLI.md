@@ -208,14 +208,17 @@ Changesets configuration (`.changeset/config.json`):
 ```json
 {
   "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
-  "changelog": "@changesets/cli/changelog",
+  "changelog": [
+    "@svitejs/changesets-changelog-github-compact",
+    { "repo": "refzlund/svelte-emails" }
+  ],
   "commit": false,
   "fixed": [],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["svelte-emails-cli", "emails"]
+  "ignore": []
 }
 ```
 
@@ -242,14 +245,16 @@ packages/svelte-emails/
 └── LLM.md             # Copied from root
 ```
 
-#### Migration Checklist
+#### Migration Checklist ✅
 
-- [ ] Move CLI runtime dependencies from `packages/cli/package.json` to `packages/svelte-emails/package.json`
-- [ ] Update `packages/svelte-emails/package.json` with `bin`, `files` entries
-- [ ] Simplify `scripts/build.ts` to copy+bundle only (no package.json generation)
-- [ ] Add `.changeset/config.json`
-- [ ] Update root `package.json` scripts for publish workflow
-- [ ] Update CI to run `changeset version` and `npm publish` from correct directory
+All migration tasks have been completed:
+
+- ✅ CLI runtime dependencies moved to `packages/svelte-emails/package.json`
+- ✅ `packages/svelte-emails/package.json` updated with `bin`, `files` entries
+- ✅ `scripts/build.ts` simplified to copy+bundle only
+- ✅ `.changeset/config.json` added
+- ✅ Root `package.json` scripts updated for publish workflow
+- ✅ CI/GitHub Actions updated to use build+deploy workflow
 
 #### Why Not Publish CLI Separately?
 
@@ -337,6 +342,7 @@ packages/cli/
 │   │   │       └── MobileEmailPreview.svelte # Full-width iframe preview
 │   │   ├── utils/
 │   │   │   ├── view-mode.svelte.ts  # URL-synced view mode state + tab config
+│   │   │   ├── derive-view-mode.ts  # Shared URL parsing (view mode, item ID, prefixes)
 │   │   │   ├── responsive.svelte.ts # Mobile detection via matchMedia
 │   │   │   ├── preview-width.svelte.ts # Persisted preview width
 │   │   │   ├── scroll-positions.svelte.ts # Global scroll position cache
@@ -1079,6 +1085,25 @@ If the user's project uses Svelte 5 but a third-party library was compiled with 
 
 ## State Management Utilities
 
+### URL Derivation (`derive-view-mode.ts`)
+
+Shared utilities for deriving view mode, item ID, and URL prefixes from the current URL:
+
+```typescript
+import { deriveViewMode, deriveItemId, getUrlPrefixForMode } from '$lib/utils/derive-view-mode'
+
+// In $derived.by() contexts:
+const mode = deriveViewMode()        // 'emails' | 'examples' | 'documentation'
+const itemId = deriveItemId()        // Current item ID from URL or shallow routing state
+const prefix = getUrlPrefixForMode('examples')  // '/svelte-emails/examples' (with base)
+```
+
+This module centralizes URL parsing logic used by:
+- `sidebar.svelte.ts` — For navigation and selection state
+- `ResponsiveLayout.svelte` — For determining current mode and item
+
+Handles base path stripping, shallow routing state, and URL parameter parsing in one place.
+
 ### View Mode (`view-mode.svelte.ts`)
 
 URL-synced tab state using Svelte 5 runes:
@@ -1217,6 +1242,9 @@ bunx svelte-emails build --out ./dist --base /emails
 
 # From a specific directory
 bunx svelte-emails build --cwd ./my-emails --out ./preview-site
+
+# Ignore specific patterns (e.g., test emails)
+bunx svelte-emails build --ignore "**/test/**" --ignore "emails/**"
 ```
 
 ### CLI Options
@@ -1226,6 +1254,10 @@ bunx svelte-emails build --cwd ./my-emails --out ./preview-site
 | `--cwd <dir>` | Directory containing `*.email.svelte` files | Current directory |
 | `--out <dir>` | Output directory for the static build | `build` |
 | `--base <path>` | Base path for deployment (e.g., `/emails` for `https://example.com/emails`) | `/` |
+| `--ignore <glob>` | Glob pattern to ignore (can be repeated, e.g., `--ignore "emails/**"`) | None |
+| `--no-examples` | Exclude bundled examples from build | Include |
+| `--no-docs` | Exclude bundled documentation from build | Include |
+| `--strict` | Fail build if any email has render errors | Continue on error |
 
 ### Output Structure
 
