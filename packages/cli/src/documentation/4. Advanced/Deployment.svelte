@@ -80,6 +80,8 @@ netlify deploy --prod --dir=dist`
   to = "/index.html"
   status = 200`
 
+	const netlifyRedirectsCode = `/*  /index.html  200`
+
 	const cloudflareCode = `# Build the static site
 bunx svelte-emails build --out ./dist
 
@@ -94,18 +96,30 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
+      - uses: oven-sh/setup-bun@v2
       - run: bun install
-      - run: bunx svelte-emails build --out ./dist
-      - uses: peaceiris/actions-gh-pages@v3
+      - run: bunx svelte-emails build --out ./dist --base /repo-name
+      # Create 404.html for SPA client-side routing
+      - run: cp ./dist/index.html ./dist/404.html
+      - uses: actions/upload-pages-artifact@v3
         with:
-          github_token: $\{{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist`
+          path: ./dist
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/deploy-pages@v4`
 
 	const nginxCode = `server {
     listen 80;
@@ -285,7 +299,16 @@ EXPOSE 80`
 		</Div>
 		
 		<Spacer h-4 />
-		<Text.H4 content="SPA Routing (netlify.toml)" text={colors.text} />
+		<Text.H4 content="SPA Routing" text={colors.text} />
+		<Spacer h-2 />
+		<Text.Paragraph content="Option 1: Create a `_redirects` file in your `static/` folder:" text={colors.textMuted} />
+		<Spacer h-2 />
+		<Div bg={colors.codeBg} p-4 border={colors.border} rounded>
+			<Text.Codeblock content={netlifyRedirectsCode} highlight="plaintext" />
+		</Div>
+		
+		<Spacer h-4 />
+		<Text.Paragraph content="Option 2: Use `netlify.toml` in project root:" text={colors.textMuted} />
 		<Spacer h-2 />
 		<Div bg={colors.codeBg} p-4 border={colors.border} rounded>
 			<Text.Codeblock content={netlifyTomlCode} highlight="toml" />
@@ -313,11 +336,13 @@ EXPOSE 80`
 		<Spacer h-4 />
 		<Text.H4 content="SPA Routing (_redirects)" text={colors.text} />
 		<Spacer h-2 />
-		<Text.Paragraph content="Create a `_redirects` file in your project root (it will be copied to `dist`):" text={colors.textMuted} />
+		<Text.Paragraph content="Create a `_redirects` file in your `static/` or `public/` folder (it will be copied to the build output):" text={colors.textMuted} />
 		<Spacer h-2 />
 		<Div bg={colors.codeBg} p-4 border={colors.border} rounded>
 			<Text.Codeblock content={cloudflareRedirectsCode} highlight="plaintext" />
 		</Div>
+		<Spacer h-2 />
+		<Text.Small content="This rewrite (status 200) serves `index.html` for all routes while keeping the URL unchanged in the browser." text={colors.textMuted} />
 	</Div>
 
 	<Divider border={colors.border} />
@@ -328,7 +353,12 @@ EXPOSE 80`
 		<Spacer h-2 />
 		<Text.Paragraph content="Free hosting for public repositories with GitHub Actions automation." text={colors.textMuted} />
 		<Spacer h-4 />
+
+		<Div bg={colors.warning} bg-opacity-10 p-4 border={colors.warning} rounded>
+			<Text.Small content="**Important:** Before deploying, enable GitHub Pages in your repository settings (`Settings → Pages → Source → GitHub Actions`)." text={colors.text} />
+		</Div>
 		
+		<Spacer h-4 />
 		<Text.H4 content="GitHub Actions Workflow" text={colors.text} />
 		<Spacer h-2 />
 		<Text.Paragraph content="Create `.github/workflows/deploy.yml`:" text={colors.textMuted} />
@@ -338,7 +368,9 @@ EXPOSE 80`
 		</Div>
 		
 		<Spacer h-4 />
-		<Text.Small content="**Note:** For project pages (not user/org pages), add `--base /repo-name` to the build command." text={colors.warning} />
+		<Text.H4 content="Key Configuration Notes" text={colors.text} />
+		<Spacer h-2 />
+		<Text content="• **Base Path:** Replace `/repo-name` with your actual repository name for project pages\n• **404.html:** The `cp` step creates a fallback for SPA client-side routing\n• **Permissions:** The `pages: write` and `id-token: write` permissions are required for the official deploy action" text={colors.textMuted} />
 	</Div>
 
 	<Divider border={colors.border} />
@@ -364,7 +396,13 @@ aws cloudfront create-invalidation \\
 		</Div>
 		
 		<Spacer h-4 />
-		<Text.Small content="Configure S3 bucket for static website hosting and set up CloudFront error page to redirect 404s to `/index.html` for SPA routing." text={colors.textMuted} />
+		<Text.H4 content="SPA Routing with CloudFront" text={colors.text} />
+		<Spacer h-2 />
+		<Text.Paragraph content="Configure a custom error response in CloudFront to handle SPA routing:" text={colors.textMuted} />
+		<Spacer h-2 />
+		<Text content="1. Go to CloudFront → Distribution → Error Pages\n2. Create custom error response for **403** and **404** errors\n3. Set **Response page path** to `/index.html`\n4. Set **HTTP Response Code** to `200`" text={colors.textMuted} />
+		<Spacer h-4 />
+		<Text.Small content="This tells CloudFront to serve `index.html` for missing routes, allowing the SPA router to handle navigation." text={colors.textMuted} />
 	</Div>
 
 	<Divider border={colors.border} />
