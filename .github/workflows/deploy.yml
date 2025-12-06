@@ -25,6 +25,10 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Sync SvelteKit
+        working-directory: packages/cli
+        run: bunx svelte-kit sync
+
       - name: Build email previews
         working-directory: packages/cli
         run: bun run src/cli.ts build --cwd ../../emails --out ../../dist --base /svelte-emails
