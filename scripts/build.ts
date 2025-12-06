@@ -182,7 +182,8 @@ export default defineConfig({
 		input: resolve(rootDir, 'packages/cli/src/cli.ts'),
 		output: {
 			format: 'esm',
-			file: resolve(distDir, 'bin/svelte-emails.js')
+			dir: resolve(distDir, 'bin'),
+			entryFileNames: 'svelte-emails.js'
 		},
 		platform: 'node',
 		external: [
