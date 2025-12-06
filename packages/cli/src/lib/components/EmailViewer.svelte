@@ -349,6 +349,12 @@
 		color: rgba(255, 255, 255, 0.5);
 	}
 
+	@media (max-width: 1250px) {
+		.file-path {
+			display: none;
+		}
+	}
+
 	.viewer-content {
 		flex: 1;
 		overflow: hidden;
