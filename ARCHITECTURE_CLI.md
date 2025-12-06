@@ -8,9 +8,10 @@ This document covers the architecture, design decisions, and implementation deta
 
 The CLI provides a development server for previewing `*.email.svelte` templates with:
 
+- **Responsive layout** — Desktop sidebar + mobile bottom nav with slide-in sidebar
 - **Sidebar** listing all discovered email files
 - **Tabbed viewer** with Preview, Source, HTML, Raw, and Text views
-- **Resizable preview** — drag edges to resize, persisted to localStorage
+- **Resizable preview** — drag edges to resize (desktop), persisted to localStorage
 - **Live reload** when files are added, removed, or modified
 - **SSR rendering** using the `svelte-emails` render function
 - **Syntax highlighting** via Shiki (optional, off-thread worker)
@@ -85,16 +86,27 @@ packages/cli/
 │   │   ├── highlight.svelte.ts # Off-thread syntax highlighting with caching
 │   │   ├── Icons.svelte       # SVG icons as Svelte snippets
 │   │   ├── components/
-│   │   │   ├── Sidebar.svelte       # Navigation sidebar
-│   │   │   ├── sidebar.svelte.ts    # Sidebar state & navigation logic
-│   │   │   ├── EmailViewer.svelte   # Shared viewer for all modes
-│   │   │   ├── email-viewer.svelte.ts # Viewer state & data fetching
-│   │   │   ├── EmailPreview.svelte  # Resizable iframe preview
-│   │   │   ├── CodeView.svelte      # Syntax-highlighted code panel
-│   │   │   ├── LoadingBar.svelte    # Animated loading indicator
-│   │   │   └── Tooltip.svelte       # Delayed tooltip with shortcut display
+│   │   │   ├── ResponsiveLayout.svelte  # Layout wrapper (desktop/mobile)
+│   │   │   ├── Sidebar.svelte           # Desktop navigation sidebar
+│   │   │   ├── sidebar.svelte.ts        # Sidebar state & navigation logic
+│   │   │   ├── EmailViewer.svelte       # Desktop viewer for all modes
+│   │   │   ├── email-viewer.svelte.ts   # Viewer state & data fetching
+│   │   │   ├── EmailPreview.svelte      # Resizable iframe preview (desktop)
+│   │   │   ├── email-preview.svelte.ts  # Shared preview state (image cache, scroll, glow)
+│   │   │   ├── CodeView.svelte          # Syntax-highlighted code panel
+│   │   │   ├── LoadingBar.svelte        # Animated loading indicator
+│   │   │   ├── Tooltip.svelte           # Delayed tooltip with shortcut display
+│   │   │   ├── shared/
+│   │   │   │   ├── SidebarContent.svelte  # Shared sidebar content (desktop/mobile)
+│   │   │   │   └── TabButton.svelte       # Shared tab button component
+│   │   │   └── mobile/
+│   │   │       ├── MobileBottomNav.svelte   # Mobile bottom navigation bar
+│   │   │       ├── MobileSidebar.svelte     # Slide-in sidebar overlay
+│   │   │       ├── MobileTabDropdown.svelte # Tab selection dropdown
+│   │   │       └── MobileEmailPreview.svelte # Full-width iframe preview
 │   │   ├── utils/
-│   │   │   ├── view-mode.svelte.ts  # URL-synced view mode state
+│   │   │   ├── view-mode.svelte.ts  # URL-synced view mode state + tab config
+│   │   │   ├── responsive.svelte.ts # Mobile detection via matchMedia
 │   │   │   ├── preview-width.svelte.ts # Persisted preview width
 │   │   │   ├── scroll-positions.svelte.ts # Global scroll position cache
 │   │   │   └── keyboard-shortcuts.ts # Global keyboard shortcut manager
@@ -104,9 +116,9 @@ packages/cli/
 │   │       ├── utils.ts       # Utility functions (path normalization, debounce)
 │   │       └── vite-plugin.ts # Core Vite plugin
 │   └── routes/
-│       ├── +layout.svelte     # Main layout (uses Sidebar component)
+│       ├── +layout.svelte     # Root layout (keyboard shortcuts, ResponsiveLayout)
 │       └── [...params]/       # Unified catch-all route for all views
-│           ├── +page.svelte   # Single page handling emails/examples/documentation
+│           ├── +page.svelte   # Route entry point (rendering in ResponsiveLayout)
 │           └── +page.ts       # Route parameter parsing
 ├── static/
 │   └── theme.css              # CSS variables and theme
@@ -379,14 +391,35 @@ export function createHighlightManager(): {
 
 ### 8. UI Components
 
+#### Responsive Layout (`ResponsiveLayout.svelte`)
+
+The root layout wrapper that switches between mobile and desktop layouts based on viewport width:
+
+```typescript
+// Breakpoint: 768px (mobile if width <= 768px)
+
+// Desktop layout:
+// - Sidebar (fixed 320px width) + EmailViewer (flex: 1)
+// - Tab switching via horizontal tab bar in viewer header
+// - Resizable email preview with drag handles
+
+// Mobile layout:
+// - Full-width email preview (no resize handles)
+// - Bottom navigation bar with menu and tab dropdown
+// - Slide-in sidebar overlay (triggered by menu button)
+```
+
+Uses `createResponsiveState()` for reactive mobile detection via `matchMedia`.
+
 #### Layout (`+layout.svelte`)
 
-- Minimal layout that renders `<Sidebar />` component
+- Minimal layout that renders `<ResponsiveLayout />` component
+- Handles keyboard shortcuts via `handleKeyboardShortcut`
 - Handles service worker cleanup on mount
 
 #### Sidebar Component (`Sidebar.svelte` + `sidebar.svelte.ts`)
 
-Navigation sidebar with email/example/documentation list:
+Desktop navigation sidebar that wraps `SidebarContent`:
 
 ```typescript
 // sidebar.svelte.ts - Extracted state logic
@@ -409,9 +442,43 @@ Features:
 - SSE subscription for live updates
 - Zebra-striped rows with alternating backgrounds
 
+#### Shared Components (`components/shared/`)
+
+**SidebarContent.svelte** — Shared sidebar content for both desktop and mobile:
+- Email/example/documentation list with folder grouping
+- Mode switching buttons (Examples, Documentation)
+- `showShortcuts` prop controls keyboard shortcut display (desktop: yes, mobile: no)
+- `onitemclick` callback for closing mobile sidebar after selection
+
+**TabButton.svelte** — Reusable tab button for desktop tabs and mobile dropdown:
+- Displays icon + label with loading spinner state
+- Uses shared `ViewMode` type from `view-mode.svelte.ts`
+
+#### Mobile Components (`components/mobile/`)
+
+**MobileSidebar.svelte** — Slide-in overlay sidebar:
+- Uses `floating-runes` portal to render at document root
+- Animated slide-in/fade with 200ms timing
+- Backdrop click or Escape key to close
+
+**MobileBottomNav.svelte** — Fixed bottom navigation bar:
+- Left: Menu button (opens sidebar)
+- Center: Email name and preview text (truncated)
+- Right: Tab button (opens dropdown)
+
+**MobileTabDropdown.svelte** — Tab selection dropdown:
+- Renders above bottom nav via portal
+- Uses shared `TabButton` component
+- Closes on selection or outside click
+
+**MobileEmailPreview.svelte** — Full-width iframe preview:
+- Same grid background and glow effect as desktop
+- No resize handles (full width on mobile)
+- Same scroll position persistence as desktop
+
 #### EmailViewer Component (`EmailViewer.svelte` + `email-viewer.svelte.ts`)
 
-Shared viewer for all view modes (emails, examples, documentation):
+Desktop viewer for all view modes (emails, examples, documentation):
 
 ```typescript
 // email-viewer.svelte.ts - Extracted state logic
@@ -440,7 +507,7 @@ Features:
 
 #### EmailPreview Component
 
-Resizable iframe for rendering email HTML:
+Desktop resizable iframe for rendering email HTML:
 
 ```typescript
 // Features:
@@ -790,7 +857,7 @@ type ViewMode = 'preview' | 'source' | 'html' | 'raw' | 'text'
 
 const viewMode = createViewMode()
 
-viewMode.current  // Current mode
+viewMode.value    // Current mode
 viewMode.isRaw    // Shorthand for mode === 'raw'
 viewMode.set('html')  // Updates state and URL
 ```
@@ -801,6 +868,26 @@ The mode is stored in the URL query parameter `?mode=html`, allowing:
 - Page refresh preserves view state
 
 **Note:** `html` and `raw` share the same tab (HTML) but have a Formatted/Raw toggle within the CodeView panel.
+
+Also exports:
+- `TAB_MODES` — Array of all view modes in order
+- `TABS` — Centralized tab configuration array with mode, label, icon, and shortcut
+- `getTabConfig(mode)` — Helper to get tab config by mode
+- `TabConfig` — Interface for tab configuration `{ mode, label, icon, shortcut }`
+
+### Responsive State (`responsive.svelte.ts`)
+
+Mobile detection using `matchMedia`:
+
+```typescript
+const responsive = createResponsiveState()
+
+responsive.isMobile   // true if viewport <= 768px
+responsive.isDesktop  // true if viewport > 768px
+```
+
+Uses `matchMedia` for efficient viewport tracking (no resize event listeners).
+Defaults to desktop for SSR, hydrates correctly on client.
 
 ### Preview Width (`preview-width.svelte.ts`)
 
@@ -829,6 +916,32 @@ shouldRestore('emails:my-email')             // Returns true on first call per k
 ```
 
 Keys are formatted as `${mode}:${emailId}` to namespace by view mode (emails, examples, documentation). The state persists in memory across navigation but resets on page refresh.
+
+### Email Preview State (`email-preview.svelte.ts`)
+
+Shared state logic for `EmailPreview.svelte` and `MobileEmailPreview.svelte`:
+
+```typescript
+import { createPreviewState, createScrollPersistence } from '$lib/utils/email-preview.svelte'
+
+// Image cache and cursor glow effect
+const previewState = createPreviewState()
+previewState.imageCache    // getImageSrc, isLoading, error
+previewState.cursorGlow    // x, y, visible for CSS custom properties
+
+// Scroll position persistence
+const scroll = createScrollPersistence(
+  () => currentEmailId,       // Getter for email ID
+  () => currentSourceType     // Getter for source type
+)
+scroll.save(element)          // Save scroll position
+scroll.restore(element)       // Restore scroll position (once per email)
+```
+
+Both preview components use these shared utilities to:
+- Cache and load email images asynchronously
+- Track cursor position for glow effect
+- Persist scroll positions across email navigation
 
 ---
 

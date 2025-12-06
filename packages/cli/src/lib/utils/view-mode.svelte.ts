@@ -14,8 +14,35 @@
 
 import { replaceState } from '$app/navigation'
 import { page } from '$app/state'
+import * as icons from '$lib/Icons.svelte'
 
+/** View mode for the email viewer tabs */
 export type ViewMode = 'preview' | 'source' | 'html' | 'raw' | 'text'
+
+/** All available tab modes in order */
+export const TAB_MODES: ViewMode[] = ['preview', 'source', 'html', 'raw', 'text']
+
+/** Tab configuration for UI rendering */
+export interface TabConfig {
+	mode: ViewMode
+	label: string
+	icon: typeof icons.contentView
+	shortcut: string
+}
+
+/** Centralized tab configuration used by both desktop and mobile components */
+export const TABS: TabConfig[] = [
+	{ mode: 'preview', label: 'Preview', icon: icons.contentView, shortcut: 'Alt+1' },
+	{ mode: 'source', label: 'Source', icon: icons.code, shortcut: 'Alt+2' },
+	{ mode: 'html', label: 'HTML', icon: icons.document, shortcut: 'Alt+3' },
+	{ mode: 'raw', label: 'Raw', icon: icons.document, shortcut: '' },
+	{ mode: 'text', label: 'Text', icon: icons.codeText, shortcut: 'Alt+4' }
+]
+
+/** Get tab configuration by mode */
+export function getTabConfig(mode: ViewMode): TabConfig {
+	return TABS.find((t) => t.mode === mode) ?? TABS[0]
+}
 
 const validModes: ViewMode[] = ['source', 'html', 'raw', 'text']
 

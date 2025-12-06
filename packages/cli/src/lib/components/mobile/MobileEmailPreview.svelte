@@ -1,18 +1,16 @@
 <!-- @component
-	Resizable iframe preview for rendered email HTML.
+	Mobile-optimized email preview.
 	
-	The iframe width can be adjusted by dragging the edges.
-	Images are automatically cached as data URLs for instant loading.
-	Uses the shared IframePreview component with morphdom for seamless updates.
+	Full-width iframe preview without resize handles.
+	Simplified version of EmailPreview for mobile devices.
 
 @example
 ```svelte
-<EmailPreview html={renderedHtml} emailId="my-email" />
+<MobileEmailPreview html={renderedHtml} emailId="my-email" mode="emails" />
 ```
 -->
 <script lang="ts">
-	import { createPreviewState, createScrollPersistence } from './email-preview.svelte.js'
-	import { createPreviewWidth } from '$lib/utils/preview-width.svelte'
+	import { createPreviewState, createScrollPersistence } from '../email-preview.svelte.js'
 	import { Email } from 'svelte-emails'
 
 	interface Props {
@@ -37,45 +35,9 @@
 	// Use shared scroll persistence
 	const scroll = createScrollPersistence(() => scrollKey)
 
-	const previewWidth = createPreviewWidth()
-	let iframeWidth = $derived(previewWidth.value)
 	let iframeHeight = $state(0)
 	let containerElement: HTMLDivElement | undefined = $state()
 	let wrapperElement: HTMLDivElement | undefined = $state()
-	let resizeEdge: 'left' | 'right' | null = $state(null)
-	let isDragging = $state(false)
-	
-	// Resize drag state
-	let dragStartX = 0
-	let dragStartWidth = 0
-	let dragContainerWidth = 0
-	
-	function handleResizeMove(clientX: number) {
-		if (!isDragging || !containerElement) return
-		
-		const deltaX = clientX - dragStartX
-		// Since iframe is centered, dragging either edge should change width symmetrically
-		const deltaPercent = (deltaX / dragContainerWidth) * 100
-		const widthChange = resizeEdge === 'right' ? deltaPercent * 2 : -deltaPercent * 2
-		previewWidth.value = Math.max(10, Math.min(100, dragStartWidth + widthChange))
-	}
-	
-	function handleResizeEnd() {
-		if (!isDragging) return
-		isDragging = false
-		resizeEdge = null
-		previewWidth.persist()
-	}
-
-	function handleResizeStart(e: MouseEvent, edge: 'left' | 'right') {
-		if (!containerElement) return
-		e.preventDefault()
-		isDragging = true
-		resizeEdge = edge
-		dragStartX = e.clientX
-		dragStartWidth = iframeWidth
-		dragContainerWidth = containerElement.getBoundingClientRect().width
-	}
 
 	// Restore scroll position when iframe height is ready
 	$effect(() => {
@@ -85,47 +47,18 @@
 
 <svelte:window onmousemove={preview.handleMouseMove} />
 
-{#snippet resizeHandle(edge: 'left' | 'right')}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div 
-		class="resize-handle resize-handle-{edge}"
-		onmouseenter={() => !isDragging && (resizeEdge = edge)}
-		onmouseleave={() => !isDragging && (resizeEdge = null)}
-		onmousedown={(e) => handleResizeStart(e, edge)}
-	></div>
-{/snippet}
-
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="preview-container"
 	bind:this={containerElement}
-	style:--iframe-width="{iframeWidth}%"
-	class:resizing={isDragging}
 	onscroll={() => scroll.savePosition(containerElement)}
 >
-	<!-- Transparent overlay to capture mouse events during drag -->
-	{#if isDragging}
-		<div 
-			class="drag-overlay"
-			onmousemove={(e) => handleResizeMove(e.clientX)}
-			onmouseup={handleResizeEnd}
-		></div>
-	{/if}
-	
 	<!-- Glow overlay - fixed position, clipped by container's clip-path -->
 	<div 
 		class="glow-overlay"
 		style:--mouse-x="{preview.mouseX}px"
 		style:--mouse-y="{preview.mouseY}px"
 	></div>
-	<div
-		class="iframe-wrapper"
-		bind:this={wrapperElement}
-		class:resize-left={resizeEdge === 'left'}
-		class:resize-right={resizeEdge === 'right'}
-	>
-		{@render resizeHandle('left')}
-		
+	<div class="iframe-wrapper" bind:this={wrapperElement}>
 		<Email.IframePreview
 			html={preview.contentHtml}
 			bind:height={iframeHeight}
@@ -135,8 +68,6 @@
 			scrolling="no"
 			oniframemousemove={preview.handleMouseMove}
 		/>
-		
-		{@render resizeHandle('right')}
 	</div>
 </div>
 
@@ -194,44 +125,11 @@
 
 	.iframe-wrapper {
 		position: relative;
-		width: var(--iframe-width, 100%);
+		width: 100%;
 		/* Fill the grid cell height (at least 100% of container) */
 		min-height: 100%;
 		z-index: 4;
 		overflow: visible;
-	}
-
-	.iframe-wrapper :global(iframe) {
-		box-shadow: 0px 0 0 0 #777BDB;
-		transition: box-shadow .2s;
-		z-index: 2;
-	}
-
-	/* Visual resize indicators via box-shadow on wrapper */
-	.iframe-wrapper.resize-left :global(iframe) {
-		box-shadow: -6px 0 0 0 #777BDB;
-	}
-
-	.iframe-wrapper.resize-right :global(iframe) {
-		box-shadow: 6px 0 0 0 #777BDB;
-	}
-
-	/* Resize handles - positioned at edges of iframe wrapper */
-	.resize-handle {
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		width: 12px;
-		cursor: ew-resize;
-		z-index: 10;
-	}
-
-	.resize-handle-left {
-		left: -6px;
-	}
-
-	.resize-handle-right {
-		right: -6px;
 	}
 
 	.preview-container :global(iframe) {
@@ -239,21 +137,5 @@
 		width: 100%;
 		border: none;
 		z-index: 1;
-	}
-
-	.preview-container.resizing {
-		cursor: ew-resize;
-		user-select: none;
-	}
-
-	/* Transparent overlay during drag to capture all mouse events */
-	.drag-overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		z-index: 9999;
-		cursor: ew-resize;
 	}
 </style>
