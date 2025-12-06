@@ -26,7 +26,7 @@ jobs:
         run: bun install
 
       - name: Build email previews
-        run: bunx svelte-emails build --cwd ./emails --out ./dist
+        run: bun run packages/cli/src/cli.ts build --cwd ./emails --out ./dist
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
