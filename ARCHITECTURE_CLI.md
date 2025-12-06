@@ -4,6 +4,25 @@ This document covers the architecture, design decisions, and implementation deta
 
 ---
 
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Package Structure & Build Strategy](#package-structure--build-strategy)
+3. [Keyboard Shortcuts](#keyboard-shortcuts)
+4. [Optional Dependencies](#optional-dependencies)
+5. [File Structure](#file-structure)
+6. [Routing](#routing)
+7. [Core Components](#core-components)
+8. [Data Flow](#data-flow)
+9. [Key Learnings & Gotchas](#key-learnings--gotchas)
+10. [State Management Utilities](#state-management-utilities)
+11. [Configuration](#configuration)
+12. [Static Site Build](#static-site-build)
+13. [Future Improvements](#future-improvements)
+14. [Dependencies](#dependencies)
+
+---
+
 ## Overview
 
 The CLI provides a development server for previewing `*.email.svelte` templates with:
@@ -31,6 +50,218 @@ The CLI provides a development server for previewing `*.email.svelte` templates 
 | `Alt+4` | Switch to Text tab |
 
 Shortcuts are displayed in tooltips (hover for 400ms) and as labels on navigation buttons.
+
+---
+
+## Package Structure & Build Strategy
+
+### The Problem with `_dist` Build Output
+
+The previous architecture used `scripts/build.ts` to create a synthetic `_dist/` directory for npm publishing. This had several issues:
+
+1. **Duplicate sources of truth** — `build.ts` hardcoded dependency versions that also existed in `package.json` files
+2. **Changesets incompatibility** — Changesets expects to version packages in `packages/`, not a generated `_dist/`
+3. **Fragile configuration** — Updates to `svelte.config.js`, `vite.config.ts`, or `package.json` required manual synchronization in `build.ts`
+4. **Complex build process** — Required understanding both the monorepo structure AND the build script
+
+### The Solution: Single Source of Truth
+
+The new architecture publishes directly from the workspace without synthetic `package.json` generation.
+
+#### Package Layout
+
+```
+svelte-emails/
+├── packages/
+│   ├── svelte-emails/           # Core library (publishable)
+│   │   ├── package.json         # THE source of truth for library
+│   │   ├── src/                 # Library source
+│   │   └── dist/                # Built output (svelte-package)
+│   │
+│   └── cli/                     # CLI dev server (included in main package)
+│       ├── package.json         # Dev dependencies only
+│       ├── src/                 # CLI source (copied to main package on build)
+│       └── static/              # Static assets
+│
+├── package.json                 # Root workspace config
+└── .changeset/                  # Changesets configuration
+```
+
+#### Key Principles
+
+1. **`packages/svelte-emails/package.json` is the single source of truth** for:
+   - Package name, version, description
+   - All dependencies (including CLI runtime deps)
+   - Exports configuration
+   - Peer dependencies
+
+2. **CLI source is bundled INTO the main package** during build, not published separately
+
+3. **Changesets manages `packages/svelte-emails/package.json`** directly
+
+4. **Build script READS from package.json, never WRITES**
+
+#### Consolidated package.json
+
+```json
+// packages/svelte-emails/package.json
+{
+  "name": "svelte-emails",
+  "version": "0.0.4",
+  "description": "Email template library for Svelte with a development server",
+  "type": "module",
+  
+  "bin": {
+    "svelte-emails": "./cli/bin/svelte-emails.js"
+  },
+  
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  
+  "files": [
+    "dist",
+    "cli",
+    "LLM.md"
+  ],
+  
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  
+  "peerDependenciesMeta": {
+    "shiki": { "optional": true }
+  },
+  
+  "dependencies": {
+    // Core library deps
+    "morphdom": "^2.7.7",
+    
+    // CLI runtime deps (previously in cli/package.json)
+    "fast-glob": "^3.3.3",
+    "chokidar": "^4.0.3",
+    "@sveltejs/kit": "^2.48.5",
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "vite": "^7.2.2"
+  },
+  
+  "optionalDependencies": {
+    "shiki": "^3.19.0",
+    "@shikijs/langs": "^3.19.0",
+    "@shikijs/themes": "^3.19.0"
+  },
+  
+  "devDependencies": {
+    // Build-time only
+    "@sveltejs/package": "^2.3.11",
+    "typescript": "^5.9.3"
+  }
+}
+```
+
+#### Simplified Build Process
+
+```typescript
+// scripts/build.ts (simplified)
+async function buildPackage() {
+  // 1. Build core library with svelte-package
+  await run(['bun', 'run', 'build'], 'packages/svelte-emails')
+  
+  // 2. Copy CLI source to packages/svelte-emails/cli/
+  await cp('packages/cli/src', 'packages/svelte-emails/cli/src')
+  await cp('packages/cli/static', 'packages/svelte-emails/cli/static')
+  
+  // 3. Bundle CLI entry point
+  await build({
+    input: 'packages/cli/src/cli.ts',
+    output: { dir: 'packages/svelte-emails/cli/bin' }
+  })
+  
+  // 4. Generate cli/svelte.config.js and cli/vite.config.ts
+  //    (static templates, not dynamic from package.json)
+  
+  // NO package.json generation - use existing one!
+}
+```
+
+#### Changesets Integration
+
+With this structure, changesets works naturally:
+
+```bash
+# Create a changeset
+bunx changeset
+
+# Version packages (updates packages/svelte-emails/package.json)
+bunx changeset version
+
+# Publish (from packages/svelte-emails after build)
+cd packages/svelte-emails && npm publish
+```
+
+Changesets configuration (`.changeset/config.json`):
+
+```json
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": ["svelte-emails-cli", "emails"]
+}
+```
+
+#### Build Output Structure
+
+After `bun run build`:
+
+```
+packages/svelte-emails/
+├── package.json       # Unchanged - source of truth
+├── dist/              # Core library output
+│   ├── index.js
+│   ├── index.d.ts
+│   └── ...
+├── cli/               # CLI files (added by build)
+│   ├── bin/
+│   │   └── svelte-emails.js
+│   ├── src/
+│   │   └── ... (CLI source)
+│   ├── static/
+│   │   └── ... (CSS, assets)
+│   ├── svelte.config.js
+│   └── vite.config.ts
+└── LLM.md             # Copied from root
+```
+
+#### Migration Checklist
+
+- [ ] Move CLI runtime dependencies from `packages/cli/package.json` to `packages/svelte-emails/package.json`
+- [ ] Update `packages/svelte-emails/package.json` with `bin`, `files` entries
+- [ ] Simplify `scripts/build.ts` to copy+bundle only (no package.json generation)
+- [ ] Add `.changeset/config.json`
+- [ ] Update root `package.json` scripts for publish workflow
+- [ ] Update CI to run `changeset version` and `npm publish` from correct directory
+
+#### Why Not Publish CLI Separately?
+
+Options considered:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| Single package (chosen) | Simple install, single version | Larger package size |
+| Separate `svelte-emails-cli` | Smaller core package | Version coordination, two installs needed |
+| CLI as optional peer dep | Flexible | Complex setup for users |
+
+The CLI is integral to the developer experience, and most users will want it. A single package simplifies installation (`bun add svelte-emails`) and ensures version compatibility.
 
 ---
 
@@ -65,7 +296,7 @@ bun add shiki @shikijs/langs @shikijs/themes
 
 ---
 
-## Package Structure
+## File Structure
 
 ```
 packages/cli/

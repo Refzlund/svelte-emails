@@ -22,5 +22,11 @@ Thumbs.db
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
+# Build outputs (generated, not committed)
 _dist
 test-build
+packages/svelte-emails/cli
+packages/svelte-emails/dist
+packages/svelte-emails/README.md
+packages/svelte-emails/LLM.md
+packages/svelte-emails/LICENSE

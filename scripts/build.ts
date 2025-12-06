@@ -6,7 +6,8 @@ import { existsSync } from 'node:fs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const rootDir = resolve(__dirname, '..')
-const distDir = resolve(rootDir, '_dist')
+const packageDir = resolve(rootDir, 'packages/svelte-emails')
+const cliDir = resolve(packageDir, 'cli')
 
 async function run(command: string[], cwd: string, env?: Record<string, string>) {
 	console.log(`   Running: ${command.join(' ')}`)
@@ -23,53 +24,38 @@ async function run(command: string[], cwd: string, env?: Record<string, string>)
 }
 
 async function buildPackage() {
-	console.log('🧹 Cleaning _dist...')
-	if (existsSync(distDir)) {
-		try {
-			await rm(distDir, { recursive: true, force: true })
-		} catch {
-			// If rm fails, try to clean contents instead
-			console.log('   Could not remove _dist, cleaning contents instead...')
-		}
+	console.log('🧹 Cleaning cli directory...')
+	if (existsSync(cliDir)) {
+		await rm(cliDir, { recursive: true, force: true })
 	}
-	await mkdir(distDir, { recursive: true })
+	await mkdir(cliDir, { recursive: true })
 
 	// =========================================================================
 	// 1. Build core library with svelte-package
 	// =========================================================================
 	console.log('\n📦 Building core library with svelte-package...')
-	const coreLibDir = resolve(rootDir, 'packages/svelte-emails')
-	await run(['bun', 'run', 'build'], coreLibDir)
-	
-	// Copy the built dist folder to _dist/dist (library output)
-	await cp(
-		resolve(coreLibDir, 'dist'),
-		resolve(distDir, 'dist'),
-		{ recursive: true }
-	)
+	await run(['bun', 'run', 'build'], packageDir)
 
 	// =========================================================================
 	// 2. Copy CLI source for dev mode (Vite dev server with HMR)
 	// =========================================================================
 	console.log('\n📦 Copying CLI source for dev mode...')
-	const cliAppDir = resolve(distDir, 'cli-app')
-	await mkdir(cliAppDir, { recursive: true })
 	
 	// Copy CLI src folder
 	await cp(
 		resolve(rootDir, 'packages/cli/src'),
-		resolve(cliAppDir, 'src'),
+		resolve(cliDir, 'src'),
 		{ recursive: true }
 	)
 	
 	// Copy CLI static files
 	await cp(
 		resolve(rootDir, 'packages/cli/static'),
-		resolve(cliAppDir, 'static'),
+		resolve(cliDir, 'static'),
 		{ recursive: true }
 	)
 	
-	// Copy and update svelte.config.js for dev mode (no adapter needed)
+	// Create svelte.config.js for CLI dev mode
 	const svelteConfig = `import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 
 /** @type {import('@sveltejs/kit').Config} */
@@ -90,9 +76,9 @@ const config = {
 
 export default config
 `
-	await writeFile(resolve(cliAppDir, 'svelte.config.js'), svelteConfig)
+	await writeFile(resolve(cliDir, 'svelte.config.js'), svelteConfig)
 	
-	// Create vite.config.ts for the CLI app with performance optimizations
+	// Create vite.config.ts for the CLI app
 	const viteConfig = `import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite'
 import { emailListPlugin } from './src/cli/vite-plugin.js'
@@ -150,39 +136,25 @@ export default defineConfig({
 	}
 })
 `
-	await writeFile(resolve(cliAppDir, 'vite.config.ts'), viteConfig)
+	await writeFile(resolve(cliDir, 'vite.config.ts'), viteConfig)
 	
 	// Copy tsconfig.json
 	await cp(
 		resolve(rootDir, 'packages/cli/tsconfig.json'),
-		resolve(cliAppDir, 'tsconfig.json')
+		resolve(cliDir, 'tsconfig.json')
 	)
-
-	// Create symlink for node_modules so cli-app can resolve dependencies
-	const cliAppNodeModules = resolve(cliAppDir, 'node_modules')
-	const parentNodeModules = resolve(distDir, 'node_modules')
-	try {
-		// Remove existing node_modules if it exists (might be a directory from previous builds)
-		if (existsSync(cliAppNodeModules)) {
-			await rm(cliAppNodeModules, { recursive: true })
-		}
-		// Create a junction (Windows) or symlink (Unix) to parent node_modules
-		const { symlink } = await import('node:fs/promises')
-		await symlink(parentNodeModules, cliAppNodeModules, 'junction')
-		console.log('   Created node_modules symlink for cli-app')
-	} catch (err) {
-		console.warn('   Warning: Could not create node_modules symlink:', err)
-	}
 
 	// =========================================================================
 	// 3. Bundle CLI entry point
 	// =========================================================================
 	console.log('\n🔨 Building CLI entry point...')
+	await mkdir(resolve(cliDir, 'bin'), { recursive: true })
+	
 	await build({
 		input: resolve(rootDir, 'packages/cli/src/cli.ts'),
 		output: {
 			format: 'esm',
-			dir: resolve(distDir, 'bin'),
+			dir: resolve(cliDir, 'bin'),
 			entryFileNames: 'svelte-emails.js'
 		},
 		platform: 'node',
@@ -200,126 +172,55 @@ export default defineConfig({
 	})
 
 	// Add shebang and fix paths in bundled CLI
-	const cliBinPath = resolve(distDir, 'bin/svelte-emails.js')
+	const cliBinPath = resolve(cliDir, 'bin/svelte-emails.js')
 	let cliContent = await readFile(cliBinPath, 'utf-8')
 	
 	// Remove any existing shebang and add our own at the top
 	cliContent = cliContent.replace(/^#!.*\n/gm, '')
 	cliContent = '#!/usr/bin/env node\n' + cliContent
 	
-	// Fix: CLI should run from cli-app directory for dev mode
+	// Fix paths for the bundled CLI:
+	// - cli.ts uses resolve(__dirname, '..') to go from src/ to cli root
+	//   After bundling to bin/, this should become resolve(__dirname, '..')
+	//   to go from bin/ to cli/
+	// - build.ts uses resolve(__dirname, '../..') to go from src/cli/ to cli root
+	//   After bundling to bin/, this should become resolve(__dirname, '..')
+	//   to go from bin/ to cli/
 	cliContent = cliContent.replace(
-		/const cliRoot = resolve\(__dirname, "\.\."\)/g,
-		'const cliRoot = resolve(__dirname, "..", "cli-app")'
+		/const cliRoot = resolve\(__dirname\$?\d*, ["']\.\.\/\.\.["']\)/g,
+		'const cliRoot = resolve(__dirname, "..")'
+	)
+	cliContent = cliContent.replace(
+		/const cliRoot = resolve\(__dirname, ["']\.\.["']\)/g,
+		'const cliRoot = resolve(__dirname, "..")'
 	)
 	
 	await writeFile(cliBinPath, cliContent)
 
 	// =========================================================================
-	// 4. Create package.json
-	// =========================================================================
-	console.log('\n📝 Creating package.json...')
-	
-	const corePackage = JSON.parse(
-		await readFile(resolve(rootDir, 'packages/svelte-emails/package.json'), 'utf-8')
-	)
-	const cliPackage = JSON.parse(
-		await readFile(resolve(rootDir, 'packages/cli/package.json'), 'utf-8')
-	)
-
-	const packageJson = {
-		name: 'svelte-emails',
-		version: corePackage.version,
-		description: 'Email template library for Svelte with a development server',
-		type: 'module',
-		bin: {
-			'svelte-emails': './bin/svelte-emails.js'
-		},
-		exports: {
-			'.': {
-				types: './dist/index.d.ts',
-				svelte: './dist/index.js',
-				default: './dist/index.js'
-			}
-		},
-		svelte: './dist/index.js',
-		types: './dist/index.d.ts',
-		files: [
-			'dist',
-			'cli-app',
-			'bin',
-			'LLM.md'
-		],
-		peerDependencies: {
-			svelte: '^5.0.0'
-		},
-		peerDependenciesMeta: {
-			shiki: { optional: true }
-		},
-		dependencies: {
-			'fast-glob': cliPackage.dependencies['fast-glob'],
-			'chokidar': cliPackage.dependencies['chokidar'],
-			// CLI dev mode needs these
-			'@sveltejs/kit': '^2.48.5',
-			'@sveltejs/vite-plugin-svelte': '^6.2.1',
-			'vite': '^7.2.2'
-		},
-		optionalDependencies: {
-			// Syntax highlighting for code view (optional)
-			'shiki': cliPackage.optionalDependencies?.['shiki'] ?? '^3.19.0',
-			'@shikijs/langs': cliPackage.optionalDependencies?.['@shikijs/langs'] ?? '^3.19.0',
-			'@shikijs/themes': cliPackage.optionalDependencies?.['@shikijs/themes'] ?? '^3.19.0'
-		},
-		keywords: [
-			'svelte',
-			'email',
-			'templates',
-			'mjml',
-			'newsletter'
-		],
-		repository: {
-			type: 'git',
-			url: 'https://github.com/Refzlund/svelte-emails'
-		},
-		license: 'MIT',
-		author: 'Refzlund'
-	}
-
-	await writeFile(
-		resolve(distDir, 'package.json'),
-		JSON.stringify(packageJson, null, '\t')
-	)
-
-	// =========================================================================
-	// 5. Copy README and LICENSE
+	// 4. Copy README and LLM.md to package directory
 	// =========================================================================
 	console.log('\n📝 Copying README, LLM.md...')
 	if (existsSync(resolve(rootDir, 'README.md'))) {
-		await cp(resolve(rootDir, 'README.md'), resolve(distDir, 'README.md'))
+		await cp(resolve(rootDir, 'README.md'), resolve(packageDir, 'README.md'))
 	}
 	if (existsSync(resolve(rootDir, 'LLM.md'))) {
-		await cp(resolve(rootDir, 'LLM.md'), resolve(distDir, 'LLM.md'))
+		await cp(resolve(rootDir, 'LLM.md'), resolve(packageDir, 'LLM.md'))
 	}
 	if (existsSync(resolve(rootDir, 'LICENSE'))) {
-		await cp(resolve(rootDir, 'LICENSE'), resolve(distDir, 'LICENSE'))
+		await cp(resolve(rootDir, 'LICENSE'), resolve(packageDir, 'LICENSE'))
 	}
 
-	// =========================================================================
-	// 6. Install dependencies
-	// =========================================================================
-	console.log('\n📦 Installing dependencies...')
-	await run(['bun', 'install'], distDir)
-
 	console.log('\n✅ Build complete!')
-	console.log(`   Output: ${distDir}`)
+	console.log(`   Output: ${packageDir}`)
 	console.log('')
 	console.log('   Structure:')
 	console.log('   - dist/      → Core library (built with svelte-package)')
-	console.log('   - cli-app/   → CLI dev server source (Vite + SvelteKit)')
-	console.log('   - bin/       → CLI entry point')
+	console.log('   - cli/       → CLI dev server source (Vite + SvelteKit)')
+	console.log('   - cli/bin/   → CLI entry point')
 	console.log('')
-	console.log('   To link locally:')
-	console.log('   cd _dist && bun link')
+	console.log('   To publish:')
+	console.log('   cd packages/svelte-emails && npm publish')
 }
 
 buildPackage().catch((err) => {

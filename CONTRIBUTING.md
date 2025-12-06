@@ -5,11 +5,14 @@
 ```
 svelte-emails/
 ├── packages/
-│   ├── svelte-emails/     # Core library
-│   └── cli/               # Dev server CLI
+│   ├── svelte-emails/     # Core library (publishable package)
+│   │   ├── src/           # Library source
+│   │   ├── dist/          # Built library (git-ignored)
+│   │   └── cli/           # CLI files (copied during build, git-ignored)
+│   └── cli/               # Dev server CLI source
 ├── emails/                # Example templates
 ├── scripts/build.ts       # Build script
-├── _dist/                 # Built output (git-ignored)
+├── .changeset/            # Changesets configuration
 └── run-emails.ts          # Dev CLI wrapper
 ```
 
@@ -21,8 +24,7 @@ svelte-emails/
 
 ```bash
 bun install
-bun link          # Links source CLI globally
-svelte-emails     # Run from any directory
+bun run dev       # Start dev server with example emails
 ```
 
 ## Development
@@ -35,39 +37,62 @@ bun run dev
 
 ### Testing Changes
 
-- **Core library** (`packages/svelte-emails/`) — Run dev server, verify rendering
-- **CLI** (`packages/cli/`) — Test file discovery, live reload, SSE updates
+- **Core library** (`packages/svelte-emails/src/`) — Run dev server, verify rendering
+- **CLI** (`packages/cli/src/`) — Test file discovery, live reload, SSE updates
 - **Type check**: `cd packages/cli && bunx svelte-check`
 
-## Build & Link for Testing
+## Build & Publish
 
-To test the built package (as it would be published):
+This project uses [Changesets](https://github.com/changesets/changesets) for versioning.
+
+### Creating a Changeset
+
+After making changes, create a changeset:
 
 ```bash
-bun run build     # Creates _dist/
-bun run link      # Registers svelte-emails globally
+bun changeset
 ```
 
-### Use in Another Project
+Follow the prompts to describe your changes and select the version bump type.
+
+### Building
+
+```bash
+bun run build
+```
+
+This builds:
+- Core library to `packages/svelte-emails/dist/`
+- CLI files to `packages/svelte-emails/cli/`
+
+### Testing the Built Package
+
+```bash
+cd packages/svelte-emails
+bun link
+```
+
+Then in another project:
 
 ```bash
 bun link svelte-emails
+bunx svelte-emails
 ```
-
-Or in `package.json`:
-
-```json
-{ "dependencies": { "svelte-emails": "link:svelte-emails" } }
-```
-
-Then `bunx svelte-emails` to test.
 
 > **Note:** Re-run `bun run build` after changes.
 
-## Unlinking
+### Versioning & Publishing
 
 ```bash
-bun unlink svelte-emails
+bun version       # Apply changesets and bump versions
+bun publish       # Build and publish to npm
+```
+
+Or manually:
+
+```bash
+bun run build
+cd packages/svelte-emails && npm publish
 ```
 
 ## Architecture
