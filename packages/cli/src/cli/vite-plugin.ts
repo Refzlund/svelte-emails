@@ -10,6 +10,9 @@ import { join } from 'node:path'
 const VIRTUAL_MODULE_ID = 'virtual:email-list'
 const RESOLVED_VIRTUAL_MODULE_ID = '\0' + VIRTUAL_MODULE_ID
 
+/** Virtual module for static build mode detection */
+const VIRTUAL_BUILD_MODE_ID = 'virtual:svelte-emails-build-mode'
+
 /** Common watcher ignore patterns */
 const WATCHER_IGNORE = ['**/node_modules/**', '**/.git/**', '**/.svelte-kit/**']
 
@@ -78,6 +81,9 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 	let discoveryInterval: ReturnType<typeof setInterval> | null = null
 	const sseClients: Set<ServerResponse> = new Set()
 
+	// Detect if we're in static build mode
+	const isStaticBuild = process.env.SVELTE_EMAILS_BUILD === '1'
+
 	/** Broadcast an SSE event to all connected clients */
 	function broadcastUpdate(event: string, data: unknown): void {
 		const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
@@ -104,11 +110,15 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 
 		resolveId(id) {
 			if (id === VIRTUAL_MODULE_ID) return RESOLVED_VIRTUAL_MODULE_ID
+			if (id === VIRTUAL_BUILD_MODE_ID) return '\0' + VIRTUAL_BUILD_MODE_ID
 		},
 
 		load(id) {
 			if (id === RESOLVED_VIRTUAL_MODULE_ID) {
 				return `export default ${JSON.stringify(toSafeAllFiles(allFiles), null, 2)}`
+			}
+			if (id === '\0' + VIRTUAL_BUILD_MODE_ID) {
+				return `export const isStaticBuild = ${isStaticBuild};`
 			}
 		},
 
@@ -384,4 +394,4 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 	}
 }
 
-export { VIRTUAL_MODULE_ID }
+export { VIRTUAL_MODULE_ID, VIRTUAL_BUILD_MODE_ID }

@@ -11,8 +11,7 @@
 		Button,
 		Spacer,
 		Divider,
-		Table,
-		Img
+		Table
 	} from 'svelte-emails'
 
 	const colors = {
@@ -24,7 +23,6 @@
 		background: '#f3f4f6',
 		white: '#ffffff',
 		border: '#d1d5db',
-		code: '#1f2937',
 		codeBg: '#f9fafb'
 	}
 
@@ -111,7 +109,7 @@
 	<Divider border={colors.border} />
 
 	<!-- Section 2: The CLI -->
-	<Div p-8 bg="#fafafa">
+	<Div p-8 bg={colors.codeBg}>
 		<Div cols responsive gap-4 align-middle>
 			<Div>
 				<Text.H2 content="The Studio" text={colors.secondary} />
@@ -124,7 +122,7 @@
 
 		<Spacer h-6 />
 
-		<Table cols="50% 50%" responsive>
+		<Table cols="50% 50%">
 			<Table.Row>
 				<Div p-4 border-b={colors.border}>
 					<Text.H5 content="⚡ Hot Module Reloading" text={colors.text} />

@@ -6,6 +6,7 @@
  */
 
 import { untrack } from 'svelte'
+import { base } from '$app/paths'
 import { emailStore, type ViewMode } from '../email-store.js'
 import {
 	getCached,
@@ -58,9 +59,22 @@ export function createEmailViewerState(
 	}
 
 	/**
-	 * Fetch email data from server
+	 * Fetch email data from server (dev mode) or static JSON (build mode)
 	 */
 	async function fetchEmail(id: string, mode: ViewMode): Promise<EmailRenderData | null> {
+		// In static build mode, fetch from pre-rendered JSON files
+		if (emailStore.isStaticBuild) {
+			const res = await fetch(`${base}/_data/${mode}/${id}.json`)
+			
+			if (!res.ok) {
+				throw new Error(`Email not found: ${id}`)
+			}
+			
+			const result = await res.json()
+			return result
+		}
+		
+		// Dev mode: fetch from Vite SSR endpoint
 		const res = await fetch(`/__svelte-emails/render?id=${encodeURIComponent(id)}&mode=${mode}`)
 		
 		if (!res.ok) {
@@ -128,8 +142,13 @@ export function createEmailViewerState(
 		}
 	})
 
-	// Setup content change listener
+	// Setup content change listener (no-op in static build mode)
 	function setupContentChangeListener() {
+		// In static build mode, no live reload
+		if (emailStore.isStaticBuild) {
+			return () => {} // no-op cleanup
+		}
+		
 		let lastSeenTime = emailStore.lastContentChangeTime
 
 		return emailStore.subscribe(() => {

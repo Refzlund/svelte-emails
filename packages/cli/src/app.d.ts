@@ -12,4 +12,19 @@ declare global {
 	}
 }
 
+// Virtual module declarations
+declare module 'virtual:email-list' {
+	import type { SafeEmail } from './cli/types.js'
+	const emailData: {
+		emails: SafeEmail[]
+		examples: SafeEmail[]
+		documentation: SafeEmail[]
+	}
+	export default emailData
+}
+
+declare module 'virtual:svelte-emails-build-mode' {
+	export const isStaticBuild: boolean
+}
+
 export {}

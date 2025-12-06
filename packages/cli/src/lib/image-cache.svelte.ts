@@ -5,7 +5,13 @@
  * 
  * Uncached images are replaced with a transparent placeholder to prevent
  * browser HTTP cache from showing stale/wrong images during loading.
+ * 
+ * NOTE: In static build mode, the image proxy is not available.
+ * Images are shown as-is (may be blocked by CORS in some browsers).
  */
+
+// @ts-ignore - virtual module
+import { isStaticBuild } from 'virtual:svelte-emails-build-mode'
 
 const imageCache = new Map<string, string>() // url -> data URL
 const pendingFetches = new Map<string, Promise<string>>() // url -> fetch promise
@@ -31,9 +37,15 @@ function shouldCacheUrl(url: string): boolean {
 }
 
 /**
- * Fetch image via server proxy to bypass CORS, then convert to data URL
+ * Fetch image via server proxy to bypass CORS, then convert to data URL.
+ * In static build mode, returns the original URL since proxy is not available.
  */
 async function fetchAsDataUrl(url: string): Promise<string> {
+	// In static mode, proxy is not available - return URL as-is
+	if (isStaticBuild) {
+		return url
+	}
+
 	// Skip if previously failed (unless TTL expired)
 	const failedAt = failedUrls.get(url)
 	if (failedAt && Date.now() - failedAt < FAILED_URL_TTL) {

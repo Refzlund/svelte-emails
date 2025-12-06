@@ -1,5 +1,8 @@
 import { browser } from '$app/environment'
+import { base } from '$app/paths'
 import type { SafeEmail, ViewMode } from '../cli/types.js'
+// @ts-ignore - virtual module
+import { isStaticBuild } from 'virtual:svelte-emails-build-mode'
 
 export type { ViewMode }
 
@@ -13,6 +16,7 @@ let documentation: SafeEmail[] = []
 let lastContentChangeId: string | null = null
 let lastContentChangeTime = 0
 let lastListUpdateTime = 0
+let isInitialized = false
 const listeners = new Set<Listener>()
 
 function notify() {
@@ -21,8 +25,36 @@ function notify() {
 	}
 }
 
+/**
+ * Load email list from static JSON (for static builds)
+ */
+async function loadStaticEmailList(): Promise<void> {
+	if (!browser || isInitialized) return
+	
+	try {
+		const res = await fetch(`${base}/_data/email-list.json`)
+		if (!res.ok) return
+		
+		const data = await res.json()
+		emails = data.emails || []
+		examples = data.examples || []
+		documentation = data.documentation || []
+		lastListUpdateTime = Date.now()
+		isInitialized = true
+		notify()
+	} catch {
+		// Silent fail for static builds - email list just won't load
+	}
+}
+
 function connect() {
 	if (eventSource || !browser) return
+	
+	// In static build mode, don't connect to SSE
+	if (isStaticBuild) {
+		loadStaticEmailList()
+		return
+	}
 
 	eventSource = new EventSource('/__svelte-emails/events')
 
@@ -32,6 +64,7 @@ function connect() {
 		examples = data.examples || []
 		documentation = data.documentation || []
 		lastListUpdateTime = Date.now()
+		isInitialized = true
 		notify()
 	})
 
@@ -57,6 +90,10 @@ if (browser) {
 }
 
 export const emailStore = {
+	/** Whether this is a static build (no live reload) */
+	get isStaticBuild() {
+		return isStaticBuild
+	},
 	get emails() {
 		return emails
 	},
@@ -88,5 +125,13 @@ export const emailStore = {
 	subscribe(listener: Listener) {
 		listeners.add(listener)
 		return () => listeners.delete(listener)
+	},
+	/**
+	 * Ensure email list is loaded (for static builds)
+	 */
+	async ensureLoaded(): Promise<void> {
+		if (isStaticBuild && !isInitialized) {
+			await loadStaticEmailList()
+		}
 	}
 }

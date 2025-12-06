@@ -4,7 +4,10 @@
  */
 
 import { browser } from '$app/environment'
+import { base } from '$app/paths'
 import type { ViewMode } from '../cli/types.js'
+// @ts-ignore - virtual module
+import { isStaticBuild } from 'virtual:svelte-emails-build-mode'
 
 export interface EmailRenderData {
 	email: {
@@ -33,7 +36,8 @@ interface CachedData {
 const clientCache = new Map<string, CachedData>()
 const prefetching = new Set<string>()
 
-export const CACHE_MAX_AGE = 5 * 60 * 1000 // 5 minutes
+// In static build mode, cache is permanent (no expiry)
+export const CACHE_MAX_AGE = isStaticBuild ? Infinity : 5 * 60 * 1000 // 5 minutes for dev, forever for static
 
 /**
  * Create a cache key from emailId and mode
@@ -100,7 +104,12 @@ export function prefetchEmail(emailId: string, mode: ViewMode = 'emails') {
 	
 	prefetching.add(key)
 	
-	fetch(`/__svelte-emails/render?id=${encodeURIComponent(emailId)}&mode=${mode}`)
+	// Use static JSON in build mode, API endpoint in dev mode
+	const url = isStaticBuild 
+		? `${base}/_data/${mode}/${emailId}.json`
+		: `/__svelte-emails/render?id=${encodeURIComponent(emailId)}&mode=${mode}`
+	
+	fetch(url)
 		.then(async (res) => {
 			if (res.ok) {
 				const data = await res.json()

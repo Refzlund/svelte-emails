@@ -1,5 +1,8 @@
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 
+// Conditionally load adapter-static for build mode
+const isBuildMode = process.env.SVELTE_EMAILS_BUILD === '1'
+
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
 	preprocess: vitePreprocess(),
@@ -12,7 +15,27 @@ const config = {
 		css: 'injected'
 	},
 	kit: {
-		// No adapter needed - this is a dev-only tool
+		// Use adapter-static for build mode (static SPA), no adapter for dev
+		adapter: isBuildMode
+			? (await import('@sveltejs/adapter-static')).default({
+				pages: process.env.SVELTE_EMAILS_OUT_DIR || 'build',
+				assets: process.env.SVELTE_EMAILS_OUT_DIR || 'build',
+				fallback: 'index.html', // SPA fallback - all routes serve index.html
+				precompress: false,
+				strict: false // Don't require all routes to be prerendered
+			})
+			: undefined,
+		// Set base path for deployment (e.g., GitHub Pages subdirectory)
+		paths: {
+			base: isBuildMode ? (process.env.SVELTE_EMAILS_BASE || '').replace(/\/$/, '') : ''
+		},
+		// Prerender configuration for static build
+		prerender: {
+			// Only prerender the root for the fallback
+			entries: isBuildMode ? ['/'] : ['*'],
+			// Don't fail on unrendered routes in build mode (we use fallback)
+			handleMissingId: 'warn'
+		}
 	}
 }
 

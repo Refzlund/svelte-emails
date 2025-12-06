@@ -52,6 +52,10 @@ export default defineConfig({
 	],
 	// Optimize startup time when running in user's project
 	cacheDir: resolve(__dirname, 'node_modules/.vite'),
+	// Worker configuration for static builds
+	worker: {
+		format: 'es'
+	},
 	resolve: {
 		alias: {
 			// Resolve 'svelte-emails' to the source for development

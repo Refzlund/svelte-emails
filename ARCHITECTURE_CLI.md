@@ -971,6 +971,183 @@ export default defineConfig({
 
 ---
 
+## Static Site Build
+
+The CLI supports building a static HTML preview site for sharing or deployment. This is useful for companies that want to showcase their email templates without running a dev server.
+
+### Usage
+
+```bash
+# Basic usage
+bunx svelte-emails build
+
+# With options
+bunx svelte-emails build --out ./dist --base /emails
+
+# From a specific directory
+bunx svelte-emails build --cwd ./my-emails --out ./preview-site
+```
+
+### CLI Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--cwd <dir>` | Directory containing `*.email.svelte` files | Current directory |
+| `--out <dir>` | Output directory for the static build | `build` |
+| `--base <path>` | Base path for deployment (e.g., `/emails` for `https://example.com/emails`) | `/` |
+
+### Output Structure
+
+```
+dist/
+├── index.html          # SPA entry point (fallback for all routes)
+├── robots.txt          # Standard robots file
+├── _app/               # SvelteKit app assets (JS, CSS, fonts)
+│   ├── immutable/      # Hashed assets (long cache)
+│   └── version.json
+└── _data/
+    ├── email-list.json # List of all emails with metadata
+    └── emails/         # Pre-rendered email data
+        ├── src-myemail.json
+        ├── src-newsletter.json
+        └── ... (one JSON per email)
+```
+
+### How It Works
+
+The build process has two phases:
+
+#### Phase 1: Pre-render Emails (Vite SSR)
+
+1. Start a Vite dev server in SSR mode
+2. Discover all `*.email.svelte` files
+3. For each email:
+   - Import the Svelte component via `ssrLoadModule`
+   - Render to HTML/text using `svelte-emails` render function
+   - Read the source file
+   - Format HTML using `prettier` (if available)
+4. Write results as JSON files to `_data/` directory
+
+```typescript
+// Simplified from packages/cli/src/cli/build.ts
+const vite = await createServer({ /* SSR config */ })
+await vite.ssrRunner.import('svelte-emails')
+
+for (const email of emails) {
+  const mod = await vite.ssrRunner.import(email.path)
+  const result = await render(mod.default)
+  writeFileSync(`_data/emails/${email.id}.json`, JSON.stringify({
+    email: { id, name, ... },
+    source: readFileSync(email.path),
+    rendered: result,
+    formattedHtml: await prettier.format(result.html)
+  }))
+}
+```
+
+#### Phase 2: SvelteKit Static Build
+
+1. Set environment variables for static mode:
+   - `SVELTE_EMAILS_BUILD=1` — Triggers adapter-static in svelte.config.js
+   - `SVELTE_EMAILS_OUT_DIR` — Output directory
+   - `SVELTE_EMAILS_BASE` — Base path
+2. Run `vite build` which invokes SvelteKit's build
+3. SvelteKit uses `@sveltejs/adapter-static` with:
+   - `fallback: 'index.html'` — SPA mode with client-side routing
+   - `strict: false` — Don't fail on missing prerendered routes
+   - `prerender: false` — Pure SPA, no static page generation
+
+### Static Mode Behavior
+
+When `SVELTE_EMAILS_BUILD=1` is set, several components adapt:
+
+| Component | Dev Mode | Static Mode |
+|-----------|----------|-------------|
+| `email-store.ts` | SSE connection for live updates | Load from `/_data/email-list.json` |
+| `email-viewer.svelte.ts` | Fetch from `/__svelte-emails/render` | Fetch from `/_data/emails/{id}.json` |
+| `image-cache.svelte.ts` | Proxy images through dev server | Use original URLs directly |
+| `svelte.config.js` | No adapter | `adapter-static` |
+| `vite-plugin.ts` | Full dev server with SSE | Virtual module for build mode detection |
+
+### Virtual Module: `virtual:svelte-emails-build-mode`
+
+Components detect static mode via:
+
+```typescript
+import { isStaticBuild } from 'virtual:svelte-emails-build-mode'
+
+if (isStaticBuild) {
+  // Load from static JSON files
+} else {
+  // Use dev server APIs
+}
+```
+
+### Deployment
+
+The output is a standard static site. Deploy to any static host:
+
+```bash
+# Build
+bunx svelte-emails build --out ./dist --base /emails
+
+# Deploy examples:
+# Netlify: drag-drop dist folder
+# Vercel: vercel --prod dist
+# GitHub Pages: copy to gh-pages branch
+# S3: aws s3 sync dist s3://bucket-name/emails
+# nginx: copy to /var/www/html/emails
+```
+
+**Important:** If using a non-root base path, ensure your server redirects all routes to `index.html` for SPA routing.
+
+### Preview Command
+
+Before deploying, test the build locally with the `preview` command:
+
+```bash
+# Preview the default ./build directory
+bunx svelte-emails preview
+
+# Preview a specific directory
+bunx svelte-emails preview ./dist
+
+# Preview with custom port and auto-open browser
+bunx svelte-emails preview --port 3000 --open
+```
+
+#### Preview CLI Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `[dir]` | Directory to serve (positional argument) | `./build` |
+| `--dir, -d <path>` | Directory to serve (alternative to positional) | `./build` |
+| `--port, -p <number>` | Port to serve on | `4173` |
+| `--open, -o` | Open browser automatically | `false` |
+
+The preview command uses Vite's built-in preview server, which handles SPA routing automatically. This ensures the preview matches production behavior.
+
+### Limitations in Static Build
+
+1. **No live reload** — Changes require a rebuild
+2. **Images not proxied** — External images must be CORS-enabled or may show broken. In dev mode, images are proxied through the server to bypass CORS.
+3. **No SSE updates** — Email list is frozen at build time
+4. **No server-side rendering** — Pure client-side SPA
+
+### Implementation Files
+
+| File | Purpose |
+|------|---------|
+| `cli/build.ts` | Build orchestration, email pre-rendering |
+| `cli.ts` | CLI argument parsing, command routing |
+| `svelte.config.js` | Conditional adapter-static configuration |
+| `vite-plugin.ts` | Build mode virtual module |
+| `email-store.ts` | Static mode JSON loading |
+| `email-viewer.svelte.ts` | Static mode data fetching |
+| `+layout.ts` | SPA prerender configuration |
+
+---
+
 ## Future Improvements
 
 1. **CLI binary** - `npx svelte-emails dev` to run from any project
@@ -981,6 +1158,7 @@ export default defineConfig({
 6. **Export** - Download rendered HTML/text
 7. **Accessibility audit** - Check email accessibility
 8. **Placeholder editor** - Edit `[[variable]]` values in UI
+9. ~~**Static site build** - Export as deployable HTML site~~ ✅ Implemented
 
 ---
 
