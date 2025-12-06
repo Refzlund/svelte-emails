@@ -47,7 +47,7 @@
 		/>
 		<Spacer h-8 />
 		<Button 
-			href="/1-getting-started/introduction" 
+			href="/documentation/1__getting_started-introduction" 
 			bg={colors.white} 
 			text={colors.primaryDark} 
 			font-bold 

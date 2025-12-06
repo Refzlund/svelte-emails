@@ -12,6 +12,7 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte'
+	import { base } from '$app/paths'
 	import { createSidebarState } from '../sidebar.svelte.js'
 	import type { SafeEmail } from '../../../cli/types.js'
 	import * as icons from '$lib/Icons.svelte'
@@ -102,7 +103,7 @@
 {/snippet}
 
 <header class="sidebar-header">
-	<img src="/svelte-emails.png" alt="svelte-emails logo" width="24" height="24" />
+	<img src="{base}/svelte-emails.png" alt="svelte-emails logo" width="24" height="24" />
 	<span class="title">{sidebar.navTitle}</span>
 </header>
 

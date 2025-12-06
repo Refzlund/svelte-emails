@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
+	import { base } from '$app/paths'
 	import { ResponsiveLayout } from '$lib/components'
 	import { handleKeyboardShortcut } from '$lib/utils/keyboard-shortcuts'
 
@@ -33,8 +34,8 @@
 			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
 		}
 	</style>
-	<link rel="stylesheet" href="/theme.css" />
-	<link rel="icon" href='/svelte-emails.png' />
+	<link rel="stylesheet" href="{base}/theme.css" />
+	<link rel="icon" href="{base}/svelte-emails.png" />
 </svelte:head>
 
 <ResponsiveLayout />

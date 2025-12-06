@@ -16,6 +16,7 @@
 	import { onMount } from 'svelte'
 	import { browser } from '$app/environment'
 	import { goto } from '$app/navigation'
+	import { base } from '$app/paths'
 	import { page } from '$app/state'
 	import { createResponsiveState } from '$lib/utils/responsive.svelte'
 	import { createViewMode } from '$lib/utils/view-mode.svelte'
@@ -41,7 +42,8 @@
 
 	// Derive view mode from URL
 	const emailMode: EmailViewMode = $derived.by(() => {
-		const path = page.url.pathname
+		// Remove base path prefix for path matching
+		const path = base ? page.url.pathname.replace(base, '') : page.url.pathname
 		if (path.startsWith('/examples')) return 'examples'
 		if (path.startsWith('/documentation')) return 'documentation'
 		return 'emails'
@@ -119,11 +121,11 @@
 		if (!needsRedirect) return
 
 		if (emailMode === 'emails' && emailData.emails.length > 0) {
-			goto(`/${emailData.emails[0].id}`, { replaceState: true })
+			goto(`${base}/${emailData.emails[0].id}`, { replaceState: true })
 		} else if (emailMode === 'examples' && emailStore.examples.length > 0) {
-			goto(`/examples/${emailStore.examples[0].id}`, { replaceState: true })
+			goto(`${base}/examples/${emailStore.examples[0].id}`, { replaceState: true })
 		} else if (emailMode === 'documentation' && emailStore.documentation.length > 0) {
-			goto(`/documentation/${emailStore.documentation[0].id}`, { replaceState: true })
+			goto(`${base}/documentation/${emailStore.documentation[0].id}`, { replaceState: true })
 		}
 	})
 

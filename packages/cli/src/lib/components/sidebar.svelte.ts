@@ -7,6 +7,7 @@
 
 import { page } from '$app/state'
 import { pushState, goto } from '$app/navigation'
+import { base } from '$app/paths'
 import initialData from 'virtual:email-list'
 import { emailStore } from '../email-store.js'
 import type { SafeEmail, ViewMode } from '../../cli/types.js'
@@ -39,7 +40,8 @@ export function createSidebarState() {
 
 	// Derive view mode from current URL path
 	const viewMode: ViewMode = $derived.by(() => {
-		const path = page.url.pathname
+		// Remove base path prefix for path matching
+		const path = base ? page.url.pathname.replace(base, '') : page.url.pathname
 		if (path.startsWith('/examples')) return 'examples'
 		if (path.startsWith('/documentation')) return 'documentation'
 		return 'emails'
@@ -101,12 +103,12 @@ export function createSidebarState() {
 		}
 	})
 
-	// Get the URL prefix for current mode
+	// Get the URL prefix for current mode (includes base path for deployments)
 	const urlPrefix = $derived.by(() => {
 		switch (viewMode) {
-			case 'emails': return ''
-			case 'examples': return '/examples'
-			case 'documentation': return '/documentation'
+			case 'emails': return base
+			case 'examples': return `${base}/examples`
+			case 'documentation': return `${base}/documentation`
 		}
 	})
 
@@ -133,8 +135,8 @@ export function createSidebarState() {
 	// Handle instant navigation via shallow routing
 	function handleItemClick(e: MouseEvent, itemId: string) {
 		e.preventDefault()
-		// Build URL based on current view mode
-		const basePath = urlPrefix ? `${urlPrefix}/${itemId}` : `/${itemId}`
+		// Build URL based on current view mode (urlPrefix already includes base)
+		const basePath = `${urlPrefix}/${itemId}`
 		const url = new URL(basePath, window.location.origin)
 		// Preserve current query params (e.g., ?mode=html)
 		const currentMode = new URL(window.location.href).searchParams.get('mode')
@@ -154,9 +156,9 @@ export function createSidebarState() {
 		if (mode === viewMode) {
 			// Already in this mode, go back to emails
 			if (emails.length > 0) {
-				goto(`/${emails[0].id}`)
+				goto(`${base}/${emails[0].id}`)
 			} else {
-				goto('/')
+				goto(base || '/')
 			}
 			return
 		}
@@ -164,11 +166,11 @@ export function createSidebarState() {
 		// Navigate to the new mode
 		const list = mode === 'emails' ? emails : mode === 'examples' ? examples : documentation
 		if (list.length > 0) {
-			const prefix = mode === 'emails' ? '' : `/${mode}`
+			const prefix = mode === 'emails' ? base : `${base}/${mode}`
 			goto(`${prefix}/${list[0].id}`)
 		} else {
 			// Navigate to mode root even if empty
-			const prefix = mode === 'emails' ? '/' : `/${mode}`
+			const prefix = mode === 'emails' ? (base || '/') : `${base}/${mode}`
 			goto(prefix)
 		}
 	}
