@@ -37,7 +37,9 @@ Before writing any code, internalize these rules:
 
 1. **All styles must be inline** — No external CSS, no `<style>` blocks (except for responsive media queries as progressive enhancement)
 
-2. **Tables are the only reliable layout** — Never use CSS flexbox or grid. Use `<Grid>` components which render as `<table>`
+2. **NO NESTED TEXT NODES** — Text must ALWAYS be rendered via the `content="..."` attribute. Never write `<Text>Hello</Text>` or `<Button>Click</Button>`. This is required for the rendering engine to work correctly.
+
+3. **Tables are the only reliable layout** — Never use CSS flexbox or grid. Use `<Grid>` components which render as `<table>`
 
 3. **Use padding, not margins** — Outlook.com dropped margin support. Use `<Spacer>` or padding instead
 

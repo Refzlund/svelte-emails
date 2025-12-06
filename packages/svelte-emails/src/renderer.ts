@@ -961,6 +961,14 @@ function renderTextNode(
 		content = parseMarkdown(interpolatePlaceholders(node.content, context), context)
 	}
 
+	// Auto-center text elements with max-width when parent has centered text alignment
+	// Without this, a <p> with max-width in a text-align:center container won't be horizontally centered
+	const effectiveTextAlign = mergedCss.textAlign || inherited.textAlign
+	if (mergedCss.maxWidth && effectiveTextAlign === 'center') {
+		mergedCss.marginLeft = 'auto'
+		mergedCss.marginRight = 'auto'
+	}
+
 	const inlineStyle = toInlineCSS(mergedCss, inherited)
 	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
 
