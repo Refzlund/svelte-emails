@@ -45,6 +45,7 @@ interface BuildCLIOptions {
 	includeExamples: boolean
 	includeDocumentation: boolean
 	continueOnError: boolean
+	ignorePatterns: string[]
 }
 
 interface PreviewCLIOptions {
@@ -92,7 +93,8 @@ function parseBuildArgs(args: string[]): BuildCLIOptions {
 		base: '/',
 		includeExamples: true,
 		includeDocumentation: true,
-		continueOnError: true
+		continueOnError: true,
+		ignorePatterns: []
 	}
 
 	for (let i = 0; i < args.length; i++) {
@@ -114,6 +116,9 @@ function parseBuildArgs(args: string[]): BuildCLIOptions {
 			options.includeDocumentation = false
 		} else if (arg === '--strict') {
 			options.continueOnError = false
+		} else if (arg === '--ignore' || arg === '-i') {
+			options.ignorePatterns.push(nextArg)
+			i++
 		} else if (arg === '--help' || arg === '-h') {
 			printBuildHelp()
 			process.exit(0)
@@ -192,6 +197,7 @@ Options:
   --out, -o <path>      Output directory (default: ./build)
   --base, -b <path>     Base path for deployment (default: /)
   --cwd <path>          Working directory (default: current directory)
+  --ignore, -i <glob>   Ignore emails matching glob pattern (can be repeated)
   --no-examples         Exclude bundled examples
   --no-documentation    Exclude bundled documentation
   --no-docs             Alias for --no-documentation
@@ -202,6 +208,7 @@ Examples:
   bunx svelte-emails build
   bunx svelte-emails build --out ./dist
   bunx svelte-emails build --base /emails/
+  bunx svelte-emails build --ignore "**/test/**" --ignore "emails/**"
   bunx svelte-emails build --no-examples --no-docs
 `)
 }
@@ -280,7 +287,8 @@ async function runBuildCommand(args: string[]) {
 		base: options.base,
 		includeExamples: options.includeExamples,
 		includeDocumentation: options.includeDocumentation,
-		continueOnError: options.continueOnError
+		continueOnError: options.continueOnError,
+		ignorePatterns: options.ignorePatterns
 	})
 }
 

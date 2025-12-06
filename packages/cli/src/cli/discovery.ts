@@ -218,9 +218,10 @@ export function getIgnorePatterns(cwd: string): string[] {
  * Discover all *.email.svelte files in a directory
  * @param cwd - Working directory to scan
  * @param skipPreview - Skip reading file contents for preview text (faster)
+ * @param additionalIgnore - Additional glob patterns to ignore
  */
-export async function discoverEmails(cwd: string, skipPreview = false): Promise<EmailFile[]> {
-	const ignorePatterns = getIgnorePatterns(cwd)
+export async function discoverEmails(cwd: string, skipPreview = false, additionalIgnore: string[] = []): Promise<EmailFile[]> {
+	const ignorePatterns = [...getIgnorePatterns(cwd), ...additionalIgnore]
 
 	const files = await fg('**/*.email.svelte', {
 		cwd,
@@ -356,14 +357,16 @@ export async function discoverSvelteFiles(
 /**
  * Discover all files for all view modes
  * @param cwd - User's project directory for emails
+ * @param skipPreview - Skip reading file contents for preview text (faster)
+ * @param ignorePatterns - Additional glob patterns to ignore for user emails
  */
-export async function discoverAll(cwd: string, skipPreview = false): Promise<{
+export async function discoverAll(cwd: string, skipPreview = false, ignorePatterns: string[] = []): Promise<{
 	emails: EmailFile[]
 	examples: EmailFile[]
 	documentation: EmailFile[]
 }> {
 	const [emails, examples, documentation] = await Promise.all([
-		discoverEmails(cwd, skipPreview),
+		discoverEmails(cwd, skipPreview, ignorePatterns),
 		discoverSvelteFiles('examples', 'examples', skipPreview),
 		discoverSvelteFiles('documentation', 'documentation', skipPreview)
 	])

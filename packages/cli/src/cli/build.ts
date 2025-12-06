@@ -38,6 +38,8 @@ export interface BuildOptions {
 	includeDocumentation?: boolean
 	/** Continue build even if some emails fail to render */
 	continueOnError?: boolean
+	/** Glob patterns to ignore when discovering emails */
+	ignorePatterns?: string[]
 }
 
 interface RenderedEmail {
@@ -71,7 +73,8 @@ export async function runBuild(options: BuildOptions): Promise<void> {
 		base = '/',
 		includeExamples = true,
 		includeDocumentation = true,
-		continueOnError = true
+		continueOnError = true,
+		ignorePatterns = []
 	} = options
 
 	const cliRoot = resolve(__dirname, '../..')
@@ -81,6 +84,7 @@ export async function runBuild(options: BuildOptions): Promise<void> {
 	console.log(`   Source: ${cwd}`)
 	console.log(`   Output: ${outDir}`)
 	if (base !== '/') console.log(`   Base: ${base}`)
+	if (ignorePatterns.length > 0) console.log(`   Ignoring: ${ignorePatterns.join(', ')}`)
 	console.log('')
 
 	// Step 1: Clean previous build data
@@ -92,7 +96,7 @@ export async function runBuild(options: BuildOptions): Promise<void> {
 
 	// Step 2: Discover all files
 	console.log('🔍 Discovering email templates...')
-	const allFiles = await discoverAll(cwd, false)
+	const allFiles = await discoverAll(cwd, false, ignorePatterns)
 	
 	const emails = allFiles.emails
 	const examples = includeExamples ? allFiles.examples : []

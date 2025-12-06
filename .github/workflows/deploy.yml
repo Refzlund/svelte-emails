@@ -31,7 +31,7 @@ jobs:
 
       - name: Build email previews
         working-directory: packages/cli
-        run: bun run src/cli.ts build --cwd ../../emails --out ../../dist --base /svelte-emails
+        run: bun run src/cli.ts build --out ../../dist --base /svelte-emails --ignore "emails/**"
         env:
           SVELTE_EMAILS_DEV: "1"
 
