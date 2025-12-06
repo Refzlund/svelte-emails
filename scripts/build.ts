@@ -188,7 +188,9 @@ export default defineConfig({
 		platform: 'node',
 		external: [
 			/^node:/,
-			'fast-glob'
+			'fast-glob',
+			'vite',
+			'chokidar'
 		],
 		resolve: {
 			alias: {
