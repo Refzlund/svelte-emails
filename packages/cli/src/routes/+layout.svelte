@@ -1,8 +1,11 @@
 <script lang="ts">
-	import { onMount } from 'svelte'
+	import { onMount, type Snippet } from 'svelte'
 	import { base } from '$app/paths'
 	import { ResponsiveLayout } from '$lib/components'
 	import { handleKeyboardShortcut } from '$lib/utils/keyboard-shortcuts'
+
+	interface Props { children?: Snippet }
+	let { children }: Props = $props()
 
 	onMount(() => {
 		// Unregister any old service workers
@@ -39,3 +42,4 @@
 </svelte:head>
 
 <ResponsiveLayout />
+{@render children?.()}

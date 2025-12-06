@@ -49,7 +49,8 @@
 </script>
 
 {#if open || isClosing}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div class="sidebar-overlay" class:closing={isClosing} onclick={handleBackdropClick} use:portal>
 		<aside class="mobile-sidebar" class:closing={isClosing}>
 			<SidebarContent showShortcuts={false} onitemclick={close} />
