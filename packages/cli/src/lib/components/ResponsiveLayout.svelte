@@ -47,8 +47,13 @@
 		return 'emails'
 	})
 
-	// Derive item ID from URL
+	// Derive item ID from URL - check shallow routing state first, then URL params
 	const itemId = $derived.by(() => {
+		// First check shallow routing state (set by pushState for instant navigation)
+		const stateId = (page.state as { emailId?: string })?.emailId
+		if (stateId) return stateId
+		
+		// Fall back to URL params
 		const params = page.params.params
 		if (params) {
 			const segments = params.split('/')

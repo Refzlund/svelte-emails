@@ -96,7 +96,8 @@
 			size: '0.875rem',
 			border: {
 				radius: '6px'
-			}
+			},
+			theme: 'github-dark'
 		}
 	}}
 >
@@ -153,7 +154,7 @@
 		<Spacer h-3 />
 		
 		<!-- Code Block -->
-		<Text.Codeblock content={codeInstall} />
+		<Text.Codeblock content={codeInstall} highlight='bash' />
 
 		<Spacer h-4 />
 		<Text.Paragraph 
@@ -162,7 +163,7 @@
 		/>
 		<Spacer h-3 />
 
-		<Text.Codeblock content={codeExample} />
+		<Text.Codeblock content={codeExample} highlight='svelte' />
 	</Div>
 
 	<Divider border={colors.border} />
@@ -253,7 +254,7 @@
 		/>
 		<Spacer h-3 />
 
-		<Text.Codeblock content={codeLayout} />
+		<Text.Codeblock content={codeLayout} highlight='svelte' />
 	</Div>
 
 	<Divider border={colors.border} />

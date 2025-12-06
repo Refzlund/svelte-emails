@@ -903,6 +903,20 @@ bun add shiki
   theme="nord"
   content={`function greet(name) { return "Hi " + name }`}
 />
+
+<!-- Theme can also be set in StyleConfig for all codeblocks -->
+<Email
+  style={{
+    Codeblock: {
+      theme: 'github-dark',
+      background: '#1f2937',
+      color: '#f9fafb'
+    }
+  }}
+>
+  <!-- All Codeblocks will use github-dark unless overridden -->
+  <Text.Codeblock highlight="typescript" content={code} />
+</Email>
 ```
 
 **Features:**

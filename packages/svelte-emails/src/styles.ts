@@ -208,6 +208,12 @@ export interface CodeStyle {
 	fontFamily?: string
 	/** Font size */
 	size?: string
+	/**
+	 * Shiki theme for syntax highlighting.
+	 * Defaults to 'github-light' if not specified.
+	 * @see https://shiki.style/themes
+	 */
+	theme?: string
 }
 
 /**
@@ -241,6 +247,12 @@ export interface CodeblockStyle {
 	wordWrap?: string
 	/** Overflow wrap (default: break-word) */
 	overflowWrap?: string
+	/**
+	 * Shiki theme for syntax highlighting.
+	 * Defaults to 'github-light' if not specified.
+	 * @see https://shiki.style/themes
+	 */
+	theme?: string
 }
 
 /**

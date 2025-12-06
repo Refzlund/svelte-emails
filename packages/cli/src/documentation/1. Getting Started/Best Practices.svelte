@@ -186,7 +186,8 @@ const { base, sansSerif } = presets
 			size: '0.875rem',
 			border: {
 				radius: '6px'
-			}
+			},
+			theme: 'github-dark'
 		}
 	}}
 >
@@ -225,14 +226,14 @@ const { base, sansSerif } = presets
 			leading-relaxed
 		/>
 		<Spacer h-4 />
-		<Text.Codeblock highlight='svelte' theme="github-dark" content={snippetExample} />
+		<Text.Codeblock highlight='svelte' content={snippetExample} />
 		<Spacer h-4 />
 		<Text.Paragraph 
 			content="You can also **export snippets** from a module script to share them across components:"
 			text={colors.textMuted}
 		/>
 		<Spacer h-4 />
-		<Text.Codeblock content={moduleSnippetExample} />
+		<Text.Codeblock highlight='svelte' content={moduleSnippetExample} />
 		<Spacer h-4 />
 		<Div bg={colors.successBg} p-4 border-l={colors.success} border-4>
 			<Text.Paragraph content="💡 **Tip:** Snippets are perfect for article cards, social links, repeated sections, and any pattern used multiple times in your email." text={colors.text} />
@@ -251,7 +252,7 @@ const { base, sansSerif } = presets
 			leading-relaxed
 		/>
 		<Spacer h-4 />
-		<Text.Codeblock content={responsiveColsExample} />
+		<Text.Codeblock highlight='svelte' content={responsiveColsExample} />
 		<Spacer h-4 />
 		<Div bg={colors.warningBg} p-4 border-l={colors.warning} border-4>
 			<Text.Paragraph content="⚠️ **Note:** The library renders columns as HTML tables for maximum compatibility. CSS flexbox/grid are NOT used." text={colors.text} />
@@ -295,7 +296,7 @@ const { base, sansSerif } = presets
 		</Table>
 
 		<Spacer h-4 />
-		<Text.Codeblock content={markdownVsStylingExample} />
+		<Text.Codeblock highlight='svelte' content={markdownVsStylingExample} />
 	</Div>
 
 	<Divider border={colors.border} />
@@ -327,7 +328,7 @@ const { base, sansSerif } = presets
 		</Table>
 
 		<Spacer h-4 />
-		<Text.Codeblock content={variablesExample} />
+		<Text.Codeblock highlight='svelte' content={variablesExample} />
 	</Div>
 
 	<Divider border={colors.border} />
@@ -354,7 +355,7 @@ const { base, sansSerif } = presets
 		</Div>
 
 		<Spacer h-4 />
-		<Text.Codeblock content={styleImportExample} />
+		<Text.Codeblock highlight='svelte' content={styleImportExample} />
 	</Div>
 
 	<Divider border={colors.border} />
@@ -390,7 +391,7 @@ const { base, sansSerif } = presets
 		</Table>
 
 		<Spacer h-4 />
-		<Text.Codeblock content={blockVsInlineExample} />
+		<Text.Codeblock highlight='svelte' content={blockVsInlineExample} />
 	</Div>
 
 	<Divider border={colors.border} />
@@ -501,7 +502,7 @@ const { base, sansSerif } = presets
 			leading-relaxed
 		/>
 		<Spacer h-4 />
-		<Text.Codeblock content={hFullExample} />
+		<Text.Codeblock highlight='svelte' content={hFullExample} />
 		<Spacer h-4 />
 		<Div bg={colors.codeBg} p-4 rounded-md border={colors.border}>
 			<Text.Paragraph content="💡 This is especially useful for card grids where you want consistent visual alignment even when content lengths vary." text={colors.text} />
@@ -541,7 +542,7 @@ const { base, sansSerif } = presets
 		</Table>
 
 		<Spacer h-4 />
-		<Text.Codeblock content={hrefTypesExample} />
+		<Text.Codeblock highlight='svelte' content={hrefTypesExample} />
 	</Div>
 
 	<Divider border={colors.border} />

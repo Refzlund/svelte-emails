@@ -193,7 +193,7 @@ export async function renderTree(root: Mail.EmailNode, options: RenderOptions = 
 	}
 
 	// Pre-process: collect and highlight all code nodes with syntax highlighting
-	const highlightCache = await preprocessHighlighting(root)
+	const highlightCache = await preprocessHighlighting(root, style)
 	if (highlightCache.size > 0) {
 		context.highlightCache = highlightCache
 	}
@@ -242,20 +242,29 @@ function getHighlightCacheKey(content: string, lang: string, theme?: string): st
  * 
  * This is called before rendering to handle async Shiki operations.
  * The results are cached so the synchronous renderer can access them.
+ * 
+ * @param root - The root IR node to traverse
+ * @param style - StyleConfig for default theme lookup
  */
-async function preprocessHighlighting(root: Mail.IRNode): Promise<Map<string, string>> {
+async function preprocessHighlighting(root: Mail.IRNode, style: StyleConfig): Promise<Map<string, string>> {
 	const cache = new Map<string, string>()
 	const nodesToHighlight: Array<{ content: string; lang: string; theme?: string; key: string }> = []
 
 	// Collect all nodes that need highlighting
 	function collectNodes(node: Mail.IRNode): void {
 		if (node.type === 'text' && (node.variant === 'code' || node.variant === 'codeblock') && node.highlight) {
-			const key = getHighlightCacheKey(node.content, node.highlight, node.highlightTheme)
+			// Resolve theme: node.highlightTheme -> style.Code/Codeblock.theme -> undefined (shiki default)
+			const styleTheme = node.variant === 'code' 
+				? style.Code?.theme 
+				: style.Codeblock?.theme
+			const theme = node.highlightTheme ?? styleTheme
+			
+			const key = getHighlightCacheKey(node.content, node.highlight, theme)
 			if (!nodesToHighlight.some((n) => n.key === key)) {
 				nodesToHighlight.push({
 					content: node.content,
 					lang: node.highlight,
-					theme: node.highlightTheme,
+					theme,
 					key
 				})
 			}
@@ -929,8 +938,14 @@ function renderTextNode(
 
 	if (variantInfo.escapeContent) {
 		// For code/codeblock: check for syntax highlighting first
+		// Resolve theme: node.highlightTheme -> style.Code/Codeblock.theme -> undefined (shiki default)
+		const styleTheme = node.variant === 'code' 
+			? context.style.Code?.theme 
+			: context.style.Codeblock?.theme
+		const resolvedTheme = node.highlightTheme ?? styleTheme
+		
 		const cacheKey = node.highlight && context.highlightCache
-			? getHighlightCacheKey(node.content, node.highlight, node.highlightTheme)
+			? getHighlightCacheKey(node.content, node.highlight, resolvedTheme)
 			: null
 		const highlightedHtml = cacheKey ? context.highlightCache?.get(cacheKey) : undefined
 		
