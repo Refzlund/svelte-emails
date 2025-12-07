@@ -23,6 +23,8 @@
 
 ---
 
+<br>
+
 ## Why svelte-emails?
 
 HTML email is stuck in the 1990s. Tables for layout. Inline styles everywhere. Outlook breaking everything. 
@@ -49,7 +51,11 @@ HTML email is stuck in the 1990s. Tables for layout. Inline styles everywhere. O
 
 That's it. No `<table>` nightmares. No inline `style=""` spaghetti. Just clean, readable code.
 
+<br>
+
 ---
+
+<br>
 
 ## Quick Start
 
@@ -59,6 +65,8 @@ That's it. No `<table>` nightmares. No inline `style=""` spaghetti. Just clean, 
 bun add -D svelte-emails
 # or: npm install -D svelte-emails
 ```
+
+<br>
 
 ### Create your first email
 
@@ -76,6 +84,8 @@ Create a file named `Welcome.email.svelte`:
   </Div>
 </Email>
 ```
+
+<br>
 
 ### Preview it
 
@@ -109,12 +119,18 @@ await emailProvider.send({
 
 ---
 
+<br>
+
 <p align="center">
   <strong>Not convinced yet?</strong><br>
   <a href="https://refzlund.github.io/svelte-emails/documentation/svelteemails">📚 See the documentation</a> — built entirely on the foundation of the library itself.
 </p>
 
+<br>
+
 ---
+
+<br><br>
 
 ## License
 
