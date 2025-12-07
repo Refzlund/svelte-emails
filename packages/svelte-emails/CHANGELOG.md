@@ -1,5 +1,16 @@
 # svelte-emails
 
+## 1.0.1
+
+### Patch Changes
+
+- fix(render): improve reactivity and race condition handling in preview components ([#3](https://github.com/Refzlund/svelte-emails/pull/3))
+
+  - Fixed race condition in `Render.svelte` with proper render queue system ensuring latest render always wins
+  - Made `Email.svelte` attribute processing reactive using `$derived.by()`
+  - Fixed `IframePreview.svelte` reactivity by using `untrack()` to prevent unnecessary re-renders
+  - Made `Text.svelte` attrs reactive using getter pattern with `$derived()`
+
 ## 1.0.0
 
 ### Major Changes
