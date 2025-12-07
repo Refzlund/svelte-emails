@@ -41,11 +41,18 @@ async function buildPackage() {
 	// =========================================================================
 	console.log('\n📦 Copying CLI source for dev mode...')
 	
-	// Copy CLI src folder
+	// Copy CLI src folder, excluding internal test routes (folders starting with __)
 	await cp(
 		resolve(rootDir, 'packages/cli/src'),
 		resolve(cliDir, 'src'),
-		{ recursive: true }
+		{ 
+			recursive: true,
+			filter: (source) => {
+				// Exclude directories/files starting with __ (internal test routes)
+				const name = source.split(/[/\\]/).pop() || ''
+				return !name.startsWith('__')
+			}
+		}
 	)
 	
 	// Copy CLI static files

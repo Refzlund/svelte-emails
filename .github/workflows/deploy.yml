@@ -29,6 +29,9 @@ jobs:
         working-directory: packages/cli
         run: bunx svelte-kit sync
 
+      - name: Remove internal test routes
+        run: rm -rf packages/cli/src/routes/__*
+
       - name: Build email previews
         working-directory: packages/cli
         run: bun run src/cli.ts build --out ../../dist --base /svelte-emails --ignore "emails/**"
