@@ -9,37 +9,60 @@
 		Div,
 		Text,
 		Button,
-		Spacer,
 		Divider,
 		Table
 	} from 'svelte-emails'
-
-	const colors = {
-		primary: '#10b981',
-		primaryDark: '#059669',
-		text: '#111827',
-		textMuted: '#4b5563',
-		background: '#f3f4f6',
-		white: '#ffffff',
-		border: '#d1d5db',
-		code: '#1f2937',
-		codeBg: '#f9fafb'
-	}
+	import { colors, style } from '../theme'
+	import { footer } from '../Shared/Footer.svelte'
 
 	const installCode = `bun add -D svelte-emails`
+	
+	const shikiInstall = `bun add -D shiki`
 	
 	const exampleCode = `<script lang="ts">
   import { Email, Div, Text } from 'svelte-emails'
 ` + '<' + `/script>
 
 <Email preview="Welcome!">
-  <Div p-6 bg="#ffffff">
+  <Div p-6 bg-[#ffffff]>
     <Text.H1 content="Hello World" />
     <Text content="This is my first email." />
   </Div>
 </Email>`
 
+	const sendingCode = `import { render } from 'svelte-emails'
+import WelcomeEmail from './WelcomeEmail.email.svelte'
+
+// Render to HTML and plain text
+const { html, text, headers } = await render(WelcomeEmail, {
+  placeholders: { first_name: 'Alice' }
+})
+
+// Send with your provider (e.g., Nodemailer, Resend, SendGrid, etc.)
+await emailer.send({
+  from: 'hello@example.com',
+  to: 'alice@example.com',
+  subject: 'Welcome!',
+  html,
+  text,
+  headers
+})`
+
 </script>
+
+{#snippet featureCard(icon: string, title: string, description: string)}
+	<Div rows gap-2 bg={colors.codeBg} p-4 rounded border={colors.border} h-full>
+		<Text.H4 content="{icon} {title}" text={colors.primaryDark} />
+		<Text.Small content={description} text={colors.textMuted} />
+	</Div>
+{/snippet}
+
+{#snippet codeStep(description: string, code: string, language: string)}
+	<Div rows gap-3>
+		<Text.Paragraph content={description} text={colors.textMuted} />
+		<Text.Codeblock content={code} highlight={language} />
+	</Div>
+{/snippet}
 
 <Email
 	order=1
@@ -50,71 +73,63 @@
 	max-w-[700px]
 >
 	<!-- Header -->
-	<Div p-8 bg={colors.primary}>
+	<Div rows gap-2 p-8 bg={colors.primary}>
 		<Text.H1 content="👋 Welcome to svelte-emails" text={colors.white} text-3xl font-bold />
-		<Spacer h-2 />
 		<Text content="Build responsive, reliable emails with Svelte and Tailwind-like styling." text={colors.white} text-opacity-90 text-lg />
 	</Div>
 
 	<!-- What is it? -->
-	<Div p-8>
-		<Text.H2 content="What is svelte-emails?" text={colors.text} />
-		<Spacer h-4 />
-		<Text.Paragraph 
-			content="Think **Tailwind for emails**. We handle the messy parts of HTML email rendering—tables, VML, inline styles, and client quirks—so you can focus on building beautiful templates using Svelte components."
-			text={colors.textMuted}
-			leading-relaxed
-		/>
-		
-		<Spacer h-6 />
+	<Div rows gap-6 p-8>
+		<Div rows gap-4>
+			<Text.H2 content="What is svelte-emails?" text={colors.text} />
+			<Text.Paragraph 
+				content="Think **Tailwind for emails**. We handle the messy parts of HTML email rendering—tables, VML, inline styles, and client quirks—so you can focus on building beautiful templates using Svelte components."
+				text={colors.textMuted}
+				leading-relaxed
+			/>
+		</Div>
 		
 		<Div cols responsive gap-4>
-			<Div bg={colors.codeBg} p-4 rounded border={colors.border}>
-				<Text.H4 content="🎨 Tailwind-like Styling" text={colors.primaryDark} />
-				<Spacer h-2 />
-				<Text.Small content="Use familiar attributes like `p-4`, `bg-white`, `rounded` directly on components." text={colors.textMuted} />
-			</Div>
-			<Div bg={colors.codeBg} p-4 rounded border={colors.border}>
-				<Text.H4 content="📱 Responsive by Default" text={colors.primaryDark} />
-				<Spacer h-2 />
-				<Text.Small content="Grid layouts that stack automatically on mobile. No media query headaches." text={colors.textMuted} />
-			</Div>
-			<Div bg={colors.codeBg} p-4 rounded border={colors.border}>
-				<Text.H4 content="📧 Client Compatible" text={colors.primaryDark} />
-				<Spacer h-2 />
-				<Text.Small content="Works in Outlook, Gmail, Apple Mail, and more. We handle the fallbacks." text={colors.textMuted} />
-			</Div>
+			{@render featureCard("🎨", "Tailwind-like Styling", "Use familiar attributes like `p-4`, `bg-[#fff]`, `rounded` directly on components.")}
+			{@render featureCard("📱", "Responsive by Default", "Grid layouts that stack automatically on mobile. No media query headaches.")}
+			{@render featureCard("📧", "Client Compatible", "Works in Outlook, Gmail, Apple Mail, and more. We handle the fallbacks.")}
 		</Div>
 	</Div>
 
 	<Divider border={colors.border} />
 
 	<!-- Installation -->
-	<Div p-8>
-		<Text.H2 content="Installation" text={colors.text} />
-		<Spacer h-4 />
-		<Text.Paragraph content="Get started by adding the package to your project:" text={colors.textMuted} />
-		<Spacer h-3 />
-		<Text.Codeblock content={installCode} highlight="bash" />
+	<Div rows gap-6 p-8>
+		<Div rows gap-4>
+			<Text.H2 content="Installation" text={colors.text} />
+			{@render codeStep("Get started by adding the package to your project:", installCode, "bash")}
+		</Div>
+		
+		<Div rows gap-2>
+			<Text.H4 content="Optional: Code Highlighting" text={colors.text} />
+			{@render codeStep("For syntax highlighting in `<Text.Codeblock highlight='...' />`, install [shiki](https://github.com/shikijs/shiki):", shikiInstall, "bash")}
+		</Div>
 	</Div>
 
 	<Divider border={colors.border} />
 
 	<!-- Quick Start -->
-	<Div p-8>
+	<Div rows gap-4 p-8>
 		<Text.H2 content="Quick Start" text={colors.text} />
-		<Spacer h-4 />
-		<Text.Paragraph content="Create a file named `MyEmail.email.svelte`:" text={colors.textMuted} />
-		<Spacer h-3 />
-		<Text.Codeblock content={exampleCode} highlight="svelte" />
-		<Spacer h-4 />
-		<Text.Paragraph content="Then run the dev server to preview it:" text={colors.textMuted} />
-		<Spacer h-3 />
-		<Text.Codeblock content="bunx svelte-emails" highlight="bash" />
+		{@render codeStep("Create a file named `MyEmail.email.svelte`:", exampleCode, "svelte")}
+		{@render codeStep("Then run the dev server to preview it:", "bunx svelte-emails", "bash")}
+		<Text content="It's just that simple!" text={colors.text} />
 	</Div>
 
-	<!-- Footer -->
-	<Div p-6 bg={colors.codeBg} align-center border-t={colors.border}>
-		<Text.Small content="Next: Check out the [Development Guide](2)" text={colors.textMuted} />
+	<Divider border={colors.border} />
+
+	<!-- Sending -->
+	<Div rows gap-4 p-8>
+		<Text.H2 content="Sending Emails" text={colors.text} />
+		<Text.Paragraph content="Use the `render()` function to generate HTML and plain text, then send with any email provider:" text={colors.textMuted} />
+		<Text.Codeblock content={sendingCode} highlight="typescript" />
+		<Text.Small content="See the **Rendering** guide for more options like props and style presets." text={colors.textMuted} />
 	</Div>
+
+	{@render footer()}
 </Email>

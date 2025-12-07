@@ -9,24 +9,28 @@
 		Div,
 		Text,
 		Button,
-		Spacer,
 		Divider,
 		Table
 	} from 'svelte-emails'
+	import { colors, style } from '../theme'
+	import { footer } from '../Shared/Footer.svelte'
 
-	const colors = {
-		primary: '#10b981',
-		primaryDark: '#059669',
-		text: '#111827',
-		textMuted: '#4b5563',
-		background: '#f3f4f6',
-		white: '#ffffff',
-		border: '#d1d5db',
-		code: '#1f2937',
-		codeBg: '#f9fafb',
-		success: '#10b981',
-		danger: '#ef4444'
-	}
+	const dosContent = `- Use \`cols\` and \`rows\` for layout
+- Include \`alt\`, \`width\`, \`height\` on images
+- Use absolute URLs (\`https://\`)
+- Keep HTML under 100KB
+- Test in Outlook and Gmail`
+
+	const dontsContent = `- Use CSS Flexbox or Grid
+- Use \`position: absolute\`
+- Use external stylesheets
+- Use JavaScript
+- Rely on \`border-radius\` in Outlook`
+
+	const imageContent = `1. **Alt Text**: Essential for accessibility and when images are blocked.
+2. **Dimensions**: Always set \`width\` and \`height\` to prevent layout shifts.
+3. **Retina**: Use 2x sized images but set 1x dimensions in attributes.
+4. **Format**: JPG for photos, PNG for graphics. SVG support is spotty (Gmail strips inline SVG).`
 
 </script>
 
@@ -39,40 +43,24 @@
 	max-w-[700px]
 >
 	<!-- Header -->
-	<Div p-8 bg={colors.primary}>
+	<Div rows gap-2 p-8 bg={colors.primary}>
 		<Text.H1 content="✨ Best Practices" text={colors.white} text-3xl font-bold />
-		<Spacer h-2 />
 		<Text content="Ensure your emails look great everywhere." text={colors.white} text-opacity-90 text-lg />
 	</Div>
 
 	<!-- Do's and Don'ts -->
-	<Div p-8>
+	<Div rows gap-4 p-8>
 		<Text.H2 content="The Golden Rules" text={colors.text} />
-		<Spacer h-4 />
 		
 		<Div cols responsive gap-6>
-			<Div bg={colors.codeBg} p-6 rounded border-l-4 border-l={colors.success}>
+			<Div rows gap-2 bg={colors.codeBg} p-6 rounded border-l-4 border-l={colors.success}>
 				<Text.H4 content="✅ DO" text={colors.success} />
-				<Spacer h-2 />
-				<Text content="
-- Use `cols` and `rows` for layout
-- Include `alt`, `width`, `height` on images
-- Use absolute URLs (`https://`)
-- Keep HTML under 100KB
-- Test in Outlook and Gmail
-" text={colors.textMuted} />
+				<Text content={dosContent} text={colors.textMuted} />
 			</Div>
 			
-			<Div bg={colors.codeBg} p-6 rounded border-l-4 border-l={colors.danger}>
+			<Div rows gap-2 bg={colors.codeBg} p-6 rounded border-l-4 border-l={colors.danger}>
 				<Text.H4 content="❌ DON'T" text={colors.danger} />
-				<Spacer h-2 />
-				<Text content="
-- Use CSS Flexbox or Grid
-- Use `position: absolute`
-- Use external stylesheets
-- Use JavaScript
-- Rely on `border-radius` in Outlook
-" text={colors.textMuted} />
+				<Text content={dontsContent} text={colors.textMuted} />
 			</Div>
 		</Div>
 	</Div>
@@ -80,11 +68,9 @@
 	<Divider border={colors.border} />
 
 	<!-- Outlook -->
-	<Div p-8>
+	<Div rows gap-4 p-8>
 		<Text.H2 content="Outlook Quirks" text={colors.text} />
-		<Spacer h-2 />
 		<Text.Paragraph content="Outlook on Windows uses Word's rendering engine, which is... unique. Here's how we handle it:" text={colors.textMuted} />
-		<Spacer h-4 />
 		
 		<Table cols="30% 70%" border>
 			<Table.Row header bg={colors.background}>
@@ -112,22 +98,42 @@
 
 	<Divider border={colors.border} />
 
+	<!-- Emulated Properties -->
+	<Div rows gap-4 p-8>
+		<Text.H2 content="Emulated CSS Properties" text={colors.text} />
+		<Text.Paragraph content="Some CSS properties don't work in emails, so we emulate them for 100% compatibility:" text={colors.textMuted} />
+		
+		<Table cols="30% 70%" border>
+			<Table.Row header bg={colors.background}>
+				<Text content="Property" font-bold />
+				<Text content="How it's emulated" font-bold />
+			</Table.Row>
+			<Table.Row>
+				<Text.Code content="m-*, margin" />
+				<Text content="Wrapped in table with padding. Safe to use!" />
+			</Table.Row>
+			<Table.Row>
+				<Text.Code content="opacity-*" />
+				<Text content="Colors blended against background to solid hex." />
+			</Table.Row>
+			<Table.Row>
+				<Text.Code content="bg-[#hex]/50" />
+				<Text content="Color modifiers blended to solid hex values." />
+			</Table.Row>
+		</Table>
+		
+		<Text.Small content="**Not emulated (avoid):** `flex`, `grid`, `box-shadow`, `transform`, `filter`, `transition`, `animation`, `object-fit`" text={colors.textMuted} />
+	</Div>
+
+	<Divider border={colors.border} />
+
 	<!-- Images -->
-	<Div p-8>
+	<Div rows gap-4 p-8>
 		<Text.H2 content="Image Handling" text={colors.text} />
-		<Spacer h-2 />
 		<Text.Paragraph content="Images are often blocked by default. Design for degradation." text={colors.textMuted} />
-		<Spacer h-4 />
-		<Text content="
-1. **Alt Text**: Essential for accessibility and when images are blocked.
-2. **Dimensions**: Always set `width` and `height` to prevent layout shifts.
-3. **Retina**: Use 2x sized images but set 1x dimensions in attributes.
-4. **Format**: JPG for photos, PNG for graphics. SVG support is spotty (Gmail strips inline SVG).
-" text={colors.textMuted} />
+		<Text content={imageContent} text={colors.textMuted} />
 	</Div>
 
 	<!-- Footer -->
-	<Div p-6 bg={colors.codeBg} align-center border-t={colors.border}>
-		<Text.Small content="Next: [Configuration](11)" text={colors.textMuted} />
-	</Div>
+	{@render footer()}
 </Email>

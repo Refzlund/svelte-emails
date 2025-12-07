@@ -29,6 +29,11 @@ Compact reference for building email templates with svelte-emails.
 
 ---
 
+## DO
+
+- Make use of `{#snippet example(opts: Options)}` and `{@render example({...})}` for repetitive code.
+
+
 ## File Convention
 
 Email templates use `*.email.svelte` naming:
@@ -117,36 +122,36 @@ render(MyEmail, {
 
 ```svelte
 <!-- Container -->
-<Div p-4 bg-[#f0f0f0]>Content</Div>
+<Div p-4 bg-[#f0f0f0]><Text content='Content' /></Div>
 
 <!-- Grid: cols (horizontal) or rows (vertical) -->
 <Div cols gap-4>
-  <Div w-[50%]>Left</Div>
-  <Div w-[50%]>Right</Div>
+  <Div w-[50%]><Text content='Left' /></Div>
+  <Div w-[50%]><Text content='Right' /></Div>
 </Div>
 
 <Div rows gap-4>
-  <Div>Row 1</Div>
-  <Div>Row 2</Div>
+  <Div><Text content='Row 1' /></Div>
+  <Div><Text content='Row 2' /></Div>
 </Div>
 
 <!-- Column template -->
 <Div cols cols="40% 30% 30%">  <!-- or cols-[40%_30%_30%] -->
-  <Div>40%</Div>
-  <Div>30%</Div>
-  <Div>30%</Div>
+  <Div><Text content='40%' /></Div>
+  <Div><Text content='30%' /></Div>
+  <Div><Text content='30%' /></Div>
 </Div>
 
 <!-- Responsive: stack on mobile -->
 <Div cols responsive>
-  <Div>Col 1</Div>
-  <Div>Col 2</Div>
+  <Div><Text content='Col 1' /></Div>
+  <Div><Text content='Col 2' /></Div>
 </Div>
 
 <!-- Spanning -->
 <Div cols cols="25% 25% 25% 25%">
-  <Div span-2>Spans 2</Div>
-  <Div span-2>Spans 2</Div>
+  <Div span-2><Text content='Spans 2' /></Div>
+  <Div span-2><Text content='Spans 2' /></Div>
 </Div>
 ```
 
@@ -406,8 +411,8 @@ responsive    <!-- On Div cols: stack on mobile -->
 
 <!-- Responsive columns: stack on mobile -->
 <Div cols responsive>
-  <Div w-[50%]>Left on desktop, full width on mobile</Div>
-  <Div w-[50%]>Right on desktop, full width on mobile</Div>
+  <Div w-[50%]><Text content='Left on desktop, full width on mobile' /></Div>
+  <Div w-[50%]><Text content='Right on desktop, full width on mobile' /></Div>
 </Div>
 ```
 

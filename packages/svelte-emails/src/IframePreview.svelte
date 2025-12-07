@@ -72,7 +72,19 @@ for smooth updates without flash, scroll reset, or image reloading.
 </script>
 
 <script lang='ts'>
-	import morphdom from 'morphdom'
+	import {
+		stripScriptTags,
+		snapshotWidthAnchor,
+		restoreWidthScroll,
+		snapshotContentAnchor,
+		restoreContentScroll,
+		calculateContentHeight,
+		morphHtmlToDocument,
+		setupImageLoadListeners,
+		toViewportCoords,
+		type WidthAnchorData,
+		type ContentAnchorData
+	} from './iframe-preview.svelte.ts'
 
 	let { 
 		html,
@@ -91,81 +103,45 @@ for smooth updates without flash, scroll reset, or image reloading.
 	let heightObserver: ResizeObserver | null = null
 	let widthObserver: ResizeObserver | null = null
 	
-	// Track anchor element position before width changes trigger reflow
-	let anchorData: { element: Element; offsetFromViewportTop: number } | null = null
+	// Separate anchor data for width vs content changes
+	let widthAnchorData: WidthAnchorData | null = null
+	let contentAnchorData: ContentAnchorData | null = null
 	
 	// Rendering state
 	let srcdocContent: string | undefined = $state(undefined)
 	let loadedHtml = $state('')   // HTML confirmed loaded via onload
 	let pendingHtml = $state('')  // HTML queued while iframe is loading
 
-	/** Strip script tags to prevent warnings in sandboxed iframes */
-	function stripScriptTags(content: string): string {
-		const endTag = String.fromCharCode(60) + '/script>'
-		return content.replace(new RegExp('<script\\b[^>]*>[\\s\\S]*?' + endTag, 'gi'), '')
-	}
-
-	/** Selector for anchor candidate elements */
-	const ANCHOR_SELECTOR = 'h1, h2, h3, h4, h5, h6, p, div, table, img, section, article, header, footer'
-
-	/** 
-	 * Find a stable anchor element near the top of the visible viewport.
-	 * Used for scroll anchoring during width changes.
-	 */
-	function findAnchorElement(doc: Document, scrollTop: number): { element: Element; offsetFromViewportTop: number } | null {
-		const body = doc.body
-		if (!body) return null
-		
-		let bestMatch: { element: Element; offsetFromViewportTop: number } | null = null
-		let bestDistance = Infinity
-		
-		for (const el of body.querySelectorAll(ANCHOR_SELECTOR)) {
-			const rect = el.getBoundingClientRect()
-			if (rect.height < 10) continue
-			
-			const distance = Math.abs(rect.top - scrollTop)
-			if (rect.top >= scrollTop - 50 && distance < bestDistance) {
-				bestDistance = distance
-				bestMatch = { element: el, offsetFromViewportTop: rect.top - scrollTop }
-			}
-		}
-		
-		return bestMatch
-	}
-
-	/** Snapshot anchor element position before width changes cause reflow */
-	function snapshotAnchorPosition(doc: Document) {
-		if (!scrollContainer) return
-		anchorData = findAnchorElement(doc, scrollContainer.scrollTop)
-	}
-
 	/** Update iframe height based on content, with scroll anchoring if configured */
-	function updateHeight(doc: Document) {
-		if (!iframeElement) return
+	function updateHeight(doc: Document, forceAnchorRestore = false) {
+		const newHeight = calculateContentHeight(doc)
+		const heightChanged = newHeight !== height && newHeight > 0
 		
-		const body = doc.body
-		if (!body) return
-		
-		const bodyStyle = doc.defaultView?.getComputedStyle(body)
-		const marginTop = parseFloat(bodyStyle?.marginTop || '0')
-		const marginBottom = parseFloat(bodyStyle?.marginBottom || '0')
-		const newHeight = body.scrollHeight + marginTop + marginBottom
-		
-		if (newHeight === height || newHeight <= 0) return
-		
-		// Apply scroll anchoring when configured
-		if (scrollContainer && heightTarget && anchorData) {
-			const anchorTopNow = anchorData.element.getBoundingClientRect().top
-			const newScrollTop = anchorTopNow - anchorData.offsetFromViewportTop
-			
-			heightTarget.style.height = `${newHeight}px`
-			void scrollContainer.offsetHeight // Force synchronous layout
-			scrollContainer.scrollTop = Math.max(0, newScrollTop)
-		} else if (heightTarget) {
-			heightTarget.style.height = `${newHeight}px`
+		// Width-based anchoring (direct element reference) - only for width changes
+		if (scrollContainer && heightTarget && widthAnchorData && heightChanged) {
+			restoreWidthScroll(scrollContainer, heightTarget, widthAnchorData, newHeight)
+			// Clear after successful restore - width change is done
+			widthAnchorData = null
+			height = newHeight
+			return
 		}
 		
-		height = newHeight
+		// Content-based anchoring (signature lookup) - for content changes
+		if (scrollContainer && heightTarget && contentAnchorData && (heightChanged || forceAnchorRestore)) {
+			const anchor = contentAnchorData
+			contentAnchorData = null  // Clear after use
+			restoreContentScroll(doc, scrollContainer, heightTarget, anchor, newHeight)
+			if (heightChanged) height = newHeight
+			return
+		}
+		
+		// No anchoring - just update height
+		if (heightChanged) {
+			if (heightTarget) {
+				heightTarget.style.height = `${newHeight}px`
+			}
+			height = newHeight
+		}
 	}
 
 	/** Setup ResizeObserver to track iframe content height */
@@ -177,32 +153,22 @@ for smooth updates without flash, scroll reset, or image reloading.
 		if (doc.body) heightObserver.observe(doc.body)
 		if (doc.documentElement) heightObserver.observe(doc.documentElement)
 		
-		// Listen to image load events to recalculate height when images finish loading
-		// This handles the case where images have no dimensions until loaded
-		setupImageLoadListeners(doc)
-	}
-
-	/** Setup load listeners on all images to recalculate height when they load */
-	function setupImageLoadListeners(doc: Document) {
-		const images = doc.querySelectorAll('img')
-		for (const img of images) {
-			if (img.complete) continue
-			img.addEventListener('load', () => updateHeight(doc), { once: true })
-			img.addEventListener('error', () => updateHeight(doc), { once: true })
-		}
+		// Listen to image load events to recalculate height
+		setupImageLoadListeners(doc, () => updateHeight(doc))
 	}
 
 	/** Setup ResizeObserver on heightTarget to snapshot anchor before width changes */
 	function setupWidthObserver(doc: Document) {
 		widthObserver?.disconnect()
-		if (!heightTarget) return
+		if (!heightTarget || !scrollContainer) return
 		
 		let lastWidth = heightTarget.getBoundingClientRect().width
 		
 		widthObserver = new ResizeObserver((entries) => {
 			const newWidth = entries[0]?.contentRect.width
 			if (newWidth && newWidth !== lastWidth) {
-				snapshotAnchorPosition(doc)
+				// Snapshot using direct element reference for width changes
+				widthAnchorData = snapshotWidthAnchor(doc, scrollContainer.scrollTop)
 				lastWidth = newWidth
 			}
 		})
@@ -212,65 +178,36 @@ for smooth updates without flash, scroll reset, or image reloading.
 
 	/** Setup mouse event forwarding from iframe to parent */
 	function setupMouseForwarding(doc: Document) {
-		// Helper to convert iframe coords to viewport coords
-		function toViewportCoords(e: MouseEvent) {
-			if (!iframeElement) return null
-			const rect = iframeElement.getBoundingClientRect()
-			return {
-				clientX: rect.left + e.clientX,
-				clientY: rect.top + e.clientY
-			}
-		}
-		
 		doc.addEventListener('mousemove', (e: MouseEvent) => {
-			const coords = toViewportCoords(e)
-			if (coords) oniframemousemove?.(coords)
+			if (!iframeElement) return
+			oniframemousemove?.(toViewportCoords(e, iframeElement))
 		})
 		
 		doc.addEventListener('mouseup', (e: MouseEvent) => {
-			const coords = toViewportCoords(e)
-			if (coords) oniframemouseup?.(coords)
+			if (!iframeElement) return
+			oniframemouseup?.(toViewportCoords(e, iframeElement))
 		})
 	}
-	
-	/** Morphdom options for head - preserve charset and viewport meta tags */
-	const headMorphOptions = {
-		onBeforeNodeDiscarded(node: Node) {
-			if (node instanceof HTMLMetaElement) {
-				if (node.hasAttribute('charset') || node.getAttribute('name') === 'viewport') {
-					return false
-				}
-			}
-			return true
-		}
-	}
-	
-	/** Morphdom options for body - preserve images with same src to avoid reload flicker */
-	const bodyMorphOptions = {
-		onBeforeElUpdated(fromEl: Element, toEl: Element) {
-			if (fromEl instanceof HTMLImageElement && toEl instanceof HTMLImageElement && fromEl.src === toEl.src) {
-				// Sync attributes without triggering image reload
-				if (fromEl.alt !== toEl.alt) fromEl.alt = toEl.alt
-				if (fromEl.width !== toEl.width) fromEl.width = toEl.width
-				if (fromEl.height !== toEl.height) fromEl.height = toEl.height
-				const newStyle = toEl.getAttribute('style')
-				if (fromEl.getAttribute('style') !== newStyle) {
-					fromEl.setAttribute('style', newStyle || '')
-				}
-				return false
-			}
-			return true
-		}
-	}
-	
+
 	/** Apply HTML to iframe document via morphdom */
 	function morphToDocument(doc: Document, newHtml: string) {
-		const newDoc = new DOMParser().parseFromString(newHtml, 'text/html')
-		if (doc.head && newDoc.head) morphdom(doc.head, newDoc.head, headMorphOptions)
-		if (doc.body && newDoc.body) morphdom(doc.body, newDoc.body, bodyMorphOptions)
-		// Re-setup image listeners for any new images added by morphdom
-		setupImageLoadListeners(doc)
-		updateHeight(doc)
+		const scrollBefore = scrollContainer?.scrollTop ?? 0
+		const heightBefore = height
+		
+		// Snapshot anchor before DOM changes
+		if (scrollContainer) {
+			contentAnchorData = snapshotContentAnchor(doc, scrollContainer.scrollTop)
+		}
+		const hadAnchor = contentAnchorData !== null
+		
+		morphHtmlToDocument(doc, newHtml)
+		setupImageLoadListeners(doc, () => updateHeight(doc))
+		updateHeight(doc, true)
+		
+		// Fallback: preserve scroll if no anchor was found
+		if (scrollContainer && (!hadAnchor || heightBefore === 0)) {
+			scrollContainer.scrollTop = scrollBefore
+		}
 	}
 
 	/** Handle iframe load event */
@@ -278,7 +215,6 @@ for smooth updates without flash, scroll reset, or image reloading.
 		const doc = iframeElement?.contentDocument
 		if (!doc) return
 		
-		// Mark srcdoc as loaded
 		if (srcdocContent) loadedHtml = srcdocContent
 		
 		setupHeightObserver(doc)
@@ -336,8 +272,6 @@ for smooth updates without flash, scroll reset, or image reloading.
 
 	// Combined styles
 	const computedStyle = $derived.by(() => {
-		// When height is known, use explicit px value
-		// Otherwise use 100% to fill parent container while loading
 		const heightStyle = height > 0 ? `height: ${height}px;` : 'height: 100%;'
 		const base = `width: 100%; border: none; ${heightStyle}`
 		return style ? `${base} ${style}` : base

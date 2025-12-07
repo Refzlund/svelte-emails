@@ -110,6 +110,19 @@ function extractEmailAttribute(content: string, attrName: string): string {
 }
 
 /**
+ * Check if file content contains an <Email> component
+ */
+export function hasEmailComponent(content: string): boolean {
+	// Skip the script section to avoid matching <Email> in imports or string literals
+	const scriptEndMatch = content.match(/<\/script>/i)
+	const searchContent = scriptEndMatch 
+		? content.slice(scriptEndMatch.index! + scriptEndMatch[0].length)
+		: content
+	
+	return /<Email\b/.test(searchContent)
+}
+
+/**
  * Extract preview text from <Email preview="..."> in a Svelte file
  */
 export function extractPreviewText(content: string): string {
@@ -320,16 +333,24 @@ export async function discoverSvelteFiles(
 		let previewText = ''
 		let category = ''
 		let order: number | undefined
+		let content = ''
+
+		try {
+			content = readFileSync(absolutePath, 'utf-8')
+		} catch {
+			// Skip files that can't be read
+			continue
+		}
+
+		// Skip files that don't have an <Email> component
+		if (!hasEmailComponent(content)) {
+			continue
+		}
 
 		if (!skipPreview) {
-			try {
-				const content = readFileSync(absolutePath, 'utf-8')
-				previewText = extractPreviewText(content)
-				category = extractCategory(content)
-				order = extractOrder(content)
-			} catch {
-				// Ignore read errors
-			}
+			previewText = extractPreviewText(content)
+			category = extractCategory(content)
+			order = extractOrder(content)
 		}
 
 		// For bundled files, use folder name as category if not specified in <Email>

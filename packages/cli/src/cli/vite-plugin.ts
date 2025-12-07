@@ -1,4 +1,4 @@
-import { isRunnableDevEnvironment, type Plugin, type ViteDevServer } from 'vite'
+import { isRunnableDevEnvironment, type Plugin, type ViteDevServer, type ModuleNode } from 'vite'
 import { watch, type FSWatcher } from 'chokidar'
 import { discoverAll, extractPreviewText, extractCategory, extractOrder, getCliSrcDir } from './discovery.js'
 import { readFile } from 'node:fs/promises'
@@ -300,6 +300,65 @@ export function emailListPlugin(options: EmailListPluginOptions): Plugin {
 			if (discoveryInterval) clearInterval(discoveryInterval)
 			await watcher?.close()
 			await bundledWatcher?.close()
+		},
+
+		/**
+		 * Handle HMR updates for imported files
+		 * When a non-email .svelte file changes (e.g., Footer.svelte), find all .email.svelte
+		 * files that import it (directly or transitively) and notify the client to refresh them.
+		 */
+		handleHotUpdate({ file, modules }) {
+			// Only handle .svelte files that are NOT email files
+			// (email files are already handled by the chokidar watcher)
+			if (!file.endsWith('.svelte') || file.endsWith('.email.svelte')) {
+				return
+			}
+
+			const normalizedPath = normalizePath(file)
+			const allEmailFiles = getAllFilesFlat(allFiles)
+			const emailPathSet = new Set(allEmailFiles.map((e) => normalizePath(e.path)))
+
+			// Find all .email.svelte files that import this changed file (directly or transitively)
+			const affectedEmails = new Set<string>()
+
+			/**
+			 * Walk up the importer chain from a module to find email files
+			 */
+			function findEmailImporters(mod: ModuleNode, visited = new Set<string>()): void {
+				const modFile = mod.file ? normalizePath(mod.file) : null
+				if (!modFile || visited.has(modFile)) return
+				visited.add(modFile)
+
+				// Check if this module is an email file
+				if (emailPathSet.has(modFile)) {
+					affectedEmails.add(modFile)
+					return // Don't need to traverse further up from an email file
+				}
+
+				// Check all modules that import this one
+				for (const importer of mod.importers) {
+					findEmailImporters(importer, visited)
+				}
+			}
+
+			// Start from all modules affected by this file change
+			for (const mod of modules) {
+				findEmailImporters(mod)
+			}
+
+			// Notify clients about affected email files
+			if (affectedEmails.size > 0) {
+				for (const emailPath of affectedEmails) {
+					const emailFile = allEmailFiles.find((e) => normalizePath(e.path) === emailPath)
+					if (emailFile) {
+						console.log(`   [svelte-emails] Dependency changed: ${normalizedPath} → refreshing ${emailFile.name}`)
+						broadcastUpdate('content-change', { id: emailFile.id, path: emailFile.relativePath })
+					}
+				}
+			}
+
+			// Let Vite handle normal HMR
+			return
 		}
 	}
 

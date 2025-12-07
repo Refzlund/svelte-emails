@@ -39,7 +39,7 @@ This affects `responsive` columns, `mobile-only`, and `desktop-only` elements.
 	preview='Check out our latest updates...'
 >
 	<Div cols responsive>
-		<Div>Stacks at 425px instead of 480px</Div>
+		<Div><Text content='Stacks at 425px instead of 480px' /></Div>
 	</Div>
 </Email>
 ```

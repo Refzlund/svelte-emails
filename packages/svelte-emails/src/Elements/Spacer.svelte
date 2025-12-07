@@ -22,15 +22,15 @@ Use `h-*` or `w-*` attributes to override the default size based on context.
 @example Horizontal spacing in cols
 ```svelte
 <Div cols>
-  <Div>Left</Div>
+  <Div><Text content='Left' /></Div>
   <Spacer />
-  <Div>Right (default 2rem gap)</Div>
+  <Div><Text content='Right (default 2rem gap)' /></Div>
 </Div>
 
 <Div cols>
-  <Div>Left</Div>
+  <Div><Text content='Left' /></Div>
   <Spacer w-12 />
-  <Div>Right (custom width)</Div>
+  <Div><Text content='Right (custom width)' /></Div>
 </Div>
 ```
 
@@ -39,7 +39,7 @@ Use `h-*` or `w-*` attributes to override the default size based on context.
 <Table cols-[40%_20%_20%_20%]>
   <Table.Row>
     <Spacer span-2 />
-    <Div span-2>Content in right columns</Div>
+    <Div span-2><Text content='Content in right columns' /></Div>
   </Table.Row>
 </Table>
 ```

@@ -13,7 +13,6 @@
 import type { InheritedStyles, ParsedAttrs } from './types'
 import {
 	SPACING_SCALE,
-	SPACING_SCALE_PX,
 	FONT_SIZES,
 	FONT_WEIGHTS,
 	LINE_HEIGHTS,
@@ -1367,6 +1366,28 @@ export function extractWidthFromAttrs(attrs: string[], rootSize: number = DEFAUL
 	return undefined
 }
 
+/**
+ * Check if an attribute is a width attribute (w-*, w-full, w-screen, w-auto, w-[value]).
+ * Used to filter width attrs from children when parent grid applies width to <td>.
+ * 
+ * @param attr - A single Tailwind-like attribute
+ * @returns true if the attribute sets width
+ * 
+ * @example
+ * ```ts
+ * isWidthAttr('w-[40%]')  // → true
+ * isWidthAttr('w-full')   // → true
+ * isWidthAttr('w-32')     // → true
+ * isWidthAttr('p-4')      // → false
+ * isWidthAttr('bg-white') // → false
+ * ```
+ */
+export function isWidthAttr(attr: string): boolean {
+	// Reuse extractWidthValue logic - if it returns a value, it's a width attr
+	// Using rootSize=16 as default since we only care about matching, not the actual value
+	return extractWidthValue(attr, 16) !== undefined
+}
+
 // ============================================================================
 // Column/Row Template Parsing
 // ============================================================================
@@ -1432,21 +1453,26 @@ export function parseRowTemplate(attrs: string[]): string[] | undefined {
  * - cell-padding-0 through cell-padding-12 (scale values)
  * - cell-padding-[8px] (arbitrary value)
  * 
+ * Returns a raw representation that should be resolved with `resolveSpacingValue()`
+ * at render time to respect the configured root size.
+ * 
  * @param attrs - Array of attribute strings
- * @returns Cell padding value or undefined
+ * @returns Raw spacing value (scale key like "4" or arbitrary like "[20px]") or undefined
  */
 export function parseCellPadding(attrs: string[]): string | undefined {
 	for (const attr of attrs) {
 		// Check for arbitrary value: cell-padding-[8px]
 		const arbitraryMatch = attr.match(CELL_PADDING_ARBITRARY_RE)
 		if (arbitraryMatch) {
-			return arbitraryMatch[1]
+			// Return arbitrary value with marker prefix for resolution
+			return `[${arbitraryMatch[1]}]`
 		}
 		
 		// Check for scale value: cell-padding-0 through cell-padding-12
 		const scaleMatch = attr.match(CELL_PADDING_SCALE_RE)
-		if (scaleMatch && SPACING_SCALE_PX[scaleMatch[1]]) {
-			return SPACING_SCALE_PX[scaleMatch[1]]
+		if (scaleMatch && SPACING_SCALE[scaleMatch[1]]) {
+			// Return scale key for resolution at render time
+			return scaleMatch[1]
 		}
 	}
 	return undefined
@@ -1459,24 +1485,67 @@ export function parseCellPadding(attrs: string[]): string | undefined {
  * - gap-0 through gap-12 (scale values)
  * - gap-[20px] (arbitrary value)
  * 
+ * Returns a raw representation that should be resolved with `resolveSpacingValue()`
+ * at render time to respect the configured root size.
+ * 
  * @param attrs - Array of attribute strings
- * @returns Gap value or undefined
+ * @returns Raw spacing value (scale key like "4" or arbitrary like "[20px]") or undefined
  */
 export function parseGap(attrs: string[]): string | undefined {
 	for (const attr of attrs) {
 		// Check for arbitrary value: gap-[20px]
 		const arbitraryMatch = attr.match(GAP_ARBITRARY_RE)
 		if (arbitraryMatch) {
-			return arbitraryMatch[1]
+			// Return arbitrary value with marker prefix for resolution
+			return `[${arbitraryMatch[1]}]`
 		}
 		
 		// Check for scale value: gap-0 through gap-12
 		const scaleMatch = attr.match(GAP_SCALE_RE)
-		if (scaleMatch && SPACING_SCALE_PX[scaleMatch[1]]) {
-			return SPACING_SCALE_PX[scaleMatch[1]]
+		if (scaleMatch && SPACING_SCALE[scaleMatch[1]]) {
+			// Return scale key for resolution at render time
+			return scaleMatch[1]
 		}
 	}
 	return undefined
+}
+
+/**
+ * Resolve a raw spacing value to px using the configured root size.
+ * 
+ * Handles two formats:
+ * - Scale key (e.g., "4", "8") → Looks up in SPACING_SCALE and converts rem to px
+ * - Arbitrary value (e.g., "[20px]", "[2rem]") → Extracts value and converts if rem
+ * 
+ * This function should be called at render time when rootSize is available.
+ * 
+ * @param value - Raw spacing value from parseGap/parseCellPadding
+ * @param rootSize - Root font size for rem→px conversion
+ * @returns Resolved px value string (e.g., "16px")
+ * 
+ * @example
+ * ```ts
+ * resolveSpacingValue("4", 16)      // → "16px"
+ * resolveSpacingValue("4", 18)      // → "18px"  
+ * resolveSpacingValue("[20px]", 16) // → "20px"
+ * resolveSpacingValue("[2rem]", 16) // → "32px"
+ * ```
+ */
+export function resolveSpacingValue(value: string, rootSize: number): string {
+	// Check if it's an arbitrary value (wrapped in brackets)
+	if (value.startsWith('[') && value.endsWith(']')) {
+		const innerValue = value.slice(1, -1)
+		return remToPx(innerValue, rootSize)
+	}
+	
+	// It's a scale key - look up rem value and convert
+	const remValue = SPACING_SCALE[value]
+	if (remValue) {
+		return remToPx(remValue, rootSize)
+	}
+	
+	// Fallback: return as-is (shouldn't happen with valid input)
+	return value
 }
 
 // ============================================================================

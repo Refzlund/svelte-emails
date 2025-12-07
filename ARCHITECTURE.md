@@ -54,7 +54,7 @@ Build email templates using Svelte components with Tailwind-like styling attribu
   </Table>
 
   <Spacer />
-  <Button href='https://example.com'>Get Started</Button>
+  <Button href='https://example.com' content='Get Started' />
 </Email>
 ```
 
@@ -352,32 +352,32 @@ Generic container supporting grid layouts via `cols` or `rows`:
 
 ```svelte
 <!-- Simple container -->
-<Div p-4 bg-[#f0f0f0]>Content</Div>
+<Div p-4 bg-[#f0f0f0]><Text content='Content' /></Div>
 
 <!-- Horizontal columns -->
 <Div cols>
-  <Div w-[50%]>Left</Div>
-  <Div w-[50%]>Right</Div>
+  <Div w-[50%]><Text content='Left' /></Div>
+  <Div w-[50%]><Text content='Right' /></Div>
 </Div>
 
 <!-- Responsive columns (stack on mobile) -->
 <Div cols responsive>
-  <Div>Column 1</Div>
-  <Div>Column 2</Div>
+  <Div><Text content='Column 1' /></Div>
+  <Div><Text content='Column 2' /></Div>
 </Div>
 
 <!-- Column template (define widths once) -->
 <Div cols cols-[40%_30%_30%]>
-  <Div>40%</Div>
-  <Div>30%</Div>
-  <Div>30%</Div>
+  <Div><Text content='40%' /></Div>
+  <Div><Text content='30%' /></Div>
+  <Div><Text content='30%' /></Div>
 </Div>
 
 <!-- Value syntax with spaces (equivalent to above) -->
 <Div cols cols="40% 30% 30%">
-  <Div>40%</Div>
-  <Div>30%</Div>
-  <Div>30%</Div>
+  <Div><Text content='40%' /></Div>
+  <Div><Text content='30%' /></Div>
+  <Div><Text content='30%' /></Div>
 </Div>
 
 <!-- Gap between children -->
@@ -385,14 +385,14 @@ Generic container supporting grid layouts via `cols` or `rows`:
 
 <!-- Span multiple columns -->
 <Div cols cols-[25%_25%_25%_25%]>
-  <Div span-2>Spans 2 cols</Div>
-  <Div span-2>Spans 2 cols</Div>
+  <Div span-2><Text content='Spans 2 cols' /></Div>
+  <Div span-2><Text content='Spans 2 cols' /></Div>
 </Div>
 
 <!-- Vertical rows -->
 <Div rows gap-4>
-  <Div>Row 1</Div>
-  <Div>Row 2</Div>
+  <Div><Text content='Row 1' /></Div>
+  <Div><Text content='Row 2' /></Div>
 </Div>
 ```
 
@@ -643,11 +643,13 @@ All bracket-style attributes support two equivalent syntaxes:
 
 Scale: `0`, `0.5`, `1`, `1.5`, `2`, `2.5`, `3`, `3.5`, `4`, `5`, `6`, `7`, `8`, `9`, `10`, `11`, `12`, `14`, `16`, `20`, `24`, `28`, `32`, `36`, `40`, `44`, `48`, `52`, `56`, `60`, `64`, `72`, `80`, `96`
 
-| Scale | rem | px (at root=16) |
-|-------|-----|-----------------|
+| Scale | rem | px (default root.size=16) |
+|-------|-----|---------------------------|
 | `4` | 1rem | 16px |
 | `8` | 2rem | 32px |
 | `12` | 3rem | 48px |
+
+All spacing utilities (`p-*`, `m-*`, `gap-*`, `cell-padding-*`) use rem values internally and are converted to px at render time using `StyleConfig.root.size`. Customize `root.size` to scale all spacing proportionally.
 
 #### Sizing
 
@@ -729,8 +731,8 @@ Rounded: `none`, `sm`, `(default)`, `md`, `lg`, `xl`, `2xl`, `3xl`, `full`, `[10
 
 ```svelte
 <Div hidden />                  <!-- display: none -->
-<Div mobile-only>Mobile content</Div>
-<Div desktop-only>Desktop content</Div>
+<Div mobile-only><Text content='Mobile content' /></Div>
+<Div desktop-only><Text content='Desktop content' /></Div>
 ```
 
 ### Style Inheritance
@@ -753,7 +755,7 @@ Border color inherits from text color if not explicitly set.
 CSS margins are unreliable (Outlook.com dropped support), so margins are **emulated via wrapper table padding**:
 
 ```svelte
-<Div m-4 p-2 bg-[#fff]>Content</Div>
+<Div m-4 p-2 bg-[#fff]><Text content='Content' /></Div>
 ```
 
 Renders as:
@@ -774,7 +776,7 @@ CSS `opacity` and `rgba()` have poor email support. Colors are **blended at rend
 ```svelte
 <Div bg-[#ffffff]>
   <Text text-[#000000]/50>Renders as #808080</Text>
-  <Div bg-[#ff0000]/25>Renders as #ffbfbf</Div>
+  <Div bg-[#ff0000]/25><Text content='Renders as #ffbfbf' /></Div>
 </Div>
 ```
 
@@ -829,19 +831,51 @@ All `content='...'` props support inline formatting:
 
 ### Lists
 
+Lists are rendered as tables for maximum email client compatibility. A list requires at least 2 consecutive items.
+
+**Unordered lists** use `-` or `*`:
 ```svelte
 <Text content='
 - First item
 - Second item
-' />
-
-<Text content='
-1. Numbered
-a. Lettered
-A. Uppercase
-I. Roman numeral
+- Third item
 ' />
 ```
+
+**Ordered lists** use `1.`, `a.`, `A.`, `i.`, or `I.`:
+```svelte
+<Text content='
+1. Numbered
+2. Items
+' />
+```
+
+**Nested lists** use indentation (2 spaces or tab):
+```svelte
+<Text content='
+- Parent item
+  - Child item
+    - Grandchild
+- Another parent
+' />
+```
+
+Bullet styles progress by depth: ● → ○ → ■
+
+Ordered lists progress by depth: 1, 2, 3 → a, b, c → i, ii, iii
+
+**Checkboxes** use `- [ ]` (unchecked) or `- [x]` (checked):
+```svelte
+<Text content='
+- [ ] Todo item
+- [x] Completed item
+- Tasks
+  - [ ] Subtask pending
+  - [x] Subtask done
+' />
+```
+
+Checkboxes render as styled inline boxes (green checkmark for checked).
 
 ### Tables (in content)
 
@@ -862,7 +896,7 @@ Use `[[variable_name]]` syntax:
 
 ```svelte
 <Text content='Hello [[first_name]]!' />
-<Button href='https://example.com/u/[[user_id]]'>Profile</Button>
+<Button href='https://example.com/u/[[user_id]]' content='Profile' />
 ```
 
 Provide values via `placeholders` option:
@@ -874,6 +908,13 @@ render(MyEmail, {
 ```
 
 Variables are HTML-escaped automatically. Missing variables remain as `[[var]]` in output.
+
+**Escaping:** To output literal `[[` or `]]` characters, escape with backslash:
+
+```svelte
+<Text content='Use \[[variable]] syntax for placeholders' />
+<!-- Renders: Use [[variable]] syntax for placeholders -->
+```
 
 ### Syntax Highlighting (Code Blocks)
 

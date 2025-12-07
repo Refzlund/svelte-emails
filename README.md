@@ -77,34 +77,34 @@ Use `cols` or `rows` on `<Div>` to arrange children in a grid:
 ```svelte
 <!-- Horizontal columns -->
 <Div cols>
-    <Div w-[50%]>Left</Div>
-    <Div w-[50%]>Right</Div>
+    <Div w-[50%]><Text content='Left' /></Div>
+    <Div w-[50%]><Text content='Right' /></Div>
 </Div>
 
 <!-- Responsive (stacks on mobile) -->
 <Div cols responsive>
-    <Div>Column 1</Div>
-    <Div>Column 2</Div>
+    <Div><Text content='Column 1' /></Div>
+    <Div><Text content='Column 2' /></Div>
 </Div>
 
 <!-- Vertical rows -->
 <Div rows gap-4>
-    <Div>Row 1</Div>
-    <Div>Row 2</Div>
+    <Div><Text content='Row 1' /></Div>
+    <Div><Text content='Row 2' /></Div>
 </Div>
 
 <!-- Column template (define widths once) -->
 <Div cols cols-[40%_30%_30%]>
-    <Div>40%</Div>
-    <Div>30%</Div>
-    <Div>30%</Div>
+    <Div><Text content='40%' /></Div>
+    <Div><Text content='30%' /></Div>
+    <Div><Text content='30%' /></Div>
 </Div>
 
 <!-- Value syntax with spaces (equivalent to above) -->
 <Div cols cols="40% 30% 30%">
-    <Div>40%</Div>
-    <Div>30%</Div>
-    <Div>30%</Div>
+    <Div><Text content='40%' /></Div>
+    <Div><Text content='30%' /></Div>
+    <Div><Text content='30%' /></Div>
 </Div>
 
 <!-- Gap between children -->
@@ -113,8 +113,8 @@ Use `cols` or `rows` on `<Div>` to arrange children in a grid:
 
 <!-- Span multiple columns -->
 <Div cols cols-[25%_25%_25%_25%]>
-    <Div span-2>Spans 2 cols</Div>
-    <Div span-2>Spans 2 cols</Div>
+    <Div span-2><Text content='Spans 2 cols' /></Div>
+    <Div span-2><Text content='Spans 2 cols' /></Div>
 </Div>
 ```
 
@@ -157,8 +157,8 @@ For tabular data with proper semantics:
 **Cell Spanning:**
 ```svelte
 <Table.Row>
-    <Div span-2>Spans 2 columns</Div>
-    <Div>Normal cell</Div>
+    <Div span-2><Text content='Spans 2 columns' /></Div>
+    <Div><Text content='Normal cell' /></Div>
 </Table.Row>
 ```
 
@@ -233,7 +233,7 @@ The value syntax enables using Svelte variables:
 </script>
 
 <Div bg={brandColor} p={spacing}>
-    Dynamic styling!
+    <Text content='Dynamic styling!' />
 </Div>
 ```
 
@@ -293,11 +293,11 @@ Both syntaxes work identically — use whichever fits your needs.
 
 ### Responsive
 ```svelte
-<Div mobile-only>Shown only on mobile</Div>
-<Div desktop-only>Shown only on desktop</Div>
+<Div mobile-only><Text content='Shown only on mobile' /></Div>
+<Div desktop-only><Text content='Shown only on desktop' /></Div>
 <Div cols responsive>
-    <Div>2 columns on Desktop</Div>
-    <Div>1 column on Mobile</Div>
+    <Div><Text content='2 columns on Desktop' /></Div>
+    <Div><Text content='1 column on Mobile' /></Div>
 </Div>
 
 <!-- Customize breakpoint (default: 480px) -->
@@ -308,8 +308,8 @@ Both syntaxes work identically — use whichever fits your needs.
 
 ### Opacity
 ```svelte
-<Div opacity-75>75% opacity (all colors blended)</Div>
-<Div opacity="0.75">Same result with value syntax</Div>
+<Div opacity-75><Text content='75% opacity (all colors blended)' /></Div>
+<Div opacity="0.75"><Text content='Same result with value syntax' /></Div>
 ```
 
 ---

@@ -85,7 +85,7 @@
 {/snippet}
 
 {#snippet socialLink(href: string, label: string)}
-	<Link {href} text={colors.textMuted}>{label}</Link>
+	<Link {href} text={colors.textMuted} content={label} />
 {/snippet}
 
 <Email

@@ -37,15 +37,18 @@ import {
 	formatFootnotes,
 	htmlAttrs,
 	presentationTable,
+	gapSpacerTable,
 	remToPx,
 	extractWidthFromAttrs,
 	extractCellAttrs,
+	isWidthAttr,
 	buildCssFromConfig,
 	buildCell,
 	buildCellStylesFromRow,
 	extractRowStylesForCells,
 	CONFIG_MAPPINGS,
-	DEFAULT_MOBILE_BREAKPOINT
+	DEFAULT_MOBILE_BREAKPOINT,
+	resolveSpacingValue
 } from './rendering'
 import { getRootSize, merge, basePreset } from './styles'
 
@@ -586,12 +589,30 @@ function renderDivNode(
 	const childInherited = extractInheritable(parsed, inherited)
 
 	// Check if this is a grid layout (has direction)
-	if (node.direction) {
+	// EXCEPTION: When a `rows` grid has h-full, render as plain Div with gap spacers
+	// This allows the container to stretch for equal-height columns
+	const isRowsWithFullHeight = node.direction === 'rows' && parsed.css.height === '100%'
+	
+	if (node.direction && !isRowsWithFullHeight) {
 		return renderDivAsGrid(node, parsed, childInherited, inherited, context, rootSize)
 	}
 
-	// Normal Div: single cell containing all children
-	const childrenHtml = renderChildren(node.children, childInherited, context, rootSize)
+	// Normal Div (or rows with h-full): single cell containing all children
+	// For rows with h-full, insert gap spacers between children
+	let childrenHtml: string
+	const resolvedGap = node.gap ? resolveSpacingValue(node.gap, rootSize) : undefined
+	if (isRowsWithFullHeight && resolvedGap) {
+		// Render children with gap spacers as content (not table rows)
+		childrenHtml = node.children.map((child, index) => {
+			const childHtml = renderNodeToHtml(child, childInherited, context, rootSize)
+			if (index > 0) {
+				return gapSpacerTable(resolvedGap) + childHtml
+			}
+			return childHtml
+		}).join('')
+	} else {
+		childrenHtml = renderChildren(node.children, childInherited, context, rootSize)
+	}
 
 	// Table attrs: use explicit width if provided, otherwise 100% to fill container
 	// Note: When Div has explicit width (w="300px" or w-[300px]), respect it
@@ -664,7 +685,7 @@ function renderDivAsGrid(
 ): string {
 	const isResponsive = node.responsiveGrid
 	const isColumns = node.direction === 'cols'
-	const gap = node.gap // e.g., "16px" from gap-4
+	const gap = node.gap ? resolveSpacingValue(node.gap, rootSize) : undefined // Resolved to px
 
 	// Width: use explicit attr if provided, otherwise default to 100%
 	const tableWidth = parsed.css.width ?? '100%'
@@ -750,10 +771,13 @@ function renderDivAsGrid(
 		// Extract width, valign, responsive, and span from each child's attrs to apply to <td>
 		const childCount = node.children.length
 		
-		// Check if any child will be unwrapped (h-full Div) - if so, use gap spacer cells
+		// Check if any child will be unwrapped (h-full Div or rows h-full Div) - if so, use gap spacer cells
 		const hasUnwrappedChildren = node.children.some(child => {
 			const attrs = extractCellAttrs(child.attrs, rootSize)
-			return child.type === 'div' && !child.direction && attrs.height === '100%'
+			// Plain Div with h-full, OR rows Div with h-full (which gets unwrapped to plain)
+			const isPlainDivWithHeight = child.type === 'div' && !child.direction && attrs.height === '100%'
+			const isRowsDivWithHeight = child.type === 'div' && child.direction === 'rows' && attrs.height === '100%'
+			return isPlainDivWithHeight || isRowsDivWithHeight
 		})
 		// Use gap spacer cells instead of padding when children are unwrapped
 		const useGapCells = gap && hasUnwrappedChildren
@@ -764,21 +788,53 @@ function renderDivAsGrid(
 			// Extract all cell-related attrs in single pass
 			const cellAttrs = extractCellAttrs(child.attrs, rootSize)
 			
-			// Filter out responsive attrs from child so it doesn't double-wrap
-			const childAttrsFiltered = cellAttrs.responsive 
-				? child.attrs.filter((a) => a !== 'mobile-only' && a !== 'desktop-only')
-				: child.attrs
+			// Determine what width will be applied to the <td>
+			// Width priority: explicit child width > effectiveColWidths[index] > none
+			let cellWidth = cellAttrs.width
+			if (!cellWidth && effectiveColWidths && effectiveColWidths[colIndex]) {
+				cellWidth = effectiveColWidths[colIndex]
+			}
+			
+			// Filter out attrs that are applied to <td> so they don't double-apply on inner element
+			// - responsive attrs (mobile-only, desktop-only)
+			// - width attrs when cellWidth is being applied to the <td>
+			let childAttrsFiltered = child.attrs
+			if (cellAttrs.responsive || cellWidth) {
+				childAttrsFiltered = child.attrs.filter((a) => {
+					// Filter responsive attrs
+					if (a === 'mobile-only' || a === 'desktop-only') return false
+					// Filter width attrs when width is applied to <td>
+					if (cellWidth && isWidthAttr(a)) return false
+					return true
+				})
+			}
 			const childForRender = { ...child, attrs: childAttrsFiltered }
 			
-			// Special case: when child is a Div with h-full, apply its styles to the <td>
-			// and render its children directly. This makes equal-height columns work.
+			// Special case: when child is a Div with h-full (plain or rows), apply its styles to the <td>
+			// and render its children directly (with gap spacers for rows). This makes equal-height columns work.
 			let childHtml: string
 			let cellStylesCss: Record<string, string> = {}
 			
-			if (child.type === 'div' && !child.direction && cellAttrs.height === '100%') {
+			const isPlainDivWithHeight = child.type === 'div' && !child.direction && cellAttrs.height === '100%'
+			const isRowsDivWithHeight = child.type === 'div' && child.direction === 'rows' && cellAttrs.height === '100%'
+			
+			if (isPlainDivWithHeight || isRowsDivWithHeight) {
 				const childParsed = parseAttrs(childForRender.attrs, childInherited, rootSize)
 				const childChildInherited = extractInheritable(childParsed, childInherited)
-				childHtml = renderChildren(child.children, childChildInherited, context, rootSize)
+				
+				// For rows with gap, insert spacers between children
+				if (isRowsDivWithHeight && child.gap) {
+					const childResolvedGap = resolveSpacingValue(child.gap, rootSize)
+					childHtml = child.children.map((grandchild, i) => {
+						const grandchildHtml = renderNodeToHtml(grandchild, childChildInherited, context, rootSize)
+						if (i > 0) {
+							return gapSpacerTable(childResolvedGap) + grandchildHtml
+						}
+						return grandchildHtml
+					}).join('')
+				} else {
+					childHtml = renderChildren(child.children, childChildInherited, context, rootSize)
+				}
 				
 				// Apply child's visual styles to the cell (excluding dimensions)
 				const { width: _w, height: _h, verticalAlign: _v, ...visualCss } = childParsed.css
@@ -787,13 +843,9 @@ function renderDivAsGrid(
 				childHtml = renderNodeToHtml(childForRender, childInherited, context, rootSize)
 			}
 			
-			// Width priority: explicit child width > effectiveColWidths[index] > none
-			let width = cellAttrs.width
-			if (!width && effectiveColWidths && effectiveColWidths[colIndex]) {
-				width = effectiveColWidths[colIndex]
-			}
-			
-			const widthAttr = width ? ` width="${width}"` : ''
+			const widthAttr = cellWidth ? ` width="${cellWidth}"` : ''
+			// Height: propagate h-full to <td> so table cells can equalize height
+			const heightAttr = cellAttrs.height ? ` height="${cellAttrs.height}"` : ''
 			
 			// Build class list
 			const classes: string[] = []
@@ -835,7 +887,7 @@ function renderDivAsGrid(
 			const styleStr = toInlineCSS(cellStylesCss, inherited)
 			const styleAttr = styleStr ? ` style="${styleStr}"` : ''
 			
-			const cell = `<td valign="${valign}"${widthAttr}${colspanAttr}${rowspanAttr}${classAttr}${styleAttr}>${childHtml}</td>`
+			const cell = `<td valign="${valign}"${widthAttr}${heightAttr}${colspanAttr}${rowspanAttr}${classAttr}${styleAttr}>${childHtml}</td>`
 			
 			// Insert gap spacer between cells when using gap cells approach
 			if (gap && index > 0 && !effectiveUseGapAsPadding) {
@@ -843,34 +895,75 @@ function renderDivAsGrid(
 			}
 			return cell
 		}).join('')
-		innerHtml = `<tr>${cells}</tr>`
+		// If any child has h-full, the row should also have height to enable cell stretching
+		const hasHeightChild = node.children.some(child => {
+			const attrs = extractCellAttrs(child.attrs, rootSize)
+			return attrs.height === '100%'
+		})
+		const trStyle = hasHeightChild ? ' style="height: 100%"' : ''
+		innerHtml = `<tr${trStyle}>${cells}</tr>`
 	} else {
 		// Vertical layout: multiple rows, single cell each
 		// Row heights from `rows-[...]` can be applied here
-		innerHtml = node.children.map((child, index) => {
-			const childHtml = renderNodeToHtml(child, childInherited, context, rootSize)
+		// Check if this rows grid has h-full
+		const hasFullHeight = parsed.css.height === '100%'
+		
+		// When h-full is set, we need a different rendering strategy:
+		// Instead of multiple <tr> rows (which don't stretch), render all children
+		// into a SINGLE cell with Spacer-like tables for gaps. This allows the
+		// single cell to stretch to 100% height like a plain Div does.
+		if (hasFullHeight) {
+			// Render as single-cell table with children as content and gap spacers
+			const childrenWithGaps = node.children.map((child, index) => {
+				const childHtml = renderNodeToHtml(child, childInherited, context, rootSize)
+				// Insert gap spacer (as content, not as table row) between children
+				if (gap && index > 0) {
+					return gapSpacerTable(gap) + childHtml
+				}
+				return childHtml
+			}).join('')
 			
-			// Apply row height from rowHeights array if available
-			const styles: string[] = []
-			if (node.rowHeights && node.rowHeights[index]) {
-				styles.push(`height: ${node.rowHeights[index]}`)
-			}
-			const styleAttr = styles.length > 0 ? ` style="${styles.join('; ')}"` : ''
-			
-			const row = `<tr><td${styleAttr}>${childHtml}</td></tr>`
-			
-			// Insert gap spacer row between rows (not before first)
-			if (gap && index > 0) {
-				return `<tr><td style="height: ${gap};"></td></tr>${row}`
-			}
-			return row
-		}).join('')
+			innerHtml = `<tr style="height: 100%"><td style="height: 100%">${childrenWithGaps}</td></tr>`
+		} else {
+			// Normal rows rendering: multiple <tr> elements
+			innerHtml = node.children.map((child, index) => {
+				const childHtml = renderNodeToHtml(child, childInherited, context, rootSize)
+				
+				// Apply row height from rowHeights array if available
+				const styles: string[] = []
+				if (node.rowHeights && node.rowHeights[index]) {
+					styles.push(`height: ${node.rowHeights[index]}`)
+				}
+				const styleAttr = styles.length > 0 ? ` style="${styles.join('; ')}"` : ''
+				
+				const row = `<tr><td${styleAttr}>${childHtml}</td></tr>`
+				
+				// Insert gap spacer row between rows (not before first)
+				if (gap && index > 0) {
+					return `<tr><td style="height: ${gap};"></td></tr>${row}`
+				}
+				return row
+			}).join('')
+		}
 	}
 
 	// Separate styles: padding/background go on wrapper, others on inner table
 	// Tables don't support padding directly in email clients
-	const { padding, paddingTop, paddingRight, paddingBottom, paddingLeft, backgroundColor, ...innerCss } = parsed.css
-	const hasPaddingOrBg = padding || paddingTop || paddingRight || paddingBottom || paddingLeft || backgroundColor
+	// IMPORTANT: When there's both padding AND border, border must go on wrapper
+	// so padding appears INSIDE the border (not outside like margin)
+	const { 
+		padding, paddingTop, paddingRight, paddingBottom, paddingLeft, 
+		backgroundColor,
+		border, borderTop, borderRight, borderBottom, borderLeft,
+		borderColor, borderWidth, borderStyle,
+		borderRadius,
+		...innerCss 
+	} = parsed.css
+	
+	const hasPadding = padding || paddingTop || paddingRight || paddingBottom || paddingLeft
+	const hasBorder = border || borderTop || borderRight || borderBottom || borderLeft || 
+		(borderColor && borderWidth)
+	const hasPaddingOrBgOrBorder = hasPadding || backgroundColor || hasBorder
 
 	const innerStyle = toInlineCSS(innerCss, inherited)
 	const innerStyleAttr = innerStyle ? ` style="${innerStyle}"` : ''
@@ -878,23 +971,38 @@ function renderDivAsGrid(
 
 	let html = `<table role="presentation" width="${tableWidth}"${heightAttr} cellpadding="0" cellspacing="0" border="0"${classAttr}${innerStyleAttr}>${innerHtml}</table>`
 
-	// Wrap with padding/background table if needed
-	if (hasPaddingOrBg) {
+	// Wrap with padding/background/border table if needed
+	if (hasPaddingOrBgOrBorder) {
 		const wrapperCss: Record<string, string> = {}
+		// Padding
 		if (padding) wrapperCss.padding = padding
 		if (paddingTop) wrapperCss.paddingTop = paddingTop
 		if (paddingRight) wrapperCss.paddingRight = paddingRight
 		if (paddingBottom) wrapperCss.paddingBottom = paddingBottom
 		if (paddingLeft) wrapperCss.paddingLeft = paddingLeft
+		// Background
 		if (backgroundColor) wrapperCss.backgroundColor = backgroundColor
+		// Border (must be on same element as padding so padding is inside border)
+		if (border) wrapperCss.border = border
+		if (borderTop) wrapperCss.borderTop = borderTop
+		if (borderRight) wrapperCss.borderRight = borderRight
+		if (borderBottom) wrapperCss.borderBottom = borderBottom
+		if (borderLeft) wrapperCss.borderLeft = borderLeft
+		if (borderColor) wrapperCss.borderColor = borderColor
+		if (borderWidth) wrapperCss.borderWidth = borderWidth
+		if (borderStyle) wrapperCss.borderStyle = borderStyle
+		if (borderRadius) wrapperCss.borderRadius = borderRadius
 		
 		const wrapperStyle = toInlineCSS(wrapperCss, inherited)
 		// Preserve height on wrapper table when h-full is set
 		const wrapperTableAttrs: Record<string, string> = { width: '100%' }
+		const wrapperTdAttrs: Record<string, string> = { style: wrapperStyle }
 		if (parsed.css.height) {
 			wrapperTableAttrs.height = parsed.css.height
+			// Also set height on <td> to propagate through table structure
+			wrapperTdAttrs.height = parsed.css.height
 		}
-		html = presentationTable(html, wrapperTableAttrs, { style: wrapperStyle })
+		html = presentationTable(html, wrapperTableAttrs, wrapperTdAttrs)
 	}
 
 	return applyWrappers(html, parsed)
@@ -1469,9 +1577,10 @@ function renderTableNode(
 	// Get table config
 	const tableConfig = context.style.Table
 	const borderColor = parsed.css.borderColor ?? tableConfig?.borderColor ?? '#e5e7eb'
-	// Node's cellPadding takes precedence, then check compact flag, then default
+	// Node's cellPadding takes precedence (resolved from scale), then check compact flag, then default
 	const cellPadding = node.cellPadding 
-		?? (node.compact ? tableConfig?.compactCellPadding : tableConfig?.cellPadding) 
+		? resolveSpacingValue(node.cellPadding, rootSize)
+		: (node.compact ? tableConfig?.compactCellPadding : tableConfig?.cellPadding) 
 		?? '8px'
 
 	// Build border styles based on node flags

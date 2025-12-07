@@ -173,8 +173,32 @@ export function presentationTable(
 
 	const tableAttrStr = htmlAttrs(baseTableAttrs)
 	const tdAttrStr = Object.keys(tdAttrs).length > 0 ? ` ${htmlAttrs(tdAttrs)}` : ''
+	
+	// When table has height, propagate to <tr> for proper height chain
+	const trStyle = tableAttrs.height ? ` style="height: ${tableAttrs.height}"` : ''
 
-	return `<table ${tableAttrStr}><tr><td${tdAttrStr}>${content}</td></tr></table>`
+	return `<table ${tableAttrStr}><tr${trStyle}><td${tdAttrStr}>${content}</td></tr></table>`
+}
+
+// ============================================================================
+// Gap Spacer Tables
+// ============================================================================
+
+/**
+ * Create a gap spacer table for vertical spacing.
+ * Used when implementing gap between children as content (not table rows).
+ * 
+ * @param gap - Gap size (e.g., "16px", "1rem")
+ * @returns HTML table with fixed height for spacing
+ * 
+ * @example
+ * ```ts
+ * gapSpacerTable('16px')
+ * // → '<table role="presentation" width="100%" ...><tr><td style="height: 16px; ...">...</td></tr></table>'
+ * ```
+ */
+export function gapSpacerTable(gap: string): string {
+	return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height: ${gap}; line-height: ${gap}; font-size: 0;">&nbsp;</td></tr></table>`
 }
 
 // ============================================================================

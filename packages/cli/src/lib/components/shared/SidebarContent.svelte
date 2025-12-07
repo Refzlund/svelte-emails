@@ -116,8 +116,10 @@
 	<!-- Categorized folders -->
 	{#each sidebar.navStructure.folders as folder, folderIndex}
 		{@const isCollapsed = sidebar.isFolderCollapsed(folder.name)}
+		{@const containsSelected = sidebar.folderContainsSelected(folder.name)}
 		<button
 			class="folder-header"
+			class:contains-selected={containsSelected && isCollapsed}
 			class:even={(sidebar.navStructure.uncategorized.length + folderIndex) % 2 === 0}
 			class:odd={(sidebar.navStructure.uncategorized.length + folderIndex) % 2 === 1}
 			onclick={() => sidebar.toggleFolder(folder.name)}
@@ -252,6 +254,11 @@
 
 	.folder-header:hover {
 		background: var(--nav-item-selected);
+	}
+
+	.folder-header.contains-selected {
+		background: var(--nav-item-selected);
+		border-left-color: var(--nav-item-selected-border);
 	}
 
 	.folder-chevron {

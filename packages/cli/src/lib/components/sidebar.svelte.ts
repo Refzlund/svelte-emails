@@ -35,7 +35,10 @@ export function createSidebarState() {
 	let documentation = $state<SafeEmail[]>(initialData.documentation || [])
 
 	// Track collapsed folders (by category name)
-	let collapsedFolders = $state<Record<string, boolean>>({})
+	// undefined = use default behavior (collapsed unless contains selected item)
+	// true = explicitly collapsed by user
+	// false = explicitly expanded by user
+	let collapsedFolders = $state<Record<string, boolean | undefined>>({})
 
 	// Derive view mode from current URL path
 	const viewMode: ViewMode = $derived.by(() => deriveViewMode())
@@ -118,11 +121,16 @@ export function createSidebarState() {
 
 	// Toggle folder collapsed state
 	function toggleFolder(folderName: string) {
-		collapsedFolders[folderName] = !collapsedFolders[folderName]
+		// Toggle: if currently collapsed, expand; if expanded, collapse
+		const currentState = isFolderCollapsed(folderName)
+		collapsedFolders[folderName] = !currentState
 	}
 
 	// Navigate to a specific view mode
 	function navigateToMode(mode: ViewMode) {
+		// Reset folder states when changing modes
+		collapsedFolders = {}
+		
 		if (mode === viewMode) {
 			// Already in this mode, go back to emails
 			const emailsPrefix = getUrlPrefixForMode('emails')
@@ -145,9 +153,21 @@ export function createSidebarState() {
 		}
 	}
 
+	// Check if a folder contains the currently selected item
+	function folderContainsSelected(folderName: string): boolean {
+		const folder = navStructure.folders.find(f => f.name === folderName)
+		return folder?.items.some(item => item.id === selectedId) ?? false
+	}
+
 	// Check if a folder is collapsed
+	// Default: collapsed unless contains selected item (and user hasn't explicitly toggled)
 	function isFolderCollapsed(folderName: string): boolean {
-		return collapsedFolders[folderName] ?? false
+		// If user has explicitly toggled this folder, use their preference
+		if (collapsedFolders[folderName] !== undefined) {
+			return collapsedFolders[folderName]!
+		}
+		// Default: collapsed unless contains the selected item
+		return !folderContainsSelected(folderName)
 	}
 
 	// Get alternating row index across all items (for zebra striping)
@@ -187,6 +207,7 @@ export function createSidebarState() {
 		toggleFolder,
 		navigateToMode,
 		isFolderCollapsed,
+		folderContainsSelected,
 		getGlobalIndex,
 		subscribeToUpdates
 	}

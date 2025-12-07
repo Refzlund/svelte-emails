@@ -79,9 +79,17 @@ function restoreEscapes(content: string): string {
  * - --small text--        → <small>small text</small>
  * - \n                    → <br> (line breaks)
  * - \* \[ etc.            → literal character (escape)
- * - - item                → <ul><li>item</li></ul> (unordered list)
- * - 1. item               → <ol><li>item</li></ol> (ordered list)
+ * - - item                → table-based list (unordered)
+ * - 1. item               → table-based list (ordered)
+ * - - [ ] item            → checkbox (unchecked)
+ * - - [x] item            → checkbox (checked)
  * - | col | col |         → <table> (markdown table)
+ * 
+ * Lists are rendered as tables for maximum email client compatibility.
+ * Checkboxes are rendered as styled inline boxes.
+ * 
+ * NOTE: Raw HTML tags in content are escaped (displayed as literal text).
+ * Only the markdown syntax above is parsed into HTML.
  * 
  * @param content - Raw text content with markdown
  * @param context - Render context for StyleConfig access
@@ -94,6 +102,12 @@ function restoreEscapes(content: string): string {
  * 
  * parseMarkdown('Visit [our site](https://example.com)')
  * // → 'Visit <a href="https://example.com">our site</a>'
+ * 
+ * parseMarkdown('- [ ] Todo item\n- [x] Done item')
+ * // → Table with styled checkboxes
+ * 
+ * parseMarkdown('Use <div> tags')
+ * // → 'Use &lt;div&gt; tags' (HTML is escaped, not parsed)
  * ```
  */
 export function parseMarkdown(content: string, context: RenderContext): string {
@@ -104,18 +118,22 @@ export function parseMarkdown(content: string, context: RenderContext): string {
 	// Step 2: Protect escaped characters (but not \n which we already handled)
 	result = protectEscapes(result)
 
-	// Step 3: Handle block-level elements first (before line breaks are converted)
+	// Step 3: Escape HTML tags to prevent raw HTML from being rendered
+	// This ensures only our markdown syntax produces HTML, not user-provided tags
+	result = escapeHtml(result)
+
+	// Step 4: Handle block-level elements first (before line breaks are converted)
 	result = parseCodeblocks(result, context)
 	result = parseTables(result, context)
 	result = parseLists(result)
 
-	// Step 4: Convert line breaks (but not inside pre/code blocks)
+	// Step 5: Convert line breaks (but not inside pre/code blocks)
 	result = parseLineBreaks(result)
 
-	// Step 5: Handle inline formatting
+	// Step 6: Handle inline formatting
 	result = parseInlineFormatting(result, context)
 
-	// Step 6: Restore escaped characters
+	// Step 7: Restore escaped characters
 	result = restoreEscapes(result)
 
 	return result
@@ -139,11 +157,14 @@ function parseInlineFormatting(content: string, context: RenderContext): string 
 	// Underline: __text__ - allows single _ inside
 	result = result.replace(/__((?:[^_]|_(?!_))+)__/g, '<u>$1</u>')
 
-	// Links: [text](url) — apply Link styles from config
+	// Links: [text](url) — apply Link styles from config, open in new tab
+	// rel="noopener noreferrer" prevents tabnabbing attacks with target="_blank"
 	const linkStyle = buildLinkStyle(context)
 	result = result.replace(
 		/\[([^\]]+)\]\(([^)]+)\)/g,
-		linkStyle ? `<a href="$2" style="${linkStyle}">$1</a>` : '<a href="$2">$1</a>'
+		linkStyle 
+			? `<a href="$2" target="_blank" rel="noopener noreferrer" style="${linkStyle}">$1</a>` 
+			: '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
 	)
 
 	// Superscript: ^text^
@@ -159,13 +180,12 @@ function parseInlineFormatting(content: string, context: RenderContext): string 
 	result = result.replace(/(?<=\s|^)_([^_]+)_(?=\s|$)/g, '<sub>$1</sub>')
 
 	// Inline code: `text` — apply Code styles from config
-	// Content inside backticks must be HTML-escaped to prevent XSS and incorrect rendering
+	// Content is already HTML-escaped from the global escapeHtml() call in parseMarkdown
 	const codeStyle = buildCodeStyle(context)
 	result = result.replace(
 		/`([^`]+)`/g,
 		(_, code: string) => {
-			const escaped = escapeHtml(code)
-			return codeStyle ? `<code style="${codeStyle}">${escaped}</code>` : `<code>${escaped}</code>`
+			return codeStyle ? `<code style="${codeStyle}">${code}</code>` : `<code>${code}</code>`
 		}
 	)
 
@@ -212,6 +232,9 @@ function buildCodeblockStyle(context: RenderContext): string {
  * 
  * Whitespace handling (pre-wrap, word-wrap, overflow-wrap) is included
  * in StyleConfig.Codeblock and applied via buildCodeblockStyle.
+ * 
+ * Note: Content is already HTML-escaped from the global escapeHtml() call
+ * in parseMarkdown, so we don't escape again here.
  */
 function parseCodeblocks(content: string, context: RenderContext): string {
 	const configStyle = buildCodeblockStyle(context)
@@ -221,8 +244,7 @@ function parseCodeblocks(content: string, context: RenderContext): string {
 	let result = content.replace(
 		/```(?:\w+)?\n([\s\S]*?)```/g,
 		(_, code: string) => {
-			const escaped = escapeHtml(code.trim())
-			return `<pre${styleAttr}><code>${escaped}</code></pre>`
+			return `<pre${styleAttr}><code>${code.trim()}</code></pre>`
 		}
 	)
 
@@ -230,8 +252,7 @@ function parseCodeblocks(content: string, context: RenderContext): string {
 	result = result.replace(
 		/```([^`\n]+)```/g,
 		(_, code: string) => {
-			const escaped = escapeHtml(code)
-			return `<pre${styleAttr}><code>${escaped}</code></pre>`
+			return `<pre${styleAttr}><code>${code}</code></pre>`
 		}
 	)
 
@@ -245,9 +266,8 @@ function parseCodeblocks(content: string, context: RenderContext): string {
 /**
  * Convert newlines to <br> tags, but not inside block-level elements.
  * 
- * Block elements (<pre>, <ul>, <ol>, <table>) are handled specially:
+ * Block elements (<pre>, <table>) are handled specially:
  * - <pre> blocks preserve newlines as-is
- * - <ul>/<ol> lists remove newlines entirely (structural, not content)
  * - <table> blocks remove newlines entirely (structural, not content)
  * 
  * Newlines immediately before or after block elements are also removed
@@ -255,14 +275,14 @@ function parseCodeblocks(content: string, context: RenderContext): string {
  */
 function parseLineBreaks(content: string): string {
 	// Split on block elements that shouldn't have <br> tags inside
-	const blockPattern = /(<(?:pre|ul|ol|table)[\s\S]*?<\/(?:pre|ul|ol|table)>)/g
+	const blockPattern = /(<(?:pre|table)[\s\S]*?<\/(?:pre|table)>)/g
 	const parts = content.split(blockPattern)
 	
 	return parts.map((part, i) => {
 		// Odd indices are block elements
 		if (i % 2 === 1) {
-			// For lists and tables, remove newlines entirely (structural, not content)
-			if (part.startsWith('<ul') || part.startsWith('<ol') || part.startsWith('<table')) {
+			// For tables, remove newlines entirely (structural, not content)
+			if (part.startsWith('<table')) {
 				return part.replace(/\n/g, '')
 			}
 			// For <pre> blocks, preserve newlines as-is
@@ -290,139 +310,335 @@ function parseLineBreaks(content: string): string {
 // ============================================================================
 
 /**
- * Parse unordered and ordered lists.
+ * Parse unordered and ordered lists with nesting support.
  * 
- * Unordered: Lines starting with - or *
- * Ordered: Lines starting with 1., a., A., i., I.
+ * Unordered: Lines starting with - or * (with optional indentation)
+ * Ordered: Lines starting with 1., a., A., i., I. (with optional indentation)
+ * Checkboxes: - [ ] unchecked, - [x] or - [X] checked
  * 
+ * Nesting is detected by indentation (2+ spaces per level).
  * A list requires at least 2 consecutive list items to be recognized.
  * This prevents single lines like "1. Introduction" from being treated as lists.
+ * 
+ * Lists are rendered as tables for maximum email client compatibility.
  */
 function parseLists(content: string): string {
 	const lines = content.split('\n')
 	
-	// First pass: identify which lines are potential list items and collect runs of consecutive items
-	const listRuns: { start: number; end: number; type: 'ul' | 'ol'; listType?: string }[] = []
-	let currentRun: { start: number; type: 'ul' | 'ol'; listType?: string } | null = null
-	
-	for (let i = 0; i < lines.length; i++) {
-		const trimmed = lines[i].trim()
+	// Helper to detect list item and its indentation level
+	const detectListItem = (line: string): { 
+		type: 'ul' | 'ol' | null
+		indent: number
+		content: string
+		listType?: string
+		checkbox?: 'checked' | 'unchecked' | null
+	} => {
+		// Count leading whitespace (tabs count as 2 spaces for indentation purposes)
+		const indentMatch = line.match(/^([\t ]*)/)
+		const indentStr = indentMatch ? indentMatch[1] : ''
+		// Convert tabs to 2-space equivalent for consistent nesting calculation
+		const indent = indentStr.split('').reduce((sum, char) => sum + (char === '\t' ? 2 : 1), 0)
+		const trimmed = line.trim()
+		
+		// Check for checkbox items: - [ ] or - [x] or - [X]
+		const checkboxMatch = trimmed.match(/^[-*]\s+\[([ xX])\]\s+(.+)$/)
+		if (checkboxMatch) {
+			const isChecked = checkboxMatch[1].toLowerCase() === 'x'
+			return { 
+				type: 'ul', 
+				indent, 
+				content: checkboxMatch[2],
+				checkbox: isChecked ? 'checked' : 'unchecked'
+			}
+		}
 		
 		// Check for unordered list item
 		const ulMatch = trimmed.match(/^[-*]\s+(.+)$/)
 		if (ulMatch) {
-			if (currentRun?.type === 'ul') {
-				// Continue the run
-			} else {
-				// Start new run
-				if (currentRun) {
-					listRuns.push({ ...currentRun, end: i - 1 })
-				}
-				currentRun = { start: i, type: 'ul' }
-			}
-			continue
+			return { type: 'ul', indent, content: ulMatch[1], checkbox: null }
 		}
 		
 		// Check for ordered list item
 		const olMatch = trimmed.match(/^(\d+|[a-z]|[A-Z]|[ivxIVX]+)\.\s+(.+)$/)
 		if (olMatch) {
 			const marker = olMatch[1]
-			let type = '1'
-			if (/^[a-z]$/.test(marker)) type = 'a'
-			else if (/^[A-Z]$/.test(marker)) type = 'A'
-			else if (/^[ivxIVX]+$/.test(marker) && marker.toLowerCase() === marker) type = 'i'
-			else if (/^[ivxIVX]+$/.test(marker)) type = 'I'
+			let listType = '1'
+			if (/^[a-z]$/.test(marker)) listType = 'a'
+			else if (/^[A-Z]$/.test(marker)) listType = 'A'
+			else if (/^[ivxIVX]+$/.test(marker) && marker.toLowerCase() === marker) listType = 'i'
+			else if (/^[ivxIVX]+$/.test(marker)) listType = 'I'
 			
-			if (currentRun?.type === 'ol' && currentRun?.listType === type) {
-				// Continue the run
-			} else {
-				// Start new run
-				if (currentRun) {
-					listRuns.push({ ...currentRun, end: i - 1 })
-				}
-				currentRun = { start: i, type: 'ol', listType: type }
-			}
-			continue
+			return { type: 'ol', indent, content: olMatch[2], listType, checkbox: null }
 		}
 		
-		// Not a list item - end current run
-		if (currentRun) {
-			listRuns.push({ ...currentRun, end: i - 1 })
-			currentRun = null
+		return { type: null, indent: 0, content: '', checkbox: null }
+	}
+	
+	// First pass: identify list items with indentation
+	interface ListItem {
+		item: {
+			type: 'ul' | 'ol'
+			indent: number
+			content: string
+			listType?: string
+			checkbox?: 'checked' | 'unchecked' | null
+		}
+		lineIndex: number
+	}
+	
+	const listItems: ListItem[] = []
+	for (let i = 0; i < lines.length; i++) {
+		const detected = detectListItem(lines[i])
+		if (detected.type) {
+			listItems.push({
+				lineIndex: i,
+				item: {
+					type: detected.type,
+					indent: detected.indent,
+					content: detected.content,
+					listType: detected.listType,
+					checkbox: detected.checkbox
+				}
+			})
 		}
 	}
 	
-	// End any remaining run
-	if (currentRun) {
-		listRuns.push({ ...currentRun, end: lines.length - 1 })
-	}
-	
-	// Filter out runs with only 1 item (not a real list)
-	const validRuns = listRuns.filter((run) => run.end > run.start)
-	
-	// If no valid runs, return content unchanged
-	if (validRuns.length === 0) {
+	// If fewer than 2 items total, no lists
+	if (listItems.length < 2) {
 		return content
 	}
 	
-	// Create a set of line indices that are part of valid lists
-	const listLineIndices = new Set<number>()
-	for (const run of validRuns) {
-		for (let i = run.start; i <= run.end; i++) {
-			listLineIndices.add(i)
-		}
+	// Check if we have at least 2 items at the root level (indent 0)
+	// to qualify as a list (prevents single "1. Introduction" from becoming a list)
+	const minIndent = Math.min(...listItems.map(item => item.item.indent))
+	const rootLevelItems = listItems.filter(item => item.item.indent === minIndent)
+	
+	if (rootLevelItems.length < 2) {
+		// Not enough items at root level to form a list
+		return content
 	}
 	
-	// Second pass: build the output
+	// Build output with nested lists
 	const result: string[] = []
-	let currentValidRun: typeof validRuns[0] | null = null
-	let inList = false
+	const listItemIndices = new Set(listItems.map(item => item.lineIndex))
 	
-	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i]
-		const trimmed = line.trim()
-		
-		// Check if this line is part of a valid list
-		if (listLineIndices.has(i)) {
-			// Find which run this belongs to
-			const run = validRuns.find((r) => i >= r.start && i <= r.end)!
-			
-			// Open list if needed
-			if (currentValidRun !== run) {
-				if (inList) {
-					result.push(currentValidRun!.type === 'ul' ? '</ul>' : '</ol>')
-				}
-				if (run.type === 'ul') {
-					result.push('<ul>')
-				} else {
-					result.push(`<ol type="${run.listType}">`)
-				}
-				currentValidRun = run
-				inList = true
-			}
-			
-			// Extract content from the list item
-			const ulMatch = trimmed.match(/^[-*]\s+(.+)$/)
-			const olMatch = trimmed.match(/^(\d+|[a-z]|[A-Z]|[ivxIVX]+)\.\s+(.+)$/)
-			const itemContent = ulMatch ? ulMatch[1] : olMatch![2]
-			result.push(`<li>${itemContent}</li>`)
+	// Group consecutive list items (line indices that are adjacent)
+	// First, find the actual consecutive groups based on line index
+	const groups: number[][] = []
+	let currentGroup: number[] = []
+	
+	const sortedIndices = [...listItemIndices].sort((a, b) => a - b)
+	for (const idx of sortedIndices) {
+		if (currentGroup.length === 0 || idx === currentGroup[currentGroup.length - 1] + 1) {
+			currentGroup.push(idx)
 		} else {
-			// Not a list line - close any open list
-			if (inList) {
-				result.push(currentValidRun!.type === 'ul' ? '</ul>' : '</ol>')
-				inList = false
-				currentValidRun = null
-			}
-			result.push(line)
+			if (currentGroup.length > 0) groups.push(currentGroup)
+			currentGroup = [idx]
+		}
+	}
+	if (currentGroup.length > 0) groups.push(currentGroup)
+	
+	// Create a map of line index to group index
+	const lineToGroup = new Map<number, number>()
+	for (let g = 0; g < groups.length; g++) {
+		for (const idx of groups[g]) {
+			lineToGroup.set(idx, g)
 		}
 	}
 	
-	// Close any remaining list
-	if (inList) {
-		result.push(currentValidRun!.type === 'ul' ? '</ul>' : '</ol>')
+	let i = 0
+	let lastRenderedGroup = -1
+	while (i < lines.length) {
+		if (!listItemIndices.has(i)) {
+			result.push(lines[i])
+			i++
+			continue
+		}
+		
+		// This line is a list item - check which group it belongs to
+		const groupIdx = lineToGroup.get(i)!
+		
+		// If we haven't rendered this group yet, render all items in the group
+		if (groupIdx !== lastRenderedGroup) {
+			const groupLineIndices = groups[groupIdx]
+			const groupItems = listItems.filter(li => groupLineIndices.includes(li.lineIndex))
+			
+			// Only render as list if group has 2+ items
+			if (groupItems.length >= 2) {
+				result.push(renderNestedList(groupItems))
+			} else {
+				// Single item - output as regular line
+				for (const idx of groupLineIndices) {
+					result.push(lines[idx])
+				}
+			}
+			lastRenderedGroup = groupIdx
+		}
+		i++
 	}
 	
 	return result.join('\n')
+}
+
+/**
+ * Render a group of list items as nested tables.
+ * Each root item is its own table, with children nested inside the content cell.
+ * Uses tables for maximum email client compatibility.
+ */
+function renderNestedList(items: Array<{ lineIndex: number; item: { type: 'ul' | 'ol'; indent: number; content: string; listType?: string; checkbox?: 'checked' | 'unchecked' | null } }>): string {
+	// Find min indent to normalize
+	const minIndent = Math.min(...items.map(i => i.item.indent))
+	
+	// Calculate nesting levels (normalize indent to 0-based levels, 2 spaces = 1 level)
+	const itemsWithLevel = items.map(({ item }, index) => ({
+		...item,
+		level: Math.floor((item.indent - minIndent) / 2),
+		originalIndex: index
+	}))
+	
+	// Track ordered list counters per level and type
+	const olCounters: Map<string, number> = new Map()
+	
+	const getCounter = (level: number, listType: string): number => {
+		const key = `${level}-${listType}`
+		const count = (olCounters.get(key) ?? 0) + 1
+		olCounters.set(key, count)
+		return count
+	}
+	
+	const formatCounter = (count: number, listType: string): string => {
+		switch (listType) {
+			case 'a': return String.fromCharCode(96 + count) // a, b, c...
+			case 'A': return String.fromCharCode(64 + count) // A, B, C...
+			case 'i': return toRoman(count).toLowerCase()    // i, ii, iii...
+			case 'I': return toRoman(count)                  // I, II, III...
+			default: return String(count)                    // 1, 2, 3...
+		}
+	}
+	
+	// Get the list type based on nesting level (for auto-progression)
+	// Ordered: 1 → a → i → 1 → a → i (cycles)
+	// If user explicitly specified a type, use that instead
+	const getListTypeForLevel = (level: number, explicitType?: string): string => {
+		if (explicitType) return explicitType
+		const types = ['1', 'a', 'i']
+		return types[level % types.length]
+	}
+	
+	// Get bullet symbol based on nesting level
+	// Standard progression: disc (●) → circle (○) → square (■)
+	const getBulletForLevel = (level: number): string => {
+		const bullets = ['●', '○', '■'] // disc, circle, square
+		return bullets[Math.min(level, bullets.length - 1)]
+	}
+	
+	const renderMarker = (item: typeof itemsWithLevel[0]): string => {
+		if (item.checkbox) {
+			const checkboxStyles = item.checkbox === 'checked'
+				? 'width:14px;height:14px;border:1px solid #10b981;background:#10b981;border-radius:2px;display:table-cell;text-align:center;vertical-align:middle;font-size:10px;color:#fff;'
+				: 'width:14px;height:14px;border:1px solid #d1d5db;background:#f9fafb;border-radius:2px;'
+			const checkmark = item.checkbox === 'checked' ? '✓' : ''
+			return `<div style="${checkboxStyles}">${checkmark}</div>`
+		} else if (item.type === 'ol') {
+			const listType = getListTypeForLevel(item.level, item.listType)
+			const count = getCounter(item.level, listType)
+			return `${formatCounter(count, listType)}.`
+		} else {
+			return getBulletForLevel(item.level)
+		}
+	}
+	
+	// Build tree structure
+	interface TreeNode {
+		item: typeof itemsWithLevel[0]
+		children: TreeNode[]
+	}
+	
+	// Iteratively build tree by finding children for each item
+	const findChildren = (parentIdx: number, parentLevel: number): TreeNode[] => {
+		const children: TreeNode[] = []
+		let i = parentIdx + 1
+		
+		while (i < itemsWithLevel.length) {
+			const item = itemsWithLevel[i]
+			
+			// If we hit an item at same level or less than parent, stop
+			if (item.level <= parentLevel) {
+				break
+			}
+			
+			// If this item is exactly one level deeper, it's a direct child
+			if (item.level === parentLevel + 1) {
+				const nodeChildren = findChildren(i, item.level)
+				children.push({ item, children: nodeChildren })
+			}
+			// Items more than one level deeper belong to a previous sibling, skip them
+			
+			i++
+		}
+		
+		return children
+	}
+	
+	// Find all root-level items (level 0) and their children
+	const rootNodes: TreeNode[] = []
+	for (let i = 0; i < itemsWithLevel.length; i++) {
+		if (itemsWithLevel[i].level === 0) {
+			const children = findChildren(i, 0)
+			rootNodes.push({ item: itemsWithLevel[i], children })
+		}
+	}
+	
+	// Render a tree node as table rows
+	// Each item is a row with: [marker (20px, centered)] [content]
+	// Children are rendered as additional rows with empty marker cell
+	const renderNodeRows = (node: TreeNode): string => {
+		const marker = renderMarker(node.item)
+		
+		// Build rows for this node and its children
+		const rows: string[] = []
+		
+		// Main row with marker and content
+		const markerCell = `<td style="width:20px;padding:2px 8px 2px 0;vertical-align:middle;text-align:center;">${marker}</td>`
+		const contentCell = `<td style="padding:2px 0;vertical-align:top;">${node.item.content}</td>`
+		rows.push(`<tr>${markerCell}${contentCell}</tr>`)
+		
+		// Children go in subsequent rows, with empty marker cell and nested table in content cell
+		if (node.children.length > 0) {
+			const childrenHtml = node.children.map(child => renderNode(child)).join('')
+			rows.push(`<tr><td></td><td style="padding:0;">${childrenHtml}</td></tr>`)
+		}
+		
+		return rows.join('')
+	}
+	
+	// Render a tree node as a complete table
+	const renderNode = (node: TreeNode): string => {
+		const rows = renderNodeRows(node)
+		return `<table style="border-collapse:collapse;">${rows}</table>`
+	}
+	
+	// Render all root nodes
+	return rootNodes.map(node => renderNode(node)).join('')
+}
+
+/**
+ * Convert number to Roman numerals.
+ */
+function toRoman(num: number): string {
+	const romanNumerals: [number, string][] = [
+		[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'],
+		[100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'],
+		[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']
+	]
+	let result = ''
+	for (const [value, numeral] of romanNumerals) {
+		while (num >= value) {
+			result += numeral
+			num -= value
+		}
+	}
+	return result
 }
 
 // ============================================================================
@@ -549,10 +765,18 @@ function renderMarkdownTable(lines: string[], context: RenderContext): string {
 // Variable Interpolation
 // ============================================================================
 
+// Unicode placeholder for escaped brackets
+const ESCAPED_OPEN_BRACKET = '\uE100'
+const ESCAPED_CLOSE_BRACKET = '\uE101'
+
 /**
  * Interpolate placeholders in content.
  * Replaces [[placeholder_name]] with values from context.placeholders.
  * Unknown placeholders are left as-is for debugging.
+ * 
+ * Escape with backslash to output literal brackets:
+ * - \[[ → [[  (escaped opening)
+ * - \]] → ]]  (escaped closing)
  * 
  * @param content - Content with [[placeholder]] syntax
  * @param context - Render context containing placeholder values
@@ -566,13 +790,27 @@ function renderMarkdownTable(lines: string[], context: RenderContext): string {
  * 
  * interpolatePlaceholders('Hello [[unknown]]!', context)
  * // → 'Hello [[unknown]]!' (preserved for debugging)
+ * 
+ * interpolatePlaceholders('Use \\[[variable]] syntax', context)
+ * // → 'Use [[variable]] syntax' (escaped, literal output)
  * ```
  */
 export function interpolatePlaceholders(content: string, context: RenderContext): string {
-	return content.replace(/\[\[([^\]]+)\]\]/g, (_, varName: string) => {
+	// Protect escaped brackets before processing
+	let result = content
+		.replace(/\\\[\[/g, ESCAPED_OPEN_BRACKET)
+		.replace(/\\\]\]/g, ESCAPED_CLOSE_BRACKET)
+	
+	// Replace placeholders
+	result = result.replace(/\[\[([^\]]+)\]\]/g, (_, varName: string) => {
 		const value = context.placeholders[varName.trim()]
 		return value !== undefined ? escapeHtml(value) : `[[${varName}]]`
 	})
+	
+	// Restore escaped brackets as literal text
+	return result
+		.replace(new RegExp(ESCAPED_OPEN_BRACKET, 'g'), '[[')
+		.replace(new RegExp(ESCAPED_CLOSE_BRACKET, 'g'), ']]')
 }
 
 // ============================================================================

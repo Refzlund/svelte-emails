@@ -23,7 +23,9 @@ export {
 	parseAttrs,
 	remToPx,
 	extractWidthFromAttrs,
-	extractCellAttrs
+	extractCellAttrs,
+	isWidthAttr,
+	resolveSpacingValue
 } from './parse-attrs'
 
 // HTML Helpers
@@ -31,6 +33,7 @@ export {
 	toInlineCSS,
 	htmlAttrs,
 	presentationTable,
+	gapSpacerTable,
 	wrapWithMargin,
 	applyWrappers,
 	extractInheritable
