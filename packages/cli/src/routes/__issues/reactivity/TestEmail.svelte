@@ -9,7 +9,7 @@
 	const { message, bgColor }: Props = $props()
 </script>
 
-<Email preview="Test reactivity">
+<Email preview={message}>
 	<Div p-4 bg={bgColor}>
 		<Text.Paragraph content={message} />
 	</Div>
