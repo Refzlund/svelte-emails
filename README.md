@@ -96,6 +96,8 @@ bunx svelte-emails
 
 That's it! Open the URL and see your email rendered live with hot reload.
 
+<br>
+
 ### Send it
 
 ```typescript
@@ -117,6 +119,8 @@ await emailProvider.send({
 })
 ```
 
+<br>
+
 ---
 
 <br>
@@ -135,3 +139,5 @@ await emailProvider.send({
 ## License
 
 MIT © [Refzlund](https://github.com/Refzlund)
+
+<br><br><br>
