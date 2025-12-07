@@ -5,6 +5,10 @@
 <h1 align="center">svelte-emails</h1>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/svelte-emails"><img src="https://img.shields.io/npm/v/svelte-emails.svg" alt="npm version"></a>
+</p>
+
+<p align="center">
   <strong>Think Tailwind for emails.</strong><br>
   Build responsive, bulletproof HTML emails with Svelte components and familiar styling.
 </p>
