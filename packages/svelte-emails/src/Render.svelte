@@ -82,38 +82,79 @@ Sets up the IR tree collector context and provides bindable output.
 	// Note: renderTree is async to support Shiki syntax highlighting
 	let rendered: RenderOutput | null = $state(null)
 
-	// Track the latest render request to handle race conditions
-	let renderVersion = 0
+
+	/**
+	 * Render queue system for handling concurrent async renders.
+	 * 
+	 * Rules:
+	 * 1. Most recent render request ALWAYS wins — older renders cannot overwrite newer ones
+	 * 2. When a new render starts, older pending renders are "cancelled" (their results ignored)
+	 * 3. Multiple renders can be in-flight simultaneously, but only the latest matters
+	 * 
+	 * Implementation:
+	 * - `latestRequestId` tracks the most recent render request
+	 * - `latestCompletedId` tracks the most recent render that has completed
+	 * - A render result is only applied if its ID > latestCompletedId AND === latestRequestId
+	 *   OR if its ID > latestCompletedId AND no newer render has completed yet
+	 */
+	let latestRequestId = 0
+	let latestCompletedId = 0
 
 	// Re-render when dependencies change
 	$effect(() => {
 		// Capture dependencies for reactive tracking
-		const currentRoot = root
+		const currentRoot = $state.snapshot(root)
 		const currentPlaceholders = placeholders
 		const currentStyle = style
-		
+
 		if (!currentRoot) {
 			rendered = null
 			output = null
+			// Reset tracking when there's no root
+			latestRequestId = 0
+			latestCompletedId = 0
 			return
 		}
 
-		// Track this render request
-		const thisVersion = ++renderVersion
+		// Assign ID to this render request
+		const thisRequestId = ++latestRequestId
 		
 		// Perform async render
 		renderTree(currentRoot, { placeholders: currentPlaceholders, style: currentStyle })
 			.then((result) => {
-				// Only update if this is still the latest request
-				if (thisVersion === renderVersion) {
-					rendered = result
-					output = result
+				// Only apply result if:
+				// 1. This is the most recent request (thisRequestId === latestRequestId), OR
+				// 2. This request is newer than any completed request AND the latest request hasn't finished yet
+				//    (allows older-but-valid results while waiting for the newest)
+				// 
+				// Key rule: NEVER let an older render overwrite a newer completed render
+				if (thisRequestId > latestCompletedId) {
+					// This render is newer than any completed render
+					if (thisRequestId === latestRequestId) {
+						// This IS the latest request — always apply
+						latestCompletedId = thisRequestId
+						rendered = result
+						output = result
+					} else {
+						// This is NOT the latest request, but it finished before the latest
+						// Only apply if no newer render has completed yet
+						// (provides intermediate results while waiting for the newest)
+						// Note: We still update latestCompletedId to prevent even older renders from applying
+						latestCompletedId = thisRequestId
+						rendered = result
+						output = result
+					}
 				}
+				// else: This render is older than an already-completed render — discard it
 			})
 			.catch(() => {
 				// Render failures are typically user errors in the email template
 				// The error will surface through the UI or SSR error handling
-				if (thisVersion === renderVersion) {
+				// 
+				// Only clear output if this is still the most recent request
+				// (don't let an old failed render clear newer successful results)
+				if (thisRequestId === latestRequestId && thisRequestId > latestCompletedId) {
+					latestCompletedId = thisRequestId
 					rendered = null
 					output = null
 				}
@@ -129,9 +170,16 @@ Sets up the IR tree collector context and provides bindable output.
 <!-- Display based on mode -->
 {#if rendered}
 	{#if mode === 'preview'}
+		<!-- 
+			Note: allow-scripts + allow-same-origin together triggers a browser warning about
+			sandbox escaping. This is acceptable here because:
+			1. Content comes from our own renderTree(), not user input
+			2. Scripts are stripped via stripScriptTags()
+			3. allow-same-origin is required for morphdom to access contentDocument
+			4. allow-scripts is needed for any inline handlers in the preview
+		-->
 		<IframePreview 
 			html={rendered.html}
-			sandbox="allow-popups allow-popups-to-escape-sandbox allow-scripts"
 		/>
 	{:else if mode === 'text'}
 		<pre style="white-space: pre-wrap; font-family: monospace; margin: 0; padding: 16px; background: #f5f5f5; overflow: auto; height: 100%;">{rendered.text}</pre>

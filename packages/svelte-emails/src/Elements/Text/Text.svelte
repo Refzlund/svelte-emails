@@ -40,13 +40,15 @@ Variable interpolation: `[[variable_name]]` replaced at render time.
 
 	const { content, ...attrs }: Props = $props()
 
+	const normalizedAttrs = $derived(normalizeAttrs(attrs))
+
 	// Get parent and register this node
 	const parent = getEmailParent()
 
 	const node: Mail.TextNode = $state({
 		type: 'text',
 		variant: 'default',
-		attrs: normalizeAttrs(attrs),
+		get attrs() { return normalizedAttrs },
 		get content() { return content }
 	})
 
