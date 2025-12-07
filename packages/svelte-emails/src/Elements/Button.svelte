@@ -4,13 +4,24 @@ Button component for call-to-action links.
 Renders as a styled `<a>` element with button-like appearance.
 For rounded buttons in Outlook Windows, VML fallbacks may be used.
 
+TODO(QUESTION): Button and Link have nearly identical implementations.
+The only differences are:
+1. The node `type` ('button' vs 'link')
+2. Component documentation/semantic meaning
+
+Consider:
+- Is this intentional duplication for semantic clarity?
+- Could a shared internal component reduce duplication?
+- The actual visual difference is handled in renderer.ts based on type
+
+The semantic distinction matters for email styling (Button = CTA block,
+Link = inline), but the component code is 95% identical.
+
 @example
 ```svelte
-	<Button href='https://example.com'>Click Me</Button>
+	<Button href='https://example.com' content='Click Me' />
 	<Button href='https://example.com' content='Get Started' bg-[#2563eb] text-[#ffffff] />
-	<Button href='https://example.com' bg-[#2563eb] text-[#ffffff] rounded-lg>
-		Get Started
-	</Button>
+	<Button href='https://example.com' content='Sign Up' bg-[#2563eb] text-[#ffffff] rounded-lg />
 ```
 
 @see EMAIL_CLIENT_SUPPORT.md for border-radius limitations in Outlook
@@ -19,7 +30,7 @@ For rounded buttons in Outlook Windows, VML fallbacks may be used.
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { ButtonAttributes } from '../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, type Mail } from '../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../context'
 
 	interface Props extends ButtonAttributes {
 		/** URL the button links to */
@@ -36,10 +47,10 @@ For rounded buttons in Outlook Windows, VML fallbacks may be used.
 
 	const node: Mail.ButtonNode = $state({
 		type: 'button',
-		href,
-		content,
-		attrs: Object.keys(attrs),
-		children: []
+		attrs: normalizeAttrs(attrs),
+		children: [],
+		get href() { return href },
+		get content() { return content }
 	})
 
 	onDestroy(addChild(parent, node))

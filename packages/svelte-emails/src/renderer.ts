@@ -22,30 +22,35 @@ import type {
 	RenderOptions,
 	InheritedStyles,
 	RenderContext,
-	ParsedAttrs
+	ParsedAttrs,
+StyleConfig
 } from './rendering'
 import {
 	parseAttrs,
 	extractInheritable,
 	toInlineCSS,
 	wrapWithMargin,
-	wrapWithResponsive,
+	applyWrappers,
 	parseMarkdown,
-	interpolateVariables,
+	interpolatePlaceholders,
 	escapeHtml,
 	formatFootnotes,
 	htmlAttrs,
 	presentationTable,
+	gapSpacerTable,
 	remToPx,
 	extractWidthFromAttrs,
-	extractValignFromAttrs,
-	extractTextAlignFromAttrs,
-	extractResponsiveFromAttrs,
-	extractColspanFromAttrs,
-	extractRowspanFromAttrs,
-	MOBILE_BREAKPOINT
+	extractCellAttrs,
+	isWidthAttr,
+	buildCssFromConfig,
+	buildCell,
+	buildCellStylesFromRow,
+	extractRowStylesForCells,
+	CONFIG_MAPPINGS,
+	DEFAULT_MOBILE_BREAKPOINT,
+	resolveSpacingValue
 } from './rendering'
-import { getRootSize } from './styles'
+import { getRootSize, merge, basePreset } from './styles'
 
 // Re-export types for consumers
 export type { RenderOutput, RenderOptions } from './rendering'
@@ -69,40 +74,150 @@ const HTML_OPEN = '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schem
 const DEFAULT_CONTENT_WIDTH = 600
 
 // ============================================================================
+// Text Variant Lookup
+// ============================================================================
+
+/**
+ * Text variant metadata for unified rendering.
+ * Replaces multiple switch statements with a single lookup.
+ */
+interface TextVariantInfo {
+	/** HTML tag to render */
+	tag: string
+	/** Key in StyleConfig.Text for variant-specific config */
+	configKey: 'H1' | 'H2' | 'H3' | 'H4' | 'H5' | 'H6' | 'Paragraph' | 'Small' | null
+	/** Key in StyleConfig for Code/Codeblock (top-level, not under Text) */
+	topLevelConfigKey?: 'Code' | 'Codeblock'
+	/** Markdown prefix for plain text output */
+	markdownPrefix: string
+	/** CSS resets for browser defaults on this element */
+	browserResets: Record<string, string>
+	/** Whether content should be escaped (no markdown parsing) */
+	escapeContent?: boolean
+}
+
+const TEXT_VARIANTS: Record<Mail.TextNode['variant'], TextVariantInfo> = {
+	h1: {
+		tag: 'h1',
+		configKey: 'H1',
+		markdownPrefix: '# ',
+		browserResets: { margin: '0', padding: '0', fontSize: 'inherit', fontWeight: 'inherit' }
+	},
+	h2: {
+		tag: 'h2',
+		configKey: 'H2',
+		markdownPrefix: '## ',
+		browserResets: { margin: '0', padding: '0', fontSize: 'inherit', fontWeight: 'inherit' }
+	},
+	h3: {
+		tag: 'h3',
+		configKey: 'H3',
+		markdownPrefix: '### ',
+		browserResets: { margin: '0', padding: '0', fontSize: 'inherit', fontWeight: 'inherit' }
+	},
+	h4: {
+		tag: 'h4',
+		configKey: 'H4',
+		markdownPrefix: '#### ',
+		browserResets: { margin: '0', padding: '0', fontSize: 'inherit', fontWeight: 'inherit' }
+	},
+	h5: {
+		tag: 'h5',
+		configKey: 'H5',
+		markdownPrefix: '##### ',
+		browserResets: { margin: '0', padding: '0', fontSize: 'inherit', fontWeight: 'inherit' }
+	},
+	h6: {
+		tag: 'h6',
+		configKey: 'H6',
+		markdownPrefix: '###### ',
+		browserResets: { margin: '0', padding: '0', fontSize: 'inherit', fontWeight: 'inherit' }
+	},
+	paragraph: {
+		tag: 'p',
+		configKey: 'Paragraph',
+		markdownPrefix: '',
+		browserResets: { margin: '0', padding: '0' }
+	},
+	small: {
+		tag: 'small',
+		configKey: 'Small',
+		markdownPrefix: '',
+		browserResets: { fontSize: 'inherit' }
+	},
+	code: {
+		tag: 'code',
+		configKey: null,
+		topLevelConfigKey: 'Code',
+		markdownPrefix: '',
+		browserResets: {},
+		escapeContent: true
+	},
+	codeblock: {
+		tag: 'pre',
+		configKey: null,
+		topLevelConfigKey: 'Codeblock',
+		markdownPrefix: '',
+		browserResets: { margin: '0', padding: '0' },
+		escapeContent: true
+	},
+	default: {
+		tag: 'span',
+		configKey: null,
+		markdownPrefix: '',
+		browserResets: {}
+	}
+}
+
+// ============================================================================
 // Main Render Function
 // ============================================================================
 
 /**
  * Render an IR tree to HTML and plain text output.
  * 
+ * This function is async to support Shiki syntax highlighting.
+ * If no nodes use highlighting, the async overhead is minimal.
+ * 
  * @param root - The root EmailNode of the IR tree
  * @param options - Render options (variables, style config, etc.)
- * @returns Object containing html, text, and headers outputs
+ * @returns Promise resolving to object containing html, text, and headers outputs
  */
-export function renderTree(root: Mail.EmailNode, options: RenderOptions = {}): RenderOutput {
+export async function renderTree(root: Mail.EmailNode, options: RenderOptions = {}): Promise<RenderOutput> {
+	// Merge styles in order: basePreset -> Email.style -> render options.style
+	// This allows Email to set defaults that can be overridden at render time
+	const style = merge(merge(basePreset, root.style), options.style) as StyleConfig
+
 	const context: RenderContext = {
-		vars: options.vars ?? {},
+		placeholders: options.placeholders ?? {},
 		footnotes: [],
 		headers: {},
-		style: options.style ?? {}
+		style
+	}
+
+	// Pre-process: collect and highlight all code nodes with syntax highlighting
+	const highlightCache = await preprocessHighlighting(root, style)
+	if (highlightCache.size > 0) {
+		context.highlightCache = highlightCache
 	}
 
 	// Get root size for rem-to-px conversion
-	const rootSize = getRootSize(options.style)
+	const rootSize = getRootSize(style)
 
 	// Initialize inherited styles from config
 	// These serve as defaults for the entire tree
-	// Sensible defaults: white background, black text, 16px font
-	const defaultColor = options.style?.root?.color ?? '#000000'
+	const defaultColor = style.root?.color ?? '#000000'
 	const defaultInherited: InheritedStyles = {
-		backgroundColor: options.style?.root?.background ?? '#ffffff',
+		backgroundColor: style.root?.background ?? '#ffffff',
 		color: defaultColor,
 		borderColor: defaultColor, // Border inherits from text color
-		fontFamily: options.style?.root?.fontFamily,
+		fontFamily: style.root?.fontFamily,
+		baseFontFamily: style.root?.fontFamily, // For font-base to reset to
+		monoFontFamily: style.root?.monoFontFamily, // For font-mono
 		fontSize: `${rootSize}px`,
-		lineHeight: typeof options.style?.root?.lineHeight === 'number' 
-			? String(options.style.root.lineHeight) 
-			: options.style?.root?.lineHeight,
+		lineHeight: typeof style.root?.lineHeight === 'number' 
+			? String(style.root.lineHeight) 
+			: style.root?.lineHeight,
 		opacity: 1
 	}
 
@@ -110,6 +225,104 @@ export function renderTree(root: Mail.EmailNode, options: RenderOptions = {}): R
 	const text = renderNodeToText(root, context)
 
 	return { html, text, headers: context.headers }
+}
+
+// ============================================================================
+// Syntax Highlighting Pre-processor
+// ============================================================================
+
+/**
+ * Generate a cache key for a highlighted code node.
+ * Uses content, language, and theme to create a unique key.
+ */
+function getHighlightCacheKey(content: string, lang: string, theme?: string): string {
+	return `${lang}:${theme ?? 'default'}:${content}`
+}
+
+/**
+ * Pre-process the IR tree to collect and highlight all code nodes.
+ * Returns a Map of cache keys to highlighted HTML.
+ * 
+ * This is called before rendering to handle async Shiki operations.
+ * The results are cached so the synchronous renderer can access them.
+ * 
+ * @param root - The root IR node to traverse
+ * @param style - StyleConfig for default theme lookup
+ */
+async function preprocessHighlighting(root: Mail.IRNode, style: StyleConfig): Promise<Map<string, string>> {
+	const cache = new Map<string, string>()
+	const nodesToHighlight: Array<{ content: string; lang: string; theme?: string; key: string }> = []
+
+	// Collect all nodes that need highlighting
+	function collectNodes(node: Mail.IRNode): void {
+		if (node.type === 'text' && (node.variant === 'code' || node.variant === 'codeblock') && node.highlight) {
+			// Resolve theme: node.highlightTheme -> style.Code/Codeblock.theme -> undefined (shiki default)
+			const styleTheme = node.variant === 'code' 
+				? style.Code?.theme 
+				: style.Codeblock?.theme
+			const theme = node.highlightTheme ?? styleTheme
+			
+			const key = getHighlightCacheKey(node.content, node.highlight, theme)
+			if (!nodesToHighlight.some((n) => n.key === key)) {
+				nodesToHighlight.push({
+					content: node.content,
+					lang: node.highlight,
+					theme,
+					key
+				})
+			}
+		}
+
+		// Recurse into children for container nodes
+		if ('children' in node && Array.isArray(node.children)) {
+			for (const child of node.children) {
+				collectNodes(child)
+			}
+		}
+	}
+
+	collectNodes(root)
+
+	// If no nodes need highlighting, return empty cache
+	if (nodesToHighlight.length === 0) {
+		return cache
+	}
+
+	// Lazy-load Shiki and highlight all code in parallel
+	try {
+		const { highlightCode } = await import('./shiki')
+		
+		const results = await Promise.all(
+			nodesToHighlight.map(async (node) => {
+				try {
+					const result = await highlightCode(node.content, {
+						lang: node.lang,
+						theme: node.theme
+					})
+					return { key: node.key, html: result.html }
+				} catch (err) {
+					// On error, fall back to plain escaped content
+					console.warn(`Shiki highlighting failed for language "${node.lang}":`, err)
+					return { key: node.key, html: null }
+				}
+			})
+		)
+
+		// Populate cache with successful results
+		for (const result of results) {
+			if (result.html) {
+				cache.set(result.key, result.html)
+			}
+		}
+	} catch {
+		// Shiki not installed - return empty cache, renderer will use plain escaping
+		console.warn(
+			'Shiki is not installed. Syntax highlighting is disabled. ' +
+			'Install it with: npm install shiki'
+		)
+	}
+
+	return cache
 }
 
 // ============================================================================
@@ -130,6 +343,26 @@ export function renderTree(root: Mail.EmailNode, options: RenderOptions = {}): R
  *   4. Render children recursively
  *   5. Generate HTML with inline styles
  *   6. Wrap with margin table if margin attrs exist
+ * 
+ * TODO(OPTIMIZATION): Most renderers repeat this exact pattern:
+ * ```ts
+ * const parsed = parseAttrs(node.attrs, inherited, rootSize)
+ * const childInherited = extractInheritable(parsed, inherited)
+ * const childrenHtml = renderChildren(node.children, childInherited, context, rootSize)
+ * const inlineStyle = toInlineCSS(parsed.css, inherited)
+ * let html = `<tag style="${inlineStyle}">${childrenHtml}</tag>`
+ * if (parsed.margin) html = wrapWithMargin(html, parsed.margin)
+ * return html
+ * ```
+ * 
+ * Consider extracting a `createBaseRenderer()` factory or `renderWithStandardFlow()`
+ * helper that handles the boilerplate, leaving renderers to only specify:
+ * - The HTML tag(s) to use
+ * - Any special attribute/CSS handling
+ * - Any config lookups (StyleConfig.Button, etc.)
+ * 
+ * This would reduce code in: renderDivNode, renderTextNode, renderButtonNode,
+ * renderImgNode, renderLinkNode, renderUnsubscribeNode, etc.
  */
 function renderNodeToHtml(
 	node: Mail.IRNode,
@@ -221,6 +454,9 @@ function renderEmailNode(
 	
 	// Content width from max-w-* or default 600px
 	const contentWidth = node.maxWidth ?? DEFAULT_CONTENT_WIDTH
+	
+	// Mobile breakpoint from mobile-threshold-* or default 480px
+	const mobileBreakpoint = node.mobileBreakpoint ?? DEFAULT_MOBILE_BREAKPOINT
 
 	// Parse attrs for content container styling (bg-[#...] goes here)
 	// Use bodyBgColor as the inherited background for opacity blending
@@ -240,15 +476,15 @@ function renderEmailNode(
 	// Render children
 	const childrenHtml = renderChildren(node.children, childInherited, context, rootSize)
 
-	// Build head section with dynamic content width for media queries
-	const headHtml = buildHeadSection(node, context, contentWidth)
+	// Build head section (only media queries - reset styles are inlined)
+	const headHtml = buildHeadSection(node, context, mobileBreakpoint)
 
 	// Build body with wrapper tables
 	const bodyStyle = `margin: 0; padding: 0; width: 100%; background-color: ${bodyBgColor};`
 	
 	// Preview text (hidden, appears in inbox list)
 	const previewHtml = node.preview 
-		? buildPreviewText(interpolateVariables(node.preview, context))
+		? buildPreviewText(interpolatePlaceholders(node.preview, context))
 		: ''
 
 	// Build content container style
@@ -272,31 +508,40 @@ function renderEmailNode(
  * Build the <head> section with meta tags, MSO XML, and styles.
  * Output is minified for smaller email size.
  * 
+ * Only includes media query styles since all other styles are inlined.
+ * Reset styles (body, table, img) are applied inline to relevant elements.
+ * 
  * @param node - Email node for subject extraction
  * @param context - Render context for variable interpolation
- * @param contentWidth - Content container width (default: 600)
+ * @param mobileBreakpoint - Breakpoint in px for responsive styles
  */
-function buildHeadSection(node: Mail.EmailNode, context: RenderContext, contentWidth: number = DEFAULT_CONTENT_WIDTH): string {
+function buildHeadSection(node: Mail.EmailNode, context: RenderContext, mobileBreakpoint: number): string {
 	const subject = node.subject 
-		? interpolateVariables(node.subject, context)
+		? interpolatePlaceholders(node.subject, context)
 		: ''
 
-	// CSS rules minified (no newlines between rules)
+	// Only media query CSS - everything else is inlined
+	// This is the inline-first approach for maximum email client compatibility
 	const css = [
-		'body{margin:0;padding:0;width:100%!important;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}',
-		'table{border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt}',
-		'img{border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;max-width:100%;height:auto}',
-		`.email-container{width:100%!important;max-width:${contentWidth}px!important}`,
-		`@media screen and (max-width:${MOBILE_BREAKPOINT}px){`,
-		'.email-container{width:100%!important}',
-		'.responsive-grid td{display:block!important;width:100%!important}',
-		'.responsive-grid td>table{display:table!important;width:100%!important}',
-		'.responsive-grid td>table>tbody>tr>td{display:table-cell!important}',
-		'.mobile-only{display:table-cell!important;max-height:none!important;overflow:visible!important;width:auto!important}',
-		'td.mobile-only{display:table-cell!important}',
-		'div.mobile-only{display:block!important}',
-		'.desktop-only{display:none!important;width:0!important;max-width:0!important;height:0!important;overflow:hidden!important;mso-hide:all!important;font-size:0!important;line-height:0!important}',
-		'td.desktop-only{display:none!important;padding:0!important;width:0!important;max-width:0!important}',
+		`@media screen and (max-width:${mobileBreakpoint}px){`,
+		`.email-container{width:100%!important}`,
+		// Responsive grid: content cells stack vertically
+		`.responsive-grid td.content-cell{display:block!important;width:auto!important;box-sizing:border-box!important}`,
+		`.responsive-grid td.content-cell>table{display:table!important;width:100%!important}`,
+		`.responsive-grid td.content-cell>table>tbody>tr>td{display:table-cell!important}`,
+		// Gap handling: hide spacer cells, add vertical margin to stacked cells
+		`.responsive-grid td.gap-spacer{display:none!important}`,
+		`.responsive-grid td.content-cell.has-gap{margin-top:var(--gap)!important}`,
+		// Gap-as-padding fallback: switch horizontal padding to vertical
+		`.responsive-grid td.responsive-gap-first{padding-right:0!important;padding-bottom:var(--gap-half)!important}`,
+		`.responsive-grid td.responsive-gap-middle{padding-left:0!important;padding-right:0!important;padding-top:var(--gap-half)!important;padding-bottom:var(--gap-half)!important}`,
+		`.responsive-grid td.responsive-gap-last{padding-left:0!important;padding-top:var(--gap-half)!important}`,
+		// Visibility toggles
+		`.mobile-only{display:table-cell!important;max-height:none!important;overflow:visible!important;width:auto!important}`,
+		`td.mobile-only{display:table-cell!important}`,
+		`div.mobile-only{display:block!important}`,
+		`.desktop-only{display:none!important;width:0!important;max-width:0!important;height:0!important;overflow:hidden!important;mso-hide:all!important;font-size:0!important;line-height:0!important}`,
+		`td.desktop-only{display:none!important;padding:0!important;width:0!important;max-width:0!important}`,
 		'}'
 	].join('')
 
@@ -344,42 +589,66 @@ function renderDivNode(
 	const childInherited = extractInheritable(parsed, inherited)
 
 	// Check if this is a grid layout (has direction)
-	if (node.direction) {
+	// EXCEPTION: When a `rows` grid has h-full, render as plain Div with gap spacers
+	// This allows the container to stretch for equal-height columns
+	const isRowsWithFullHeight = node.direction === 'rows' && parsed.css.height === '100%'
+	
+	if (node.direction && !isRowsWithFullHeight) {
 		return renderDivAsGrid(node, parsed, childInherited, inherited, context, rootSize)
 	}
 
-	// Normal Div: single cell containing all children
-	const childrenHtml = renderChildren(node.children, childInherited, context, rootSize)
+	// Normal Div (or rows with h-full): single cell containing all children
+	// For rows with h-full, insert gap spacers between children
+	let childrenHtml: string
+	const resolvedGap = node.gap ? resolveSpacingValue(node.gap, rootSize) : undefined
+	if (isRowsWithFullHeight && resolvedGap) {
+		// Render children with gap spacers as content (not table rows)
+		childrenHtml = node.children.map((child, index) => {
+			const childHtml = renderNodeToHtml(child, childInherited, context, rootSize)
+			if (index > 0) {
+				return gapSpacerTable(resolvedGap) + childHtml
+			}
+			return childHtml
+		}).join('')
+	} else {
+		childrenHtml = renderChildren(node.children, childInherited, context, rootSize)
+	}
 
-	// Table attrs: always 100% width to fill container, height if specified
-	// Note: Actual width constraint comes from parent (Grid's <td> or margin wrapper)
+	// Table attrs: use explicit width if provided, otherwise 100% to fill container
+	// Note: When Div has explicit width (w="300px" or w-[300px]), respect it
+	// When no width, default to 100% to fill parent container
 	const tableAttrs: Record<string, string> = {
-		width: '100%'
+		width: parsed.css.width ?? '100%'
 	}
 	if (parsed.css.height) {
 		tableAttrs.height = parsed.css.height
 	}
 
-	// Build CSS without width (width is controlled by parent)
-	// Clone parsed.css and remove width to avoid "40% of 40%" in nested contexts
-	const cssWithoutWidth = { ...parsed.css }
-	delete cssWithoutWidth.width
+	// Build CSS without width/height (these are on table/td attributes, not inline style)
+	// Clone parsed.css and remove width to avoid duplication
+	const cssWithoutDimensions = { ...parsed.css }
+	delete cssWithoutDimensions.width
+	delete cssWithoutDimensions.height
 
-	// Build the table cell with inline styles (excluding width)
-	const inlineStyle = toInlineCSS(cssWithoutWidth, inherited)
-	let html = presentationTable(childrenHtml, tableAttrs, { style: inlineStyle })
-
-	// Wrap with margin table if margin attrs exist
-	if (parsed.margin) {
-		html = wrapWithMargin(html, parsed.margin)
+	// Build td attributes - vertical alignment and height need to be HTML attributes for email
+	const tdAttrs: Record<string, string> = {}
+	if (parsed.css.verticalAlign) {
+		tdAttrs.valign = parsed.css.verticalAlign
+		delete cssWithoutDimensions.verticalAlign // Don't duplicate in inline style
+	}
+	// Height on <td> must be an HTML attribute for email clients
+	if (parsed.css.height) {
+		tdAttrs.height = parsed.css.height
 	}
 
-	// Wrap with responsive class if needed
-	if (parsed.responsive) {
-		html = wrapWithResponsive(html, parsed.responsive)
+	// Build the table cell with inline styles (excluding width/height)
+	const inlineStyle = toInlineCSS(cssWithoutDimensions, inherited)
+	if (inlineStyle) {
+		tdAttrs.style = inlineStyle
 	}
+	const html = presentationTable(childrenHtml, tableAttrs, tdAttrs)
 
-	return html
+	return applyWrappers(html, parsed)
 }
 
 /**
@@ -392,6 +661,19 @@ function renderDivNode(
  * - Child explicit width takes precedence
  * 
  * Cells can span multiple columns via `span-*` attribute.
+ * 
+ * TODO(REDUNDANCY): Cell rendering logic is duplicated between:
+ * - renderDivAsGrid() - for layout grids
+ * - renderTableRowNode() - for data tables
+ * 
+ * Both do similar work:
+ * 1. Extract width/valign/colspan/rowspan from child attrs
+ * 2. Build <td> with those attributes
+ * 3. Optionally add responsive classes
+ * 4. Handle gap spacing between cells
+ * 
+ * Consider extracting a `renderCell(child, options)` helper that both can use.
+ * Options would include: colWidths, borderColor, responsive, gap, etc.
  */
 function renderDivAsGrid(
 	node: Mail.DivNode,
@@ -403,7 +685,7 @@ function renderDivAsGrid(
 ): string {
 	const isResponsive = node.responsiveGrid
 	const isColumns = node.direction === 'cols'
-	const gap = node.gap // e.g., "16px" from gap-4
+	const gap = node.gap ? resolveSpacingValue(node.gap, rootSize) : undefined // Resolved to px
 
 	// Width: use explicit attr if provided, otherwise default to 100%
 	const tableWidth = parsed.css.width ?? '100%'
@@ -456,7 +738,7 @@ function renderDivAsGrid(
 			if (autoWidth || hasFixedWidthChildren) {
 				autoWidths = node.children.map((child) => {
 					const childWidth = extractWidthFromAttrs(child.attrs, rootSize)
-					return childWidth ?? autoWidth
+					return childWidth ?? autoWidth!
 				})
 			}
 		}
@@ -464,78 +746,224 @@ function renderDivAsGrid(
 		// Use explicit colWidths or calculated autoWidths
 		const effectiveColWidths = node.colWidths ?? autoWidths
 		
+		// When we have explicit percentage-based colWidths AND a gap, we can't use
+		// separate gap cells (35% + gap + 65% > 100%). Instead, implement gap using
+		// cell padding distributed evenly: each cell gets half the gap on each side
+		// (except first cell has no left padding, last cell has no right padding).
+		// This preserves the intended percentage ratios AND equal content areas.
+		const hasPercentageWidths = effectiveColWidths?.some(w => w?.endsWith('%'))
+		const useGapAsPadding = gap && hasPercentageWidths
+		
+		// Calculate half gap for even distribution (parse px value and divide)
+		let halfGap: string | undefined
+		if (useGapAsPadding && gap) {
+			const gapMatch = gap.match(/^(\d+(?:\.\d+)?)(px|rem|em)?$/)
+			if (gapMatch) {
+				const value = parseFloat(gapMatch[1])
+				const unit = gapMatch[2] || 'px'
+				halfGap = `${value / 2}${unit}`
+			} else {
+				// Fallback for complex values: use calc (limited email support)
+				halfGap = `calc(${gap} / 2)`
+			}
+		}
+		
 		// Extract width, valign, responsive, and span from each child's attrs to apply to <td>
+		const childCount = node.children.length
+		
+		// Check if any child will be unwrapped (h-full Div or rows h-full Div) - if so, use gap spacer cells
+		const hasUnwrappedChildren = node.children.some(child => {
+			const attrs = extractCellAttrs(child.attrs, rootSize)
+			// Plain Div with h-full, OR rows Div with h-full (which gets unwrapped to plain)
+			const isPlainDivWithHeight = child.type === 'div' && !child.direction && attrs.height === '100%'
+			const isRowsDivWithHeight = child.type === 'div' && child.direction === 'rows' && attrs.height === '100%'
+			return isPlainDivWithHeight || isRowsDivWithHeight
+		})
+		// Use gap spacer cells instead of padding when children are unwrapped
+		const useGapCells = gap && hasUnwrappedChildren
+		const effectiveUseGapAsPadding = useGapAsPadding && !useGapCells
+		
 		let colIndex = 0
 		const cells = node.children.map((child, index) => {
-			// Extract responsive visibility BEFORE rendering - we'll apply it to <td>, not the child
-			const childResponsive = extractResponsiveFromAttrs(child.attrs)
+			// Extract all cell-related attrs in single pass
+			const cellAttrs = extractCellAttrs(child.attrs, rootSize)
 			
-			// Filter out responsive attrs from child so it doesn't double-wrap
-			const childAttrsFiltered = childResponsive 
-				? child.attrs.filter((a) => a !== 'mobile-only' && a !== 'desktop-only')
-				: child.attrs
-			const childForRender = { ...child, attrs: childAttrsFiltered }
-			
-			const childHtml = renderNodeToHtml(childForRender, childInherited, context, rootSize)
-			
-			// Extract width, valign, and span from child's attrs for the <td>
-			const childWidth = extractWidthFromAttrs(child.attrs, rootSize)
-			const childValign = extractValignFromAttrs(child.attrs) ?? 'top'
-			const colspan = extractColspanFromAttrs(child.attrs)
-			const rowspan = extractRowspanFromAttrs(child.attrs)
-			
+			// Determine what width will be applied to the <td>
 			// Width priority: explicit child width > effectiveColWidths[index] > none
-			let width = childWidth
-			if (!width && effectiveColWidths && effectiveColWidths[colIndex]) {
-				width = effectiveColWidths[colIndex]
+			let cellWidth = cellAttrs.width
+			if (!cellWidth && effectiveColWidths && effectiveColWidths[colIndex]) {
+				cellWidth = effectiveColWidths[colIndex]
 			}
 			
-			const widthAttr = width ? ` width="${width}"` : ''
-			const classAttr = childResponsive ? ` class="${childResponsive}"` : ''
-			// For mobile-only, start hidden; for desktop-only, start visible
-			const styleAttr = childResponsive === 'mobile-only' ? ' style="display: none;"' : ''
-			const colspanAttr = colspan ? ` colspan="${colspan}"` : ''
-			const rowspanAttr = rowspan ? ` rowspan="${rowspan}"` : ''
+			// Filter out attrs that are applied to <td> so they don't double-apply on inner element
+			// - responsive attrs (mobile-only, desktop-only)
+			// - width attrs when cellWidth is being applied to the <td>
+			let childAttrsFiltered = child.attrs
+			if (cellAttrs.responsive || cellWidth) {
+				childAttrsFiltered = child.attrs.filter((a) => {
+					// Filter responsive attrs
+					if (a === 'mobile-only' || a === 'desktop-only') return false
+					// Filter width attrs when width is applied to <td>
+					if (cellWidth && isWidthAttr(a)) return false
+					return true
+				})
+			}
+			const childForRender = { ...child, attrs: childAttrsFiltered }
 			
-			// Advance column index by colspan
-			colIndex += colspan ?? 1
+			// Special case: when child is a Div with h-full (plain or rows), apply its styles to the <td>
+			// and render its children directly (with gap spacers for rows). This makes equal-height columns work.
+			let childHtml: string
+			let cellStylesCss: Record<string, string> = {}
 			
-			const cell = `<td valign="${childValign}"${widthAttr}${colspanAttr}${rowspanAttr}${classAttr}${styleAttr}>${childHtml}</td>`
+			const isPlainDivWithHeight = child.type === 'div' && !child.direction && cellAttrs.height === '100%'
+			const isRowsDivWithHeight = child.type === 'div' && child.direction === 'rows' && cellAttrs.height === '100%'
 			
-			// Insert gap spacer between cells (not before first)
-			if (gap && index > 0) {
-				return `<td width="${gap}"></td>${cell}`
+			if (isPlainDivWithHeight || isRowsDivWithHeight) {
+				const childParsed = parseAttrs(childForRender.attrs, childInherited, rootSize)
+				const childChildInherited = extractInheritable(childParsed, childInherited)
+				
+				// For rows with gap, insert spacers between children
+				if (isRowsDivWithHeight && child.gap) {
+					const childResolvedGap = resolveSpacingValue(child.gap, rootSize)
+					childHtml = child.children.map((grandchild, i) => {
+						const grandchildHtml = renderNodeToHtml(grandchild, childChildInherited, context, rootSize)
+						if (i > 0) {
+							return gapSpacerTable(childResolvedGap) + grandchildHtml
+						}
+						return grandchildHtml
+					}).join('')
+				} else {
+					childHtml = renderChildren(child.children, childChildInherited, context, rootSize)
+				}
+				
+				// Apply child's visual styles to the cell (excluding dimensions)
+				const { width: _w, height: _h, verticalAlign: _v, ...visualCss } = childParsed.css
+				cellStylesCss = { ...visualCss }
+			} else {
+				childHtml = renderNodeToHtml(childForRender, childInherited, context, rootSize)
+			}
+			
+			const widthAttr = cellWidth ? ` width="${cellWidth}"` : ''
+			// Height: propagate h-full to <td> so table cells can equalize height
+			const heightAttr = cellAttrs.height ? ` height="${cellAttrs.height}"` : ''
+			
+			// Build class list
+			const classes: string[] = []
+			if (cellAttrs.responsive) classes.push(cellAttrs.responsive)
+			if (cellAttrs.responsive === 'mobile-only') cellStylesCss.display = 'none'
+			
+			// Apply gap as padding (only when not using gap cells)
+			if (effectiveUseGapAsPadding && halfGap) {
+				const isFirst = index === 0
+				const isLast = index === childCount - 1
+				if (!isFirst) cellStylesCss.paddingLeft = halfGap
+				if (!isLast) cellStylesCss.paddingRight = halfGap
+				
+				if (isResponsive) {
+					cellStylesCss['--gap-half'] = halfGap
+					if (isFirst) classes.push('responsive-gap-first')
+					else if (isLast) classes.push('responsive-gap-last')
+					else classes.push('responsive-gap-middle')
+				}
+			}
+			
+			const colspanAttr = cellAttrs.colspan ? ` colspan="${cellAttrs.colspan}"` : ''
+			const rowspanAttr = cellAttrs.rowspan ? ` rowspan="${cellAttrs.rowspan}"` : ''
+			const valign = cellAttrs.valign ?? 'top'
+			
+			colIndex += cellAttrs.colspan ?? 1
+			
+			// Add content-cell class for responsive targeting
+			if (isResponsive) {
+				classes.push('content-cell')
+				// Add has-gap class + CSS variable for margin-top on mobile (gap cells approach)
+				if (gap && index > 0 && !effectiveUseGapAsPadding) {
+					classes.push('has-gap')
+					cellStylesCss['--gap'] = gap
+				}
+			}
+			
+			const classAttr = classes.length > 0 ? ` class="${classes.join(' ')}"` : ''
+			const styleStr = toInlineCSS(cellStylesCss, inherited)
+			const styleAttr = styleStr ? ` style="${styleStr}"` : ''
+			
+			const cell = `<td valign="${valign}"${widthAttr}${heightAttr}${colspanAttr}${rowspanAttr}${classAttr}${styleAttr}>${childHtml}</td>`
+			
+			// Insert gap spacer between cells when using gap cells approach
+			if (gap && index > 0 && !effectiveUseGapAsPadding) {
+				return `<td class="gap-spacer" style="width: ${gap}; min-width: ${gap}; font-size: 0; line-height: 0;">&nbsp;</td>${cell}`
 			}
 			return cell
 		}).join('')
-		innerHtml = `<tr>${cells}</tr>`
+		// If any child has h-full, the row should also have height to enable cell stretching
+		const hasHeightChild = node.children.some(child => {
+			const attrs = extractCellAttrs(child.attrs, rootSize)
+			return attrs.height === '100%'
+		})
+		const trStyle = hasHeightChild ? ' style="height: 100%"' : ''
+		innerHtml = `<tr${trStyle}>${cells}</tr>`
 	} else {
 		// Vertical layout: multiple rows, single cell each
 		// Row heights from `rows-[...]` can be applied here
-		innerHtml = node.children.map((child, index) => {
-			const childHtml = renderNodeToHtml(child, childInherited, context, rootSize)
+		// Check if this rows grid has h-full
+		const hasFullHeight = parsed.css.height === '100%'
+		
+		// When h-full is set, we need a different rendering strategy:
+		// Instead of multiple <tr> rows (which don't stretch), render all children
+		// into a SINGLE cell with Spacer-like tables for gaps. This allows the
+		// single cell to stretch to 100% height like a plain Div does.
+		if (hasFullHeight) {
+			// Render as single-cell table with children as content and gap spacers
+			const childrenWithGaps = node.children.map((child, index) => {
+				const childHtml = renderNodeToHtml(child, childInherited, context, rootSize)
+				// Insert gap spacer (as content, not as table row) between children
+				if (gap && index > 0) {
+					return gapSpacerTable(gap) + childHtml
+				}
+				return childHtml
+			}).join('')
 			
-			// Apply row height from rowHeights array if available
-			const styles: string[] = []
-			if (node.rowHeights && node.rowHeights[index]) {
-				styles.push(`height: ${node.rowHeights[index]}`)
-			}
-			const styleAttr = styles.length > 0 ? ` style="${styles.join('; ')}"` : ''
-			
-			const row = `<tr><td${styleAttr}>${childHtml}</td></tr>`
-			
-			// Insert gap spacer row between rows (not before first)
-			if (gap && index > 0) {
-				return `<tr><td style="height: ${gap};"></td></tr>${row}`
-			}
-			return row
-		}).join('')
+			innerHtml = `<tr style="height: 100%"><td style="height: 100%">${childrenWithGaps}</td></tr>`
+		} else {
+			// Normal rows rendering: multiple <tr> elements
+			innerHtml = node.children.map((child, index) => {
+				const childHtml = renderNodeToHtml(child, childInherited, context, rootSize)
+				
+				// Apply row height from rowHeights array if available
+				const styles: string[] = []
+				if (node.rowHeights && node.rowHeights[index]) {
+					styles.push(`height: ${node.rowHeights[index]}`)
+				}
+				const styleAttr = styles.length > 0 ? ` style="${styles.join('; ')}"` : ''
+				
+				const row = `<tr><td${styleAttr}>${childHtml}</td></tr>`
+				
+				// Insert gap spacer row between rows (not before first)
+				if (gap && index > 0) {
+					return `<tr><td style="height: ${gap};"></td></tr>${row}`
+				}
+				return row
+			}).join('')
+		}
 	}
 
 	// Separate styles: padding/background go on wrapper, others on inner table
 	// Tables don't support padding directly in email clients
-	const { padding, paddingTop, paddingRight, paddingBottom, paddingLeft, backgroundColor, ...innerCss } = parsed.css
-	const hasPaddingOrBg = padding || paddingTop || paddingRight || paddingBottom || paddingLeft || backgroundColor
+	// IMPORTANT: When there's both padding AND border, border must go on wrapper
+	// so padding appears INSIDE the border (not outside like margin)
+	const { 
+		padding, paddingTop, paddingRight, paddingBottom, paddingLeft, 
+		backgroundColor,
+		border, borderTop, borderRight, borderBottom, borderLeft,
+		borderColor, borderWidth, borderStyle,
+		borderRadius,
+		...innerCss 
+	} = parsed.css
+	
+	const hasPadding = padding || paddingTop || paddingRight || paddingBottom || paddingLeft
+	const hasBorder = border || borderTop || borderRight || borderBottom || borderLeft || 
+		(borderColor && borderWidth)
+	const hasPaddingOrBgOrBorder = hasPadding || backgroundColor || hasBorder
 
 	const innerStyle = toInlineCSS(innerCss, inherited)
 	const innerStyleAttr = innerStyle ? ` style="${innerStyle}"` : ''
@@ -543,31 +971,41 @@ function renderDivAsGrid(
 
 	let html = `<table role="presentation" width="${tableWidth}"${heightAttr} cellpadding="0" cellspacing="0" border="0"${classAttr}${innerStyleAttr}>${innerHtml}</table>`
 
-	// Wrap with padding/background table if needed
-	if (hasPaddingOrBg) {
+	// Wrap with padding/background/border table if needed
+	if (hasPaddingOrBgOrBorder) {
 		const wrapperCss: Record<string, string> = {}
+		// Padding
 		if (padding) wrapperCss.padding = padding
 		if (paddingTop) wrapperCss.paddingTop = paddingTop
 		if (paddingRight) wrapperCss.paddingRight = paddingRight
 		if (paddingBottom) wrapperCss.paddingBottom = paddingBottom
 		if (paddingLeft) wrapperCss.paddingLeft = paddingLeft
+		// Background
 		if (backgroundColor) wrapperCss.backgroundColor = backgroundColor
+		// Border (must be on same element as padding so padding is inside border)
+		if (border) wrapperCss.border = border
+		if (borderTop) wrapperCss.borderTop = borderTop
+		if (borderRight) wrapperCss.borderRight = borderRight
+		if (borderBottom) wrapperCss.borderBottom = borderBottom
+		if (borderLeft) wrapperCss.borderLeft = borderLeft
+		if (borderColor) wrapperCss.borderColor = borderColor
+		if (borderWidth) wrapperCss.borderWidth = borderWidth
+		if (borderStyle) wrapperCss.borderStyle = borderStyle
+		if (borderRadius) wrapperCss.borderRadius = borderRadius
 		
 		const wrapperStyle = toInlineCSS(wrapperCss, inherited)
-		html = presentationTable(html, { width: '100%' }, { style: wrapperStyle })
+		// Preserve height on wrapper table when h-full is set
+		const wrapperTableAttrs: Record<string, string> = { width: '100%' }
+		const wrapperTdAttrs: Record<string, string> = { style: wrapperStyle }
+		if (parsed.css.height) {
+			wrapperTableAttrs.height = parsed.css.height
+			// Also set height on <td> to propagate through table structure
+			wrapperTdAttrs.height = parsed.css.height
+		}
+		html = presentationTable(html, wrapperTableAttrs, wrapperTdAttrs)
 	}
 
-	// Wrap with margin if needed
-	if (parsed.margin) {
-		html = wrapWithMargin(html, parsed.margin)
-	}
-
-	// Wrap with responsive class if needed
-	if (parsed.responsive) {
-		html = wrapWithResponsive(html, parsed.responsive)
-	}
-
-	return html
+	return applyWrappers(html, parsed)
 }
 
 // ============================================================================
@@ -575,21 +1013,20 @@ function renderDivAsGrid(
 // ============================================================================
 
 /**
- * Render a Text node with markdown parsing.
+ * Render a Text node with markdown parsing or syntax highlighting.
  * 
  * IMPLEMENTATION:
  * 1. Apply variant-specific styling from StyleConfig
  * 2. Parse attributes with inherited styles
  * 3. Interpolate variables in content: [[var]] → value
- * 4. Parse markdown syntax: **bold**, *italic*, etc.
- * 5. Output appropriate tag based on variant:
- *    - 'h1'-'h6' → <h1>-<h6>
- *    - 'paragraph' → <p>
- *    - 'small' → <small>
- *    - 'default' → <span>
+ * 4. For code/codeblock with highlight: use pre-highlighted content from cache
+ * 5. For regular code/codeblock: escape HTML and preserve whitespace
+ * 6. For other variants: parse markdown syntax
+ * 7. Output appropriate tag based on variant
  * 
  * @see ARCHITECTURE.md "Content Parsing" for markdown syntax
  * @see ARCHITECTURE.md "Variable Interpolation" for [[var]] syntax
+ * @see ARCHITECTURE.md "Syntax Highlighting" for Shiki integration
  */
 function renderTextNode(
 	node: Mail.TextNode,
@@ -598,45 +1035,72 @@ function renderTextNode(
 	rootSize: number
 ): string {
 	const parsed = parseAttrs(node.attrs, inherited, rootSize)
+	const variantInfo = TEXT_VARIANTS[node.variant]
 	
-	// Apply variant-specific styles from StyleConfig
+	// Apply browser resets + variant-specific styles from StyleConfig
 	const variantStyles = getTextVariantStyles(node.variant, context, rootSize)
-	const mergedCss = { ...variantStyles, ...parsed.css }
+	const mergedCss = { ...variantInfo.browserResets, ...variantStyles, ...parsed.css }
 
-	// Process content: variables first, then markdown
-	let content = interpolateVariables(node.content, context)
-	content = parseMarkdown(content, context)
+	// Process content
+	let content: string
+
+	if (variantInfo.escapeContent) {
+		// For code/codeblock: check for syntax highlighting first
+		// Resolve theme: node.highlightTheme -> style.Code/Codeblock.theme -> undefined (shiki default)
+		const styleTheme = node.variant === 'code' 
+			? context.style.Code?.theme 
+			: context.style.Codeblock?.theme
+		const resolvedTheme = node.highlightTheme ?? styleTheme
+		
+		const cacheKey = node.highlight && context.highlightCache
+			? getHighlightCacheKey(node.content, node.highlight, resolvedTheme)
+			: null
+		const highlightedHtml = cacheKey ? context.highlightCache?.get(cacheKey) : undefined
+		
+		if (highlightedHtml) {
+			// Use pre-highlighted content from cache
+			content = highlightedHtml
+		} else {
+			// Fall back to plain escaped content
+			content = escapeHtml(interpolatePlaceholders(node.content, context))
+		}
+	} else {
+		// For other variants: variables first, then markdown
+		content = parseMarkdown(interpolatePlaceholders(node.content, context), context)
+	}
+
+	// Auto-center text elements with max-width when parent has centered text alignment
+	// Without this, a <p> with max-width in a text-align:center container won't be horizontally centered
+	const effectiveTextAlign = mergedCss.textAlign || inherited.textAlign
+	if (mergedCss.maxWidth && effectiveTextAlign === 'center') {
+		mergedCss.marginLeft = 'auto'
+		mergedCss.marginRight = 'auto'
+	}
 
 	const inlineStyle = toInlineCSS(mergedCss, inherited)
 	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
 
-	// Choose tag based on variant
-	const tag = getTextTag(node.variant)
-	let html = `<${tag}${styleAttr}>${content}</${tag}>`
+	// Check if content contains block-level elements (lists, tables, etc.)
+	// Block elements cannot be inside <p> tags - use <div> instead
+	// Skip this check for code/codeblock since they escape content
+	const hasBlockElements = !variantInfo.escapeContent && /<(?:ul|ol|table|blockquote|pre|div|hr)[>\s]/i.test(content)
+	const tag = hasBlockElements ? 'div' : variantInfo.tag
 
-	// Wrap with margin if needed
-	if (parsed.margin) {
-		html = wrapWithMargin(html, parsed.margin)
+	// Build HTML output
+	let html: string
+	if (node.variant === 'codeblock') {
+		// For codeblock: wrap in <pre><code>
+		// When highlighted, Shiki already outputs <pre><code> structure, but we've stripped it
+		// to get just the spans. So we re-wrap with our styled <pre>.
+		html = `<pre${styleAttr}><code>${content}</code></pre>`
+	} else if (node.variant === 'code') {
+		// For inline code: just <code> tag
+		html = `<code${styleAttr}>${content}</code>`
+	} else {
+		html = `<${tag}${styleAttr}>${content}</${tag}>`
 	}
 
-	return html
-}
-
-/**
- * Get the HTML tag for a text variant.
- */
-function getTextTag(variant: Mail.TextNode['variant']): string {
-	switch (variant) {
-		case 'h1': return 'h1'
-		case 'h2': return 'h2'
-		case 'h3': return 'h3'
-		case 'h4': return 'h4'
-		case 'h5': return 'h5'
-		case 'h6': return 'h6'
-		case 'paragraph': return 'p'
-		case 'small': return 'small'
-		default: return 'span'
-	}
+	return applyWrappers(html, parsed)
 }
 
 /**
@@ -649,45 +1113,82 @@ function getTextVariantStyles(
 	rootSize: number
 ): Record<string, string> {
 	const textConfig = context.style.Text
-	if (!textConfig) return {}
-
 	const css: Record<string, string> = {}
+	const variantInfo = TEXT_VARIANTS[variant]
+	
+	// Handle top-level config (Code, Codeblock)
+	if (variantInfo.topLevelConfigKey) {
+		const config = context.style[variantInfo.topLevelConfigKey]
+		if (!config) return css
+
+		if (config.color) css.color = config.color
+		if (config.background) css.backgroundColor = config.background
+		if (config.padding) css.padding = config.padding
+		// Legacy borderRadius (deprecated, use border.radius)
+		if (config.borderRadius) css.borderRadius = config.borderRadius
+		if (config.fontFamily) css.fontFamily = config.fontFamily
+		if (config.size) css.fontSize = remToPx(config.size, rootSize)
+		if ('lineHeight' in config && config.lineHeight !== undefined) {
+			css.lineHeight = typeof config.lineHeight === 'number'
+				? String(config.lineHeight)
+				: config.lineHeight
+		}
+		// Whitespace properties (for codeblock)
+		if ('whiteSpace' in config && config.whiteSpace) css.whiteSpace = config.whiteSpace
+		if ('wordWrap' in config && config.wordWrap) css.wordWrap = config.wordWrap
+		if ('overflowWrap' in config && config.overflowWrap) css.overflowWrap = config.overflowWrap
+		// Border object (for code and codeblock)
+		if ('border' in config && config.border) {
+			const border = config.border
+			const borderStyle = border.style ?? 'solid'
+			
+			if (border.width && border.color) {
+				// Check if width is directional or uniform
+				if (typeof border.width === 'object') {
+					// Directional widths
+					const { top, right, bottom, left } = border.width
+					if (top) css.borderTop = `${top} ${borderStyle} ${border.color}`
+					if (right) css.borderRight = `${right} ${borderStyle} ${border.color}`
+					if (bottom) css.borderBottom = `${bottom} ${borderStyle} ${border.color}`
+					if (left) css.borderLeft = `${left} ${borderStyle} ${border.color}`
+				} else {
+					// Uniform width
+					css.border = `${border.width} ${borderStyle} ${border.color}`
+				}
+			}
+			// border.radius overrides legacy borderRadius
+			if (border.radius) css.borderRadius = border.radius
+		}
+
+		return css
+	}
+
+	if (!textConfig) return css
 
 	// Apply base text color if set
 	if (textConfig.color) {
 		css.color = textConfig.color
 	}
 
-	// Get variant-specific config
-	let variantConfig: { size?: string; weight?: string | number; lineHeight?: string | number; color?: string } | undefined
+	// Get variant-specific config using TEXT_VARIANTS lookup
+	if (!variantInfo.configKey) return css
 
-	switch (variant) {
-		case 'h1': variantConfig = textConfig.H1; break
-		case 'h2': variantConfig = textConfig.H2; break
-		case 'h3': variantConfig = textConfig.H3; break
-		case 'h4': variantConfig = textConfig.H4; break
-		case 'h5': variantConfig = textConfig.H5; break
-		case 'h6': variantConfig = textConfig.H6; break
-		case 'paragraph': variantConfig = textConfig.Paragraph; break
-		case 'small': variantConfig = textConfig.Small; break
-		default: break
+	const variantConfig = textConfig[variantInfo.configKey]
+	if (!variantConfig) return css
+
+	if (variantConfig.size) {
+		css.fontSize = remToPx(variantConfig.size, rootSize)
 	}
-
-	if (variantConfig) {
-		if (variantConfig.size) {
-			css.fontSize = remToPx(variantConfig.size, rootSize)
-		}
-		if (variantConfig.weight !== undefined) {
-			css.fontWeight = String(variantConfig.weight)
-		}
-		if (variantConfig.lineHeight !== undefined) {
-			css.lineHeight = typeof variantConfig.lineHeight === 'number'
-				? String(variantConfig.lineHeight)
-				: variantConfig.lineHeight
-		}
-		if (variantConfig.color) {
-			css.color = variantConfig.color
-		}
+	if ('weight' in variantConfig && variantConfig.weight !== undefined) {
+		css.fontWeight = String(variantConfig.weight)
+	}
+	if (variantConfig.lineHeight !== undefined) {
+		css.lineHeight = typeof variantConfig.lineHeight === 'number'
+			? String(variantConfig.lineHeight)
+			: variantConfig.lineHeight
+	}
+	if (variantConfig.color) {
+		css.color = variantConfig.color
 	}
 
 	return css
@@ -705,47 +1206,112 @@ function getTextVariantStyles(
  * Note: For VML-based Outlook buttons with rounded corners,
  * we'd need conditional comments. Current impl uses CSS only.
  */
+
+// ============================================================================
+// Anchor Node Helper
+// ============================================================================
+
+interface AnchorRenderOptions {
+	/** Config key to get default styles from context.style */
+	configKey: 'Button' | 'Link' | 'Unsubscribe'
+	/** Config mapping to build CSS object from config */
+	configMapping: Record<string, string>
+	/** Extra default CSS to apply before config and parsed attrs */
+	extraDefaults?: Record<string, string>
+	/** Whether to add target="_blank" rel="noopener noreferrer" */
+	targetBlank?: boolean
+	/** Whether content should be parsed as markdown (vs escaped HTML) */
+	parseMarkdownContent?: boolean
+	/** Whether margin wrapping is supported */
+	supportMargin?: boolean
+	/** Callback for side effects (e.g., setting headers) */
+	onRender?: (href: string, node: AnchorLikeNode, context: RenderContext) => void
+}
+
+type AnchorLikeNode = (Mail.ButtonNode | Mail.LinkNode | Mail.UnsubscribeNode) & {
+	href: string
+	content?: string
+	children: Mail.IRNode[]
+	email?: string // Only on Unsubscribe
+}
+
+/**
+ * Unified anchor renderer for Button, Link, and Unsubscribe nodes.
+ * 
+ * These nodes share the same structure:
+ * 1. Parse attrs and get config defaults
+ * 2. Merge defaults with parsed CSS
+ * 3. Process href with variable interpolation
+ * 4. Process content (markdown or plain) or render children
+ * 5. Build <a> tag with styles
+ * 6. Optionally wrap with margin
+ */
+function renderAnchorLikeNode(
+	node: AnchorLikeNode,
+	inherited: InheritedStyles,
+	context: RenderContext,
+	rootSize: number,
+	options: AnchorRenderOptions
+): string {
+	const parsed = parseAttrs(node.attrs, inherited, rootSize)
+
+	// Build default CSS from config
+	const config = context.style[options.configKey]
+	const configCss = buildCssFromConfig(config, options.configMapping)
+	
+	// Merge: extraDefaults < configCss < parsed.css (attrs win)
+	const defaultCss = { ...options.extraDefaults, ...configCss }
+	const mergedCss = { ...defaultCss, ...parsed.css }
+	const inlineStyle = toInlineCSS(mergedCss, inherited)
+	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
+
+	// Process href with variables
+	const href = interpolatePlaceholders(node.href, context)
+
+	// Build content: use content prop if available, otherwise render children
+	const childInherited = extractInheritable(parsed, inherited)
+	let content: string
+	if (node.content) {
+		const interpolated = interpolatePlaceholders(node.content, context)
+		content = options.parseMarkdownContent
+			? parseMarkdown(interpolated, context)
+			: escapeHtml(interpolated)
+	} else {
+		content = renderChildren(node.children, childInherited, context, rootSize)
+	}
+
+	// Run side effect callback if provided
+	options.onRender?.(href, node, context)
+
+	// Build anchor tag
+	const targetAttr = options.targetBlank ? ' target="_blank" rel="noopener noreferrer"' : ''
+	let html = `<a href="${escapeHtml(href)}"${targetAttr}${styleAttr}>${content}</a>`
+
+	// Wrap with margin if supported and needed
+	if (options.supportMargin && parsed.margin) {
+		html = wrapWithMargin(html, parsed.margin)
+	}
+
+	return html
+}
+
 function renderButtonNode(
 	node: Mail.ButtonNode,
 	inherited: InheritedStyles,
 	context: RenderContext,
 	rootSize: number
 ): string {
-	const parsed = parseAttrs(node.attrs, inherited, rootSize)
-
-	// Get button defaults from StyleConfig
-	const buttonConfig = context.style.Button
-	const defaultCss: Record<string, string> = {
-		display: 'inline-block',
-		textDecoration: 'none'
-	}
-	if (buttonConfig) {
-		if (buttonConfig.color) defaultCss.color = buttonConfig.color
-		if (buttonConfig.background) defaultCss.backgroundColor = buttonConfig.background
-		if (buttonConfig.padding) defaultCss.padding = buttonConfig.padding
-		if (buttonConfig.borderRadius) defaultCss.borderRadius = buttonConfig.borderRadius
-		if (buttonConfig.fontWeight) defaultCss.fontWeight = String(buttonConfig.fontWeight)
-	}
-
-	// Merge: defaults < parsed (attrs win)
-	const mergedCss = { ...defaultCss, ...parsed.css }
-	const inlineStyle = toInlineCSS(mergedCss, inherited)
-
-	// Process href and content with variables
-	const href = interpolateVariables(node.href, context)
-	// Use content prop if available, otherwise render children
-	const childInherited = extractInheritable(parsed, inherited)
-	const content = node.content 
-		? parseMarkdown(interpolateVariables(node.content, context), context)
-		: renderChildren(node.children, childInherited, context, rootSize)
-
-	let html = `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" style="${inlineStyle}">${content}</a>`
-
-	if (parsed.margin) {
-		html = wrapWithMargin(html, parsed.margin)
-	}
-
-	return html
+	return renderAnchorLikeNode(node, inherited, context, rootSize, {
+		configKey: 'Button',
+		configMapping: CONFIG_MAPPINGS.ButtonCss,
+		extraDefaults: {
+			display: 'inline-block',
+			textDecoration: 'none'
+		},
+		targetBlank: true,
+		parseMarkdownContent: true,
+		supportMargin: true
+	})
 }
 
 /**
@@ -766,8 +1332,39 @@ function renderImgNode(
 	const parsed = parseAttrs(node.attrs, inherited, rootSize)
 
 	// Process src and alt with variables
-	const src = interpolateVariables(node.src, context)
-	const alt = node.alt ? interpolateVariables(node.alt, context) : ''
+	const src = interpolatePlaceholders(node.src, context)
+	const alt = node.alt ? interpolatePlaceholders(node.alt, context) : ''
+
+	// Reset browser defaults for images:
+	// - display: block removes bottom gap (inline images have text baseline gap)
+	// - max-width: 100% prevents overflow
+	// - height: auto maintains aspect ratio (only when no explicit height)
+	// - aspect-ratio preserves dimensions before image loads (when both width and height are set)
+	const resetCss: Record<string, string> = {
+		display: 'block',
+		maxWidth: '100%'
+	}
+
+	// When both width and height are specified, use aspect-ratio to prevent layout shift
+	// before the image loads. Otherwise, use height: auto for fluid scaling.
+	if (node.width && node.height) {
+		resetCss.aspectRatio = `${node.width} / ${node.height}`
+		resetCss.height = 'auto'
+	} else if (!node.height) {
+		resetCss.height = 'auto'
+	}
+
+	// Center block images when parent has text-align: center
+	// (text-align doesn't affect block elements, so we use margin: 0 auto)
+	if (inherited.textAlign === 'center') {
+		resetCss.marginLeft = 'auto'
+		resetCss.marginRight = 'auto'
+	} else if (inherited.textAlign === 'right') {
+		resetCss.marginLeft = 'auto'
+		resetCss.marginRight = '0'
+	}
+
+	const mergedCss = { ...resetCss, ...parsed.css }
 
 	const attrs: Record<string, string | number | undefined> = {
 		src,
@@ -779,23 +1376,19 @@ function renderImgNode(
 	if (node.width) attrs.width = node.width
 	if (node.height) attrs.height = node.height
 
-	// Add inline styles if any
-	const inlineStyle = toInlineCSS(parsed.css, inherited)
+	// Add inline styles (reset styles + parsed attrs)
+	const inlineStyle = toInlineCSS(mergedCss, inherited)
 	if (inlineStyle) attrs.style = inlineStyle
 
 	let html = `<img ${htmlAttrs(attrs)}>`
 
 	// Wrap in anchor if href is provided (clickable image)
 	if (node.href) {
-		const href = interpolateVariables(node.href, context)
+		const href = interpolatePlaceholders(node.href, context)
 		html = `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${html}</a>`
 	}
 
-	if (parsed.margin) {
-		html = wrapWithMargin(html, parsed.margin)
-	}
-
-	return html
+	return applyWrappers(html, parsed)
 }
 
 // ============================================================================
@@ -803,12 +1396,24 @@ function renderImgNode(
 // ============================================================================
 
 /**
- * Render a Spacer node as empty table cell with height.
+ * Render a Spacer node with context-aware dimensions.
  * 
- * IMPLEMENTATION:
- * - Uses an empty table cell with specified height
- * - Default height from StyleConfig.Spacer.size
- * - Can be overridden via attrs (h-[40px])
+ * Behavior depends on layoutContext (computed from parent in Spacer.svelte):
+ * 
+ * - vertical (default/rows layout):
+ *   • Uses height for spacing (default: 2rem)
+ *   • Width: 100%
+ *   • Creates vertical gap between stacked elements
+ * 
+ * - horizontal (cols layout):
+ *   • Uses width for spacing (default: 2rem)
+ *   • Height: 1px (minimal)
+ *   • Creates horizontal gap between side-by-side elements
+ * 
+ * - table-cell (Table.Row):
+ *   • Uses width for sizing (no default)
+ *   • Height: 1px (minimal)
+ *   • Acts as empty cell placeholder
  */
 function renderSpacerNode(
 	node: Mail.SpacerNode,
@@ -817,12 +1422,28 @@ function renderSpacerNode(
 	rootSize: number
 ): string {
 	const parsed = parseAttrs(node.attrs, inherited, rootSize)
+	const layoutContext = node.layoutContext ?? 'vertical'
 
-	// Get height from attrs or config default
-	const defaultHeight = context.style.Spacer?.size ?? '16px'
-	const height = parsed.css.height ?? defaultHeight
+	// Get default size from config
+	const configSize = context.style.Spacer?.size ?? '2rem'
 
-	return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height: ${height}; line-height: ${height}; font-size: 0;">&nbsp;</td></tr></table>`
+	if (layoutContext === 'vertical') {
+		// Vertical: height-based spacing, full width
+		const height = parsed.css.height ?? node.size ?? configSize
+		return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height: ${height}; line-height: ${height}; font-size: 0;">&nbsp;</td></tr></table>`
+	}
+
+	if (layoutContext === 'horizontal') {
+		// Horizontal: width-based spacing, minimal height
+		const width = parsed.css.width ?? node.size ?? configSize
+		return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="width: ${width}; height: 1px; line-height: 1px; font-size: 0;">&nbsp;</td></tr></table>`
+	}
+
+	// table-cell: width-based, minimal height, no default size
+	// Used as empty cell placeholder - the cell itself provides the spacing via column widths
+	const width = parsed.css.width ?? node.size
+	const widthStyle = width ? `width: ${width}; ` : ''
+	return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="${widthStyle}height: 1px; line-height: 1px; font-size: 0;">&nbsp;</td></tr></table>`
 }
 
 /**
@@ -882,28 +1503,12 @@ function renderLinkNode(
 	context: RenderContext,
 	rootSize: number
 ): string {
-	const parsed = parseAttrs(node.attrs, inherited, rootSize)
-
-	// Get defaults from StyleConfig.Link
-	const linkConfig = context.style.Link
-	const defaultCss: Record<string, string> = {}
-	if (linkConfig) {
-		if (linkConfig.color) defaultCss.color = linkConfig.color
-		if (linkConfig.textDecoration) defaultCss.textDecoration = linkConfig.textDecoration
-	}
-
-	const mergedCss = { ...defaultCss, ...parsed.css }
-	const inlineStyle = toInlineCSS(mergedCss, inherited)
-	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
-
-	const href = interpolateVariables(node.href, context)
-	// Use content prop if available, otherwise render children
-	const childInherited = extractInheritable(parsed, inherited)
-	const content = node.content
-		? parseMarkdown(interpolateVariables(node.content, context), context)
-		: renderChildren(node.children, childInherited, context, rootSize)
-
-	return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer"${styleAttr}>${content}</a>`
+	return renderAnchorLikeNode(node, inherited, context, rootSize, {
+		configKey: 'Link',
+		configMapping: CONFIG_MAPPINGS.LinkCss,
+		targetBlank: true,
+		parseMarkdownContent: true
+	})
 }
 
 /**
@@ -911,8 +1516,8 @@ function renderLinkNode(
  * 
  * IMPLEMENTATION:
  * - Special styling from StyleConfig.Unsubscribe
- * - May add List-Unsubscribe header for email clients
- * - Typically smaller/muted text in footer
+ * - Adds List-Unsubscribe header for email clients
+ * - Content is escaped (not markdown) for safety
  */
 function renderUnsubscribeNode(
 	node: Mail.UnsubscribeNode,
@@ -920,37 +1525,20 @@ function renderUnsubscribeNode(
 	context: RenderContext,
 	rootSize: number
 ): string {
-	const parsed = parseAttrs(node.attrs, inherited, rootSize)
-
-	// Get defaults from StyleConfig.Unsubscribe
-	const config = context.style.Unsubscribe
-	const defaultCss: Record<string, string> = {}
-	if (config) {
-		if (config.color) defaultCss.color = config.color
-		if (config.size) defaultCss.fontSize = config.size
-	}
-
-	const mergedCss = { ...defaultCss, ...parsed.css }
-	const inlineStyle = toInlineCSS(mergedCss, inherited)
-	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
-
-	const href = interpolateVariables(node.href, context)
-	// Use content prop if available, otherwise render children
-	const childInherited = extractInheritable(parsed, inherited)
-	const content = node.content
-		? escapeHtml(interpolateVariables(node.content, context))
-		: renderChildren(node.children, childInherited, context, rootSize)
-
-	// Add List-Unsubscribe header
-	if (href) {
-		context.headers['List-Unsubscribe'] = `<${href}>`
-		// Also add mailto if email provided
-		if (node.email) {
-			context.headers['List-Unsubscribe'] = `<mailto:${node.email}>, <${href}>`
+	return renderAnchorLikeNode(node, inherited, context, rootSize, {
+		configKey: 'Unsubscribe',
+		configMapping: CONFIG_MAPPINGS.UnsubscribeCss,
+		targetBlank: false,
+		parseMarkdownContent: false,
+		onRender: (href, n) => {
+			if (href) {
+				const unsubNode = n as Mail.UnsubscribeNode
+				context.headers['List-Unsubscribe'] = unsubNode.email
+					? `<mailto:${unsubNode.email}>, <${href}>`
+					: `<${href}>`
+			}
 		}
-	}
-
-	return `<a href="${escapeHtml(href)}"${styleAttr}>${content}</a>`
+	})
 }
 
 // ============================================================================
@@ -989,8 +1577,11 @@ function renderTableNode(
 	// Get table config
 	const tableConfig = context.style.Table
 	const borderColor = parsed.css.borderColor ?? tableConfig?.borderColor ?? '#e5e7eb'
-	// Node's cellPadding takes precedence over config
-	const cellPadding = node.cellPadding ?? tableConfig?.cellPadding ?? '8px'
+	// Node's cellPadding takes precedence (resolved from scale), then check compact flag, then default
+	const cellPadding = node.cellPadding 
+		? resolveSpacingValue(node.cellPadding, rootSize)
+		: (node.compact ? tableConfig?.compactCellPadding : tableConfig?.cellPadding) 
+		?? '8px'
 
 	// Build border styles based on node flags
 	// border: outer + cell borders
@@ -1019,12 +1610,14 @@ function renderTableNode(
 			return renderTableRowNode(child, rowInherited, context, rootSize, {
 				rowBackground: stripeColor,
 				colWidths: node.colWidths,
-				borderColor: needCellBorders ? borderColor : undefined
+				borderColor: needCellBorders ? borderColor : undefined,
+				cellPadding
 			})
 		}
 		return renderTableRowNode(node.children[index] as Mail.TableRowNode, childInherited, context, rootSize, {
 			colWidths: node.colWidths,
-			borderColor: needCellBorders ? borderColor : undefined
+			borderColor: needCellBorders ? borderColor : undefined,
+			cellPadding
 		})
 	}).join('')
 
@@ -1055,13 +1648,9 @@ function renderTableNode(
 		}
 	}
 
-	let html = `<table cellpadding="${cellPadding}" cellspacing="0" border="0"${widthAttr}${heightAttr}${finalStyle}>${rowsHtml}</table>`
+	const html = `<table cellpadding="0" cellspacing="0" border="0"${widthAttr}${heightAttr}${finalStyle}>${rowsHtml}</table>`
 
-	if (parsed.margin) {
-		html = wrapWithMargin(html, parsed.margin)
-	}
-
-	return html
+	return applyWrappers(html, parsed)
 }
 
 /**
@@ -1071,6 +1660,7 @@ interface TableRowRenderOptions {
 	rowBackground?: string
 	colWidths?: string[]
 	borderColor?: string
+	cellPadding?: string
 }
 
 /**
@@ -1084,6 +1674,32 @@ interface TableRowRenderOptions {
  * - Column widths from parent Table are applied by index
  * - Cells can span multiple columns via `span-*` attribute
  * - Cells can span multiple rows via `row-span-*` attribute
+ * - Border styles on row are applied to cells (<tr> doesn't support borders reliably)
+ * 
+ * TODO(COMPLEXITY): This function is ~150 lines and handles many concerns:
+ * - Row background for striping
+ * - Padding transfer from row to cells
+ * - Border transfer from row to cells (5+ border properties)
+ * - Column width application
+ * - Colspan/rowspan extraction
+ * - Alignment extraction
+ * 
+ * Consider splitting into smaller functions:
+ * - `buildCellStyles(parsed, options)` - handles padding, borders, background
+ * - `buildCellAttrs(child, colWidths, colIndex)` - handles width, colspan, rowspan
+ * - `renderTableCell(child, cellTag, styles, attrs)` - assembles the <td>/<th>
+ * 
+ * This would make the main function a coordinator:
+ * ```ts
+ * function renderTableRowNode(...) {
+ *   const cellStyles = buildCellStyles(parsed, { rowBackground, borderColor })
+ *   const cells = node.children.map((child, i) => {
+ *     const attrs = buildCellAttrs(child, colWidths, colIndex)
+ *     return renderTableCell(child, cellTag, cellStyles, attrs)
+ *   })
+ *   return `<tr>${cells.join('')}</tr>`
+ * }
+ * ```
  */
 function renderTableRowNode(
 	node: Mail.TableRowNode,
@@ -1092,103 +1708,65 @@ function renderTableRowNode(
 	rootSize: number,
 	options: TableRowRenderOptions = {}
 ): string {
-	const { rowBackground, colWidths, borderColor } = options
+	const { rowBackground, colWidths, borderColor, cellPadding } = options
 	const parsed = parseAttrs(node.attrs, inherited, rootSize)
 	const cellTag = node.header ? 'th' : 'td'
 
 	// Apply row background if provided (for striped tables)
-	const bgStyle = rowBackground ? `background-color: ${rowBackground}` : ''
 	const rowInherited = rowBackground 
 		? { ...inherited, backgroundColor: rowBackground }
 		: inherited
 
 	const childInherited = extractInheritable(parsed, rowInherited)
 
-	// Extract padding from row - padding on <tr> doesn't work, apply to cells
-	const rowPadding = parsed.css.padding
-	const rowPaddingTop = parsed.css.paddingTop
-	const rowPaddingBottom = parsed.css.paddingBottom
-	const rowPaddingLeft = parsed.css.paddingLeft
-	const rowPaddingRight = parsed.css.paddingRight
+	// Extract row styles that need to be transferred to cells
+	// (padding and borders don't work on <tr> in email clients)
+	const { rowStyles, cleanedCss } = extractRowStylesForCells(parsed.css)
 
 	// Track column index for width assignment
 	let colIndex = 0
+	const totalChildren = node.children.length
+
+	// Check if row has any explicit padding
+	const rowHasPadding = rowStyles.padding || rowStyles.paddingTop ||
+		rowStyles.paddingRight || rowStyles.paddingBottom || rowStyles.paddingLeft
 
 	// Each child becomes a cell
-	const cellsHtml = node.children.map((child) => {
+	const cellsHtml = node.children.map((child, childIndex) => {
 		const cellHtml = renderNodeToHtml(child, childInherited, context, rootSize)
 		
-		// Build cell attributes
-		const cellStyles: string[] = []
-		const cellAttrs: string[] = []
+		// Get row styles transferred to this cell
+		const rowTransferStyles = buildCellStylesFromRow(
+			rowStyles,
+			{ isFirst: childIndex === 0, isLast: childIndex === totalChildren - 1 },
+			{ rowBackground, tableBorderColor: borderColor }
+		)
 
-		// Apply row padding to cells (since <tr> doesn't support padding)
-		if (rowPadding) cellStyles.push(`padding: ${rowPadding}`)
-		if (rowPaddingTop) cellStyles.push(`padding-top: ${rowPaddingTop}`)
-		if (rowPaddingBottom) cellStyles.push(`padding-bottom: ${rowPaddingBottom}`)
-		if (rowPaddingLeft) cellStyles.push(`padding-left: ${rowPaddingLeft}`)
-		if (rowPaddingRight) cellStyles.push(`padding-right: ${rowPaddingRight}`)
-
-		// Background from row
-		if (bgStyle) cellStyles.push(bgStyle)
-
-		// Border on cells
-		if (borderColor) {
-			cellStyles.push(`border: 1px solid ${borderColor}`)
+		// Add table-level cell padding if specified AND row doesn't have explicit padding
+		// This allows row padding (py-2, pb-2) to override table cell-padding
+		if (cellPadding && !rowHasPadding) {
+			rowTransferStyles.push(`padding: ${cellPadding}`)
 		}
 
-		// Extract colspan and rowspan from child's attrs
-		const colspan = extractColspanFromAttrs(child.attrs)
-		const rowspan = extractRowspanFromAttrs(child.attrs)
+		// Extract cell-related attrs
+		const childCellAttrs = extractCellAttrs(child.attrs, rootSize)
 		
-		if (colspan) cellAttrs.push(`colspan="${colspan}"`)
-		if (rowspan) cellAttrs.push(`rowspan="${rowspan}"`)
-
-		// Extract alignment from child - must be on <td> to work, not on inline content
-		// vertical-align: controls vertical positioning within cell
-		// text-align: controls horizontal alignment of content
-		const childValign = extractValignFromAttrs(child.attrs)
-		const childTextAlign = extractTextAlignFromAttrs(child.attrs)
-		if (childValign) {
-			cellStyles.push(`vertical-align: ${childValign}`)
-		}
-		if (childTextAlign) {
-			cellStyles.push(`text-align: ${childTextAlign}`)
-		}
-
-		// Width: explicit child width takes precedence, otherwise use colWidths[index]
-		// Apply as HTML attribute for Outlook compatibility, and as CSS for modern clients
-		const childWidth = extractWidthFromAttrs(child.attrs, rootSize)
-		let cellWidth: string | undefined
-		if (childWidth) {
-			cellWidth = childWidth
-		} else if (colWidths && colWidths[colIndex]) {
-			cellWidth = colWidths[colIndex]
-		}
+		// Determine cell width
+		const fallbackWidth = colWidths?.[colIndex]
 		
-		if (cellWidth) {
-			cellAttrs.push(`width="${cellWidth}"`)
-			cellStyles.push(`width: ${cellWidth}`)
-		}
-
 		// Advance column index by colspan
-		colIndex += colspan ?? 1
+		colIndex += childCellAttrs.colspan ?? 1
 
-		const styleAttr = cellStyles.length > 0 ? ` style="${cellStyles.join('; ')}"` : ''
-		const attrsStr = cellAttrs.length > 0 ? ' ' + cellAttrs.join(' ') : ''
-		
-		return `<${cellTag}${attrsStr}${styleAttr}>${cellHtml}</${cellTag}>`
+		// Build cell using helper
+		// For <th> cells, default text-align to left (browsers default to center)
+		return buildCell(cellTag, cellHtml, childCellAttrs, {
+			fallbackWidth,
+			extraStyles: rowTransferStyles,
+			defaultTextAlign: cellTag === 'th' ? 'left' : undefined
+		})
 	}).join('')
 
-	// For <tr>, exclude padding (already applied to cells) but keep other styles
-	const rowCss = { ...parsed.css }
-	delete rowCss.padding
-	delete rowCss.paddingTop
-	delete rowCss.paddingBottom
-	delete rowCss.paddingLeft
-	delete rowCss.paddingRight
-	
-	const inlineStyle = toInlineCSS(rowCss, inherited)
+	const inlineStyle = toInlineCSS(cleanedCss, inherited)
 	const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : ''
 
 	return `<tr${styleAttr}>${cellsHtml}</tr>`
@@ -1210,6 +1788,25 @@ function renderTableRowNode(
  * - Variables are interpolated (same as HTML)
  * 
  * @see ARCHITECTURE.md "Plain Text Output" for format details
+ * 
+ * TODO(CONSIDERATION): The HTML and text renderers are parallel but separate.
+ * This means:
+ * - Adding a new node type requires updating BOTH dispatchers
+ * - Similar logic is duplicated (variable interpolation, content processing)
+ * 
+ * Alternative approach: Single renderer with output format parameter:
+ * ```ts
+ * function renderNode(node, inherited, context, options: { format: 'html' | 'text' }) {
+ *   // Shared logic here
+ * }
+ * ```
+ * 
+ * However, the current approach has benefits:
+ * - Clear separation of concerns
+ * - HTML renderer can be complex without affecting text output
+ * - Text output is simpler and doesn't need all the HTML machinery
+ * 
+ * The trade-off is acceptable given the complexity difference between formats.
  */
 function renderNodeToText(node: Mail.IRNode, context: RenderContext): string {
 	switch (node.type) {
@@ -1263,7 +1860,15 @@ function renderContainerToText(
 
 function renderTextNodeToText(node: Mail.TextNode, context: RenderContext): string {
 	// Interpolate variables
-	let content = interpolateVariables(node.content, context)
+	let content = interpolatePlaceholders(node.content, context)
+	
+	// For code variants, don't strip markdown syntax - return raw content
+	if (node.variant === 'code') {
+		return `\`${content}\``
+	}
+	if (node.variant === 'codeblock') {
+		return `\`\`\`\n${content}\n\`\`\``
+	}
 	
 	// Strip HTML-specific markdown syntax while preserving standard markdown
 	content = stripHtmlSpecificMarkdown(content)
@@ -1271,16 +1876,9 @@ function renderTextNodeToText(node: Mail.TextNode, context: RenderContext): stri
 	// Convert literal \n to actual newlines (for plain text)
 	content = content.replace(/\\n/g, '\n')
 	
-	// Add heading markers based on variant
-	switch (node.variant) {
-		case 'h1': return `# ${content}`
-		case 'h2': return `## ${content}`
-		case 'h3': return `### ${content}`
-		case 'h4': return `#### ${content}`
-		case 'h5': return `##### ${content}`
-		case 'h6': return `###### ${content}`
-		default: return content
-	}
+	// Add heading markers based on variant using TEXT_VARIANTS lookup
+	const prefix = TEXT_VARIANTS[node.variant].markdownPrefix
+	return prefix ? `${prefix}${content}` : content
 }
 
 /**
@@ -1316,36 +1914,46 @@ function stripHtmlSpecificMarkdown(content: string): string {
 	return result
 }
 
-function renderButtonNodeToText(node: Mail.ButtonNode, context: RenderContext): string {
-	const href = interpolateVariables(node.href, context)
-	let content = node.content 
-		? interpolateVariables(node.content, context)
+/**
+ * Shared helper for rendering link-like nodes to plain text.
+ * Used by Button, Link, and Unsubscribe nodes.
+ * 
+ * @param node - Node with href, optional content, and children
+ * @param context - Render context for interpolation
+ * @param format - Output format: 'markdown' for [text](url), 'plain' for text: url
+ */
+function renderLinkLikeToText(
+	node: { href: string; content?: string; children: Mail.IRNode[] },
+	context: RenderContext,
+	format: 'markdown' | 'plain' = 'markdown'
+): string {
+	const href = interpolatePlaceholders(node.href, context)
+	let content = node.content
+		? interpolatePlaceholders(node.content, context)
 		: node.children.map((c) => renderNodeToText(c, context)).join('')
 	content = content.trim() || 'Link'
-	return `[${content}](${href})`
+
+	return format === 'markdown'
+		? `[${content}](${href})`
+		: `${content}: ${href}`
+}
+
+function renderButtonNodeToText(node: Mail.ButtonNode, context: RenderContext): string {
+	return renderLinkLikeToText(node, context, 'markdown')
 }
 
 function renderImgNodeToText(node: Mail.ImgNode, context: RenderContext): string {
-	const src = interpolateVariables(node.src, context)
-	const alt = node.alt ? interpolateVariables(node.alt, context) : 'Image'
+	const src = interpolatePlaceholders(node.src, context)
+	const alt = node.alt ? interpolatePlaceholders(node.alt, context) : 'Image'
 	return `![${alt}](${src})`
 }
 
 function renderLinkNodeToText(node: Mail.LinkNode, context: RenderContext): string {
-	const href = interpolateVariables(node.href, context)
-	let content = node.content 
-		? interpolateVariables(node.content, context)
-		: node.children.map((c) => renderNodeToText(c, context)).join('')
-	content = content.trim() || 'Link'
-	return `[${content}](${href})`
+	return renderLinkLikeToText(node, context, 'markdown')
 }
 
 function renderUnsubscribeNodeToText(node: Mail.UnsubscribeNode, context: RenderContext): string {
-	const href = interpolateVariables(node.href, context)
-	const content = node.content 
-		? interpolateVariables(node.content, context)
-		: node.children.map((c) => renderNodeToText(c, context)).join('')
-	return `${content}: ${href}`
+	return renderLinkLikeToText(node, context, 'plain')
 }
 
 /**

@@ -4,7 +4,10 @@ Root email component.
 This is the top-level wrapper for all email content. It sets up the
 IR tree collector context and registers itself as the root node.
 
-Must be used inside `<Email.Preview>` or `render()` to provide the collector.
+## Usage
+
+For SSR rendering via `render()`, the collector is set automatically at module level.
+For client-side preview, use inside `<Email.Render>` which provides the collector via context.
 
 ## Background Colors
 
@@ -18,16 +21,25 @@ Use `max-w-*` to customize the content container width:
 - `max-w-[700px]` — Arbitrary pixel value
 - `max-w-xl`, `max-w-2xl`, etc. — Preset values
 
+## Responsive Breakpoint
+
+The default mobile breakpoint is 480px. Use `mobile-threshold` to customize:
+- `mobile-threshold-[425px]` — Tighter mobile breakpoint
+- `mobile-threshold-[600px]` — Looser breakpoint (stacks earlier)
+
+This affects `responsive` columns, `mobile-only`, and `desktop-only` elements.
+
 @example
 ```svelte
 <Email
 	body-bg-[#f5f5f5]
 	bg-[#ffffff]
 	max-w-[700px]
+	mobile-threshold-[425px]
 	preview='Check out our latest updates...'
 >
-	<Div cols>
-		<Div>Content here</Div>
+	<Div cols responsive>
+		<Div><Text content='Stacks at 425px instead of 480px' /></Div>
 	</Div>
 </Email>
 ```
@@ -37,26 +49,42 @@ Use `max-w-*` to customize the content container width:
 <script lang='ts'>
 	import type { Snippet } from 'svelte'
 	import type { EmailAttributes } from './style-attributes'
-	import { getEmailRoot, getSSRCollector, setEmailParent, type Mail, type Collector } from './context'
+	import type { StyleConfig } from './styles'
+	import { setEmailParent, normalizeAttrs, type Mail, type Collector, EMAIL_ROOT_CONTEXT_KEY } from './context'
+	import { getContext } from 'svelte'
 
-	interface Props extends EmailAttributes {
+	export interface Props extends EmailAttributes {
 		/** Preview text shown in email client inbox (before opening) */
 		preview?: string
+		/** 
+		 * Category for grouping emails in the CLI navigation.
+		 * Emails with the same category appear in a collapsible folder.
+		 * This is a CLI-only feature and does not affect rendered output.
+		 */
+		category?: string
+		/**
+		 * Order for sorting emails in the CLI navigation.
+		 * Lower values appear first. Emails without order are sorted alphabetically after ordered ones.
+		 * This is a CLI-only feature and does not affect rendered output.
+		 */
+		order?: string | number
+		/**
+		 * Style configuration for this email.
+		 * These styles are merged between base preset and render options:
+		 * `merge(presets.base, Email.style, render.opts.style)`
+		 */
+		style?: StyleConfig
 		/** Email content */
 		children?: Snippet
 	}
 
-	const { preview = '', children, ...attrs }: Props = $props()
+	const { preview = '', style, children, ...attrs }: Props = $props()
 
-	// Get the collector from parent (Email.Preview or render())
-	// Try Svelte context first, fall back to SSR collector
-	let collector: Collector | null = null
-	try {
-		collector = getEmailRoot()
-	} catch {
-		// Context not available (SSR), use module-level fallback
-		collector = getSSRCollector()
-	}
+	// Get collector from Svelte context
+	// In SSR: render() passes collector via context Map
+	// In client: Email.Render provides collector via setContext()
+	// Both use the same Symbol.for() key which guarantees cross-module identity
+	const collector = getContext<Collector>(EMAIL_ROOT_CONTEXT_KEY)
 	
 	if (!collector) {
 		throw new Error(
@@ -65,10 +93,11 @@ Use `max-w-*` to customize the content container width:
 		)
 	}
 
-	// Extract body-bg-[#...] from attrs
-	const attrKeys = Object.keys(attrs)
+	// normalizeAttrs converts value-attributes (body-bg="#f5f5f5") to bracket syntax (body-bg-[#f5f5f5])
+	const attrKeys = normalizeAttrs(attrs)
 	let bodyBackground: string | undefined
 	let maxWidth: number | undefined
+	let mobileBreakpoint: number | undefined
 	const filteredAttrs: string[] = []
 
 	for (const attr of attrKeys) {
@@ -76,6 +105,13 @@ Use `max-w-*` to customize the content container width:
 		const bodyBgMatch = attr.match(/^body-bg-\[(#[0-9a-fA-F]{3,8})\]$/)
 		if (bodyBgMatch) {
 			bodyBackground = bodyBgMatch[1]
+			continue
+		}
+
+		// Extract mobile-threshold-[value] for responsive breakpoint
+		const mobileThresholdMatch = attr.match(/^mobile-threshold-\[(\d+)(?:px)?\]$/)
+		if (mobileThresholdMatch) {
+			mobileBreakpoint = parseInt(mobileThresholdMatch[1])
 			continue
 		}
 
@@ -109,16 +145,17 @@ Use `max-w-*` to customize the content container width:
 		filteredAttrs.push(attr)
 	}
 
-	// Create this node
 	const node: Mail.EmailNode = $state({
 		type: 'email',
-		preview,
-		bodyBackground,
-		maxWidth,
 		attrs: filteredAttrs,
-		children: []
+		children: [],
+		get preview() { return preview },
+		get bodyBackground() { return bodyBackground },
+		get maxWidth() { return maxWidth },
+		get mobileBreakpoint() { return mobileBreakpoint },
+		get style() { return style }
 	})
-
+	
 	// Register with collector
 	collector.registerRoot(node)
 

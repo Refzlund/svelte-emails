@@ -1,6 +1,6 @@
 # Agent Instructions for svelte-emails
 
-This document guides AI agents working on the `svelte-emails` library. The documentation files below contain critical context about email client compatibility constraints that **must** be consulted before making code changes.
+This document guides AI agents working on the `svelte-emails` library.
 
 1. Make a todo-list
 2. Validate them with the developer
@@ -15,91 +15,19 @@ This document guides AI agents working on the `svelte-emails` library. The docum
 
 ### [README.md](README.md)
 
-Contains usage of the library.
+Quick usage examples and API overview.
 
 ### [ARCHITECTURE.md](ARCHITECTURE.md)
-**When to use:** Before implementing new components, understanding the rendering pipeline, or modifying the virtual layout tree system.
 
-Contains:
-- How the virtual layout tree (IR) works
-- Component registration flow via Svelte context
-- The rendering pipeline (Preview mode vs Server render)
-- Style system with Tailwind-like attributes
-- Content parsing (markdown syntax, variable interpolation)
-- HTML output strategy (table-based layout, inline styles)
-- Component reference and style presets
+**The single source of truth.** Contains everything about the library:
 
-### [EMAIL_DEVELOPMENT_GUIDE.md](EMAIL_DEVELOPMENT_GUIDE.md)
-**When to use:** Before implementing any styling, layout, or visual feature. This is your **primary reference** for what CSS/HTML actually works in email clients.
-
-Contains:
-- The Golden Rules (inline styles, table layouts, design for degradation)
-- Layout & structure (what works vs what doesn't)
-- Sizing & spacing (padding vs margin, units to avoid)
-- Typography support
-- Colors & backgrounds (including VML for Outlook)
-- Borders & visual effects (border-radius, box-shadow limitations)
-- Image handling best practices
-- Responsive design constraints
-- Client-specific quirks (Outlook, Gmail, Apple Mail, Yahoo)
-- CSS property support matrix
-- Pre-send checklist
-
-### [CSS_UTILITIES_REFERENCE.md](CSS_UTILITIES_REFERENCE.md)
-**When to use:** When implementing or modifying Tailwind-style utility parsing, or when deciding which utilities to support.
-
-Contains:
-- Detailed CSS property support by email client
-- Layout & display utilities (tables over flex/grid)
-- Sizing utilities (width/height, min/max constraints)
-- Spacing utilities (padding safe, margin problematic)
-- Typography utilities
-- Color and background utilities
-- Border and corner utilities
-- Effects to avoid (opacity, transforms, animations)
-- Quick reference tables for safe vs unsafe utilities
-
-### [EMAIL_CLIENT_SUPPORT.md](EMAIL_CLIENT_SUPPORT.md)
-**When to use:** When implementing features involving images, backgrounds, SVG, or advanced visual effects. Deep-dive reference for specific client behaviors.
-
-Contains:
-- Table-based layout rationale
-- Image format support (PNG, JPEG, GIF, SVG)
-- Background images (CSS vs HTML attribute vs VML)
-- CSS shapes & visual effects (border-radius, box-shadow)
-- SVG support (linked vs inline, Gmail stripping behavior)
-- Client support summary matrix
-- VML code examples for Outlook compatibility
-
----
-
-## Decision Flowchart
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  What are you trying to do?                                 │
-└─────────────────────────────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        ▼                     ▼                     ▼
-┌───────────────┐   ┌─────────────────┐   ┌─────────────────┐
-│ Add/modify    │   │ Add styling or  │   │ Work with       │
-│ a component   │   │ CSS utility     │   │ images/SVG/     │
-│               │   │                 │   │ backgrounds     │
-└───────────────┘   └─────────────────┘   └─────────────────┘
-        │                     │                     │
-        ▼                     ▼                     ▼
-┌───────────────┐   ┌─────────────────┐   ┌─────────────────┐
-│ Read          │   │ Read            │   │ Read            │
-│ ARCHITECTURE  │   │ EMAIL_          │   │ EMAIL_CLIENT_   │
-│ .md           │   │ DEVELOPMENT_    │   │ SUPPORT.md      │
-│               │   │ GUIDE.md        │   │                 │
-│ Then check    │   │                 │   │ Then check      │
-│ EMAIL_        │   │ Then check      │   │ EMAIL_          │
-│ DEVELOPMENT_  │   │ CSS_UTILITIES_  │   │ DEVELOPMENT_    │
-│ GUIDE.md      │   │ REFERENCE.md    │   │ GUIDE.md        │
-└───────────────┘   └─────────────────┘   └─────────────────┘
-```
+- **Architecture:** IR tree, component registration, rendering pipeline, SSR
+- **Components:** Email, Div, Table, Text, Button, Img, Spacer, etc.
+- **Styling:** Tailwind-like attributes, inheritance, emulation strategies
+- **Content Parsing:** Markdown syntax, variable interpolation
+- **Email Client Compatibility:** CSS support matrix, Outlook quirks, VML, images/SVG
+- **Style Presets:** Available presets and customization
+- **Development:** Dev server, testing tools, pre-send checklist
 
 ---
 
@@ -109,7 +37,9 @@ Before writing any code, internalize these rules:
 
 1. **All styles must be inline** — No external CSS, no `<style>` blocks (except for responsive media queries as progressive enhancement)
 
-2. **Tables are the only reliable layout** — Never use CSS flexbox or grid. Use `<Grid>` components which render as `<table>`
+2. **NO NESTED TEXT NODES** — Text must ALWAYS be rendered via the `content="..."` attribute. Never write `<Text>Hello</Text>` or `<Button>Click</Button>`. This is required for the rendering engine to work correctly.
+
+3. **Tables are the only reliable layout** — Never use CSS flexbox or grid. Use `<Grid>` components which render as `<table>`
 
 3. **Use padding, not margins** — Outlook.com dropped margin support. Use `<Spacer>` or padding instead
 
@@ -141,7 +71,7 @@ Before writing any code, internalize these rules:
 
 ## When Implementing New Features
 
-1. **Check support first** — Consult the CSS property support matrices in EMAIL_DEVELOPMENT_GUIDE.md
+1. **Check support first** — Consult the CSS property support matrix in ARCHITECTURE.md
 2. **Design for degradation** — The feature should fail gracefully in unsupported clients
 3. **Provide fallbacks** — Solid colors for gradients, square corners for rounded, etc.
 4. **Consider Outlook** — If it needs to work in Outlook Windows, you likely need VML

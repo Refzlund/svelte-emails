@@ -11,9 +11,9 @@ Heading 3 text component.
 <script lang='ts'>
 	import { onDestroy } from 'svelte'
 	import type { TextAttributes } from '../../style-attributes'
-	import { getEmailParent, addChild, type Mail } from '../../context'
+	import { getEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 
-	interface Props extends TextAttributes {
+	export interface Props extends TextAttributes {
 		/** Text content with markdown-like syntax support */
 		content: string
 	}
@@ -24,9 +24,9 @@ Heading 3 text component.
 
 	const node: Mail.TextNode = $state({
 		type: 'text',
-		content,
 		variant: 'h3',
-		attrs: Object.keys(attrs)
+		attrs: normalizeAttrs(attrs),
+		get content() { return content }
 	})
 
 	onDestroy(addChild(parent, node))

@@ -1,16 +1,8 @@
 /**
  * Rendering system exports.
  * 
- * This module provides all utilities needed for converting the IR tree
+ * This module provides utilities for converting the IR tree
  * to email-safe HTML and plain text output.
- * 
- * @example
- * ```ts
- * import { parseAttrs, toInlineCSS, blendColor } from './rendering'
- * 
- * const parsed = parseAttrs(['p-4', 'bg-[#fff]/50'], inherited)
- * const style = toInlineCSS(parsed.css, inherited)
- * ```
  */
 
 // Types
@@ -20,89 +12,49 @@ export type {
 	StyleConfig,
 	InheritedStyles,
 	ParsedAttrs,
-	RenderContext,
-	RGB,
-	ColorWithOpacity
+	RenderContext
 } from './types'
 
 // Constants
-export {
-	SPACING_SCALE,
-	FONT_SIZES,
-	FONT_WEIGHTS,
-	LINE_HEIGHTS,
-	LETTER_SPACINGS,
-	BORDER_RADII,
-	BORDER_WIDTHS,
-	MAX_WIDTHS,
-	DEFAULT_ROOT_SIZE,
-	DEFAULT_BACKGROUND_COLOR,
-	DEFAULT_OPACITY,
-	MOBILE_BREAKPOINT
-} from './CONSTANTS'
+export { DEFAULT_MOBILE_BREAKPOINT } from './CONSTANTS'
 
 // Attribute Parsing
 export {
 	parseAttrs,
-	parsePadding,
-	parseMargin,
-	parseWidth,
-	parseHeight,
-	parseMinMaxWidth,
-	parseMinHeight,
-	parseColor,
-	parseAlignment,
-	parseJustify,
-	parseTypography,
-	parseBorder,
-	parseDisplay,
-	parseOpacity,
-	parseResponsive,
 	remToPx,
 	extractWidthFromAttrs,
-	extractValignFromAttrs,
-	extractTextAlignFromAttrs,
-	extractResponsiveFromAttrs,
-	extractColspanFromAttrs,
-	extractRowspanFromAttrs,
-	parseColumnTemplate,
-	parseRowTemplate,
-	parseCellPadding,
-	parseGap
+	extractCellAttrs,
+	isWidthAttr,
+	resolveSpacingValue
 } from './parse-attrs'
-
-// Color Utilities
-export {
-	blendColor,
-	parseHex,
-	rgbToHex,
-	parseColorWithOpacity,
-	isValidHex,
-	normalizeHex
-} from './colors'
 
 // HTML Helpers
 export {
-	toKebabCase,
 	toInlineCSS,
 	htmlAttrs,
 	presentationTable,
+	gapSpacerTable,
 	wrapWithMargin,
-	wrapWithResponsive,
-	mergeWithInherited,
-	extractInheritable,
-	createDefaultInherited
+	applyWrappers,
+	extractInheritable
 } from './html-helpers'
 
 // Content Processing
 export {
 	parseMarkdown,
-	interpolateVariables,
+	interpolatePlaceholders,
 	escapeHtml,
-	unescapeHtml,
-	stripHtmlToText,
 	formatFootnotes
 } from './content'
+
+// Style Helpers
+export {
+	buildCssFromConfig,
+	buildCell,
+	buildCellStylesFromRow,
+	extractRowStylesForCells,
+	CONFIG_MAPPINGS
+} from './style-helpers'
 
 // HTML Formatting
 export { formatHtml } from './format-html'

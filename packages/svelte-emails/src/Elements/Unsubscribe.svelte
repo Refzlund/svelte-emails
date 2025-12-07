@@ -1,42 +1,57 @@
 <!-- @component
 Unsubscribe link component for email footers.
 
-Renders as a specially styled anchor link, typically used for 
-CAN-SPAM compliance unsubscribe functionality.
+Renders as a specially styled anchor link for CAN-SPAM compliance.
+
+**Props:**
+- `href` — Unsubscribe URL (required)
+- `content` — Static text content (alternative to children)
+- `email` — Email address for mailto: in List-Unsubscribe header
+
+If both `href` and `email` are provided, the List-Unsubscribe header
+will include both: `<mailto:email>, <href>`
 
 @example
 ```svelte
-	<Unsubscribe href='https://example.com/unsubscribe?token=abc123'>
-		Press here to unsubscribe
-	</Unsubscribe>
+<Unsubscribe href='https://example.com/unsubscribe?token=abc123' content='Press here to unsubscribe' />
 
-	<Unsubscribe href='...' text-[#6b7280] text-xs>
-		Click to unsubscribe from these emails
-	</Unsubscribe>
+<Unsubscribe 
+	href='https://example.com/unsubscribe' 
+	email='unsubscribe@example.com'
+	content='Unsubscribe'
+	text-[#6b7280] 
+	text-xs
+/>
 ```
 -->
 <script lang='ts'>
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { TextAttributes } from '../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, type Mail } from '../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../context'
 
 	interface Props extends TextAttributes {
 		/** Unsubscribe URL */
 		href: string
+		/** Static text content (alternative to children snippet) */
+		content?: string
+		/** Email address for mailto: in List-Unsubscribe header */
+		email?: string
 		/** Link text content */
 		children?: Snippet
 	}
 
-	const { href, children, ...attrs }: Props = $props()
+	const { href, content, email, children, ...attrs }: Props = $props()
 
 	const parent = getEmailParent()
 
 	const node: Mail.UnsubscribeNode = $state({
 		type: 'unsubscribe',
-		href,
-		attrs: Object.keys(attrs),
-		children: []
+		attrs: normalizeAttrs(attrs),
+		children: [],
+		get href() { return href },
+		get content() { return content },
+		get email() { return email }
 	})
 
 	onDestroy(addChild(parent, node))

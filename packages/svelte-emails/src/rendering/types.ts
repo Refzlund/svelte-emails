@@ -27,8 +27,8 @@ export interface RenderOutput {
  * Options passed to the render function.
  */
 export interface RenderOptions {
-	/** Variables for interpolation (e.g., { first_name: 'Alice' }) */
-	vars?: Record<string, string>
+	/** Placeholder values for [[variable]] interpolation (e.g., { first_name: 'Alice' }) */
+	placeholders?: Record<string, string>
 	/** Style configuration (component theming, rem base size, etc.) */
 	style?: StyleConfig
 }
@@ -58,6 +58,10 @@ export interface InheritedStyles {
 	// --- Font Properties ---
 	/** Inherited font family */
 	fontFamily?: string
+	/** Base font family (for font-base to reset to) */
+	baseFontFamily?: string
+	/** Monospace font family (for font-mono) */
+	monoFontFamily?: string
 	/** Inherited font size */
 	fontSize?: string
 	/** Inherited font weight */
@@ -153,6 +157,16 @@ export interface ParsedAttrs {
 	borderOpacity?: number
 	/** Responsive visibility mode */
 	responsive?: 'mobile-only' | 'desktop-only'
+	/** 
+	 * Tracks which border sides have been explicitly colored (for directional border logic).
+	 * When directional colors are set, uniform border-width applies only to those sides.
+	 */
+	borderSidesWithColor?: Set<'top' | 'right' | 'bottom' | 'left'>
+	/**
+	 * Uniform border width from border-N (stored separately for post-processing).
+	 * Applied to directional sides if any, otherwise all sides.
+	 */
+	uniformBorderWidth?: string
 }
 
 // ============================================================================
@@ -163,14 +177,20 @@ export interface ParsedAttrs {
  * Context maintained during rendering traversal.
  */
 export interface RenderContext {
-	/** Variable values for interpolation */
-	vars: Record<string, string>
+	/** Placeholder values for [[variable]] interpolation */
+	placeholders: Record<string, string>
 	/** Footnotes collected for plain text output (links become [1], [2], etc.) */
 	footnotes: Array<{ label: string; url: string }>
 	/** Email headers collected during rendering (e.g., List-Unsubscribe) */
 	headers: Record<string, string>
 	/** Style configuration */
 	style: StyleConfig
+	/**
+	 * Cache of pre-highlighted code content.
+	 * Maps node content hash to highlighted HTML.
+	 * Populated by preprocessHighlighting() before rendering.
+	 */
+	highlightCache?: Map<string, string>
 }
 
 // ============================================================================

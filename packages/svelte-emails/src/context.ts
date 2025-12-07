@@ -7,7 +7,21 @@
  * @see ARCHITECTURE.md for detailed information about the component registration flow.
  */
 
-import { createContext } from 'svelte'
+import { getContext, setContext } from 'svelte'
+
+// ============================================================================
+// Stable Context Keys (for SSR compatibility)
+// ============================================================================
+
+/**
+ * Stable key for the email root collector context.
+ * Using Symbol.for() guarantees the same symbol instance across ALL module
+ * instances - even when Vite's SSR runner loads the same module multiple times.
+ * This is critical for SSR because getContext() must find the same key that
+ * render()'s context Map was set with.
+ */
+export const EMAIL_ROOT_CONTEXT_KEY = Symbol.for('svelte-emails:root-collector')
+export const EMAIL_PARENT_CONTEXT_KEY = Symbol.for('svelte-emails:parent-node')
 
 // ============================================================================
 // IR (Intermediate Representation) Types
@@ -36,6 +50,14 @@ export namespace Mail {
 		bodyBackground?: string
 		/** Content container max width in pixels (defaults to 600) */
 		maxWidth?: number
+		/** Mobile breakpoint in pixels for responsive styles (defaults to 480) */
+		mobileBreakpoint?: number
+		/**
+		 * Style configuration for this email.
+		 * Merged between base preset and render options:
+		 * `merge(presets.base, Email.style, render.opts.style)`
+		 */
+		style?: import('./styles').StyleConfig
 		children: IRNode[]
 	}
 
@@ -62,7 +84,19 @@ export namespace Mail {
 	 */
 	export interface TextNode extends BaseNode<'text'> {
 		content: string
-		variant: 'default' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'paragraph' | 'small'
+		variant: 'default' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'paragraph' | 'small' | 'code' | 'codeblock'
+		/** 
+		 * Language for syntax highlighting (e.g., 'typescript', 'javascript', 'html').
+		 * Requires `shiki` to be installed as a peer dependency.
+		 * Only applies to 'code' and 'codeblock' variants.
+		 */
+		highlight?: string
+		/**
+		 * Theme for syntax highlighting.
+		 * Defaults to 'github-light' for email readability.
+		 * @see https://shiki.style/themes for available themes
+		 */
+		highlightTheme?: string
 	}
 
 	/**
@@ -87,10 +121,16 @@ export namespace Mail {
 	}
 
 	/**
-	 * Spacer node - vertical spacing
+	 * Spacer node - spacing between elements
+	 * Behavior adapts based on layout context:
+	 * - vertical: height-based, full width (default/rows layout)
+	 * - horizontal: width-based, 1px height (cols layout)
+	 * - table-cell: width-based, minimal height (Table.Row)
 	 */
 	export interface SpacerNode extends BaseNode<'spacer'> {
 		size?: string
+		/** Layout context computed from parent - determines dimension behavior */
+		layoutContext?: 'vertical' | 'horizontal' | 'table-cell'
 	}
 
 	/**
@@ -191,45 +231,170 @@ export interface Collector {
 }
 
 // ============================================================================
-// Context Definitions
+// Context Functions
 // ============================================================================
 
 /**
- * Module-level collector for SSR fallback.
- * When using svelte/server's render(), the Svelte 5 context API may not work
- * reliably, so we use a module-level variable as a fallback.
+ * Get the root collector context.
+ * Works in both client (preview) and server (render) modes.
  */
-let ssrCollector: Collector | null = null
-
-/**
- * Set the SSR collector (called before SSR render).
- */
-export function setSSRCollector(collector: Collector | null): void {
-	ssrCollector = collector
+export function getEmailRoot(): Collector {
+	return getContext<Collector>(EMAIL_ROOT_CONTEXT_KEY)
 }
 
 /**
- * Get the SSR collector.
+ * Set the root collector context.
+ * Called by Email.Preview (client) or passed via render() context option (server).
  */
-export function getSSRCollector(): Collector | null {
-	return ssrCollector
+export function setEmailRoot(collector: Collector): Collector {
+	return setContext(EMAIL_ROOT_CONTEXT_KEY, collector)
 }
 
 /**
- * Context for the root collector.
- * Set by Email.Preview or render(), accessed by Email component.
+ * Get the current parent node context.
  */
-export const [getEmailRoot, setEmailRoot] = createContext<Collector>()
+export function getEmailParent(): Mail.IRParentNode {
+	return getContext<Mail.IRParentNode>(EMAIL_PARENT_CONTEXT_KEY)
+}
 
 /**
- * Context for the current parent node.
- * Each component gets its parent, registers itself, then sets itself as parent for children.
+ * Set the current parent node context.
  */
-export const [getEmailParent, setEmailParent] = createContext<Mail.IRParentNode>()
+export function setEmailParent(node: Mail.IRParentNode): Mail.IRParentNode {
+	return setContext(EMAIL_PARENT_CONTEXT_KEY, node)
+}
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+/**
+ * Detect if we're running in SSR mode.
+ * In SSR, we don't want cleanup functions to run because:
+ * 1. SSR is a one-time render, there's no "unmounting"
+ * 2. Svelte's onDestroy runs during SSR (unlike other lifecycle hooks)
+ * 3. Running cleanup would remove children we just added
+ */
+const isSSR = typeof window === 'undefined'
+
+// ============================================================================
+// Attribute Normalization
+// ============================================================================
+
+/**
+ * Attribute prefixes that support value syntax.
+ * These are the prefixes that can be used with either:
+ * - Bracket syntax: `bg-[#ffffff]` (works as boolean attribute)
+ * - Value syntax: `bg="#ffffff"` (works with Svelte variables)
+ * 
+ * The value syntax is converted to bracket syntax during normalization.
+ */
+const VALUE_ATTR_PREFIXES = [
+	// Sizing
+	'w', 'h', 'min-w', 'max-w', 'min-h',
+	// Spacing
+	'p', 'pt', 'pr', 'pb', 'pl', 'px', 'py',
+	'm', 'mt', 'mr', 'mb', 'ml', 'mx', 'my',
+	// Colors
+	'text', 'bg', 'text-opacity', 'bg-opacity', 'border-opacity',
+	// Typography
+	'leading', 'tracking',
+	// Borders
+	'border', 'border-t', 'border-r', 'border-b', 'border-l', 'border-x', 'border-y',
+	'rounded', 'rounded-t', 'rounded-r', 'rounded-b', 'rounded-l',
+	'rounded-tl', 'rounded-tr', 'rounded-br', 'rounded-bl',
+	// Layout
+	'span', 'row-span', 'cols', 'rows', 'gap', 'cell-padding',
+	// Email
+	'body-bg', 'mobile-threshold',
+	// Effects
+	'opacity'
+] as const
+
+/**
+ * Normalize attributes from component props to consistent string format.
+ * 
+ * Converts value-style attributes (e.g., `bg="#ffffff"`) to bracket syntax
+ * (e.g., `bg-[#ffffff]`) while preserving boolean attributes as-is.
+ * 
+ * This allows using Svelte variables with style attributes:
+ * ```svelte
+ * <script>
+ *   let color = '#ff0000'
+ * </script>
+ * <Div bg={color}>  <!-- Works! Converted to bg-[#ff0000] -->
+ * ```
+ * 
+ * Special handling for `cols` and `rows`: spaces are converted to underscores
+ * to match the bracket syntax format (e.g., `cols="20% 50% 30%"` → `cols-[20%_50%_30%]`).
+ * 
+ * @param attrs - The attrs object from $props() spread
+ * @returns Array of normalized attribute strings
+ * 
+ * @example
+ * ```ts
+ * // Boolean attributes (existing Tailwind-like syntax)
+ * normalizeAttrs({ 'bg-[#fff]': true, 'p-4': true })
+ * // → ['bg-[#fff]', 'p-4']
+ * 
+ * // Value attributes (new syntax for variables)
+ * normalizeAttrs({ bg: '#fff', p: '1rem' })
+ * // → ['bg-[#fff]', 'p-[1rem]']
+ * 
+ * // cols/rows with spaces (converted to underscores)
+ * normalizeAttrs({ cols: '20% 50% 30%' })
+ * // → ['cols-[20%_50%_30%]']
+ * 
+ * // Mixed
+ * normalizeAttrs({ 'p-4': true, bg: '#fff' })
+ * // → ['p-4', 'bg-[#fff]']
+ * ```
+ */
+export function normalizeAttrs(attrs: Record<string, unknown>): string[] {
+	const result: string[] = []
+
+	for (const [key, value] of Object.entries(attrs)) {
+		// Boolean attribute (existing syntax): { 'bg-[#fff]': true }
+		if (value === true) {
+			result.push(key)
+			continue
+		}
+
+		// Skip false/null/undefined values
+		if (value === false || value === null || value === undefined) {
+			continue
+		}
+
+		// Value attribute: { bg: '#fff' } → 'bg-[#fff]'
+		// Check if the key is a valid value-attribute prefix
+		if (typeof value === 'string' || typeof value === 'number') {
+			// Check for exact match against known value attribute prefixes
+			const isValueAttr = (VALUE_ATTR_PREFIXES as readonly string[]).includes(key)
+
+			if (isValueAttr) {
+				// For numeric values, convert to string
+				let strValue = String(value)
+				
+				// Special handling for cols/rows: convert spaces to underscores
+				// This allows `cols="20% 50% 30%"` to work like `cols-[20%_50%_30%]`
+				if (key === 'cols' || key === 'rows') {
+					strValue = strValue.replace(/\s+/g, '_')
+				}
+				
+				// Check if value is already wrapped in brackets
+				if (strValue.startsWith('[') && strValue.endsWith(']')) {
+					result.push(`${key}-${strValue}`)
+				} else {
+					result.push(`${key}-[${strValue}]`)
+				}
+			}
+			// Unknown attributes with values are silently ignored
+			// (they're not style attributes we recognize)
+		}
+	}
+
+	return result
+}
 
 /**
  * Add a child node to a parent node.
@@ -238,6 +403,9 @@ export const [getEmailParent, setEmailParent] = createContext<Mail.IRParentNode>
  * Returns a cleanup function that removes the child from the parent.
  * This should be called in `onDestroy` to support dynamic content
  * (e.g., conditional rendering with {#if} or {#each} blocks).
+ * 
+ * Note: In SSR mode, returns a no-op function because onDestroy runs
+ * during SSR and would otherwise remove children immediately after adding.
  * 
  * Note: TableNode only accepts TableRowNode children - this is enforced
  * at runtime with an error if violated.
@@ -266,7 +434,14 @@ export function addChild(parent: Mail.IRParentNode, child: Mail.IRNode): () => v
 	const children = parent.children as Mail.IRNode[]
 	children.push(child)
 
-	// Return cleanup function to remove child from parent
+	// In SSR, return no-op because onDestroy runs during SSR
+	// and would remove children we just added
+	if (isSSR) {
+		return () => {}
+	}
+
+	// In browser, return cleanup function to remove child from parent
+	// This supports dynamic content (conditional rendering, {#each}, etc.)
 	return () => {
 		const index = children.indexOf(child)
 		if (index !== -1) children.splice(index, 1)

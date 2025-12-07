@@ -1,22 +1,25 @@
 <!-- @component
 Email render component.
 
-Renders email content in an isolated iframe (HTML mode) or as plain text.
+Renders email content in an isolated iframe (preview mode) or as plain text/HTML source.
 Sets up the IR tree collector context and provides bindable output.
+
+**Preview Mode Features:**
+- Seamless updates using DOM diffing (morphdom) — no flash or scroll reset
+- Images don't reload on content changes
+- Form state is preserved
+- Complete CSS isolation via iframe
 
 @example
 ```svelte
 <script>
 	let output = $state()
+	let name = $state('World')
 </script>
 
-<Email.Render bind:output>
-	<Email preview='Welcome!'>
-		<Text content='Hello [[name]]!' />
-	</Email>
-</Email.Render>
+<input bind:value={name} />
 
-<Email.Render mode="text" bind:output>
+<Email.Render bind:output>
 	<Email preview='Welcome!'>
 		<Text content='Hello [[name]]!' />
 	</Email>
@@ -31,8 +34,9 @@ Sets up the IR tree collector context and provides bindable output.
 	import { renderTree, type RenderOptions, type RenderOutput } from './renderer'
 	import { formatHtml } from './rendering'
 	import type { StyleConfig } from './styles'
+	import IframePreview from './IframePreview.svelte'
 
-	interface Props {
+	export interface Props {
 		/** Render mode: 'preview' shows in iframe, 'text' shows plain text, 'html' shows HTML source */
 		mode?: 'preview' | 'text' | 'html'
 		/** 
@@ -42,8 +46,8 @@ Sets up the IR tree collector context and provides bindable output.
 		 * - 'html+style': Format HTML structure and CSS (style attributes + style tags)
 		 */
 		prettify?: 'none' | 'html' | 'html+style'
-		/** Variables for interpolation */
-		vars?: RenderOptions['vars']
+		/** Placeholder values for [[variable]] interpolation */
+		placeholders?: RenderOptions['placeholders']
 		/** Style configuration (component theming, rem base size, etc.) */
 		style?: StyleConfig
 		/** Bindable output containing html, text, and headers */
@@ -55,7 +59,7 @@ Sets up the IR tree collector context and provides bindable output.
 	let { 
 		mode = 'preview',
 		prettify = 'html+style',
-		vars = {}, 
+		placeholders = {}, 
 		style, 
 		output = $bindable(null),
 		children 
@@ -74,16 +78,46 @@ Sets up the IR tree collector context and provides bindable output.
 	// Provide collector to children via context
 	setEmailRoot(collector)
 
-	// Render from IR tree when root is available and update bindable output
-	const rendered = $derived.by(() => {
-		if (!root) return null
-		const result = renderTree(root, { vars, style })
-		return result
-	})
+	// Rendered output state - updated asynchronously when root changes
+	// Note: renderTree is async to support Shiki syntax highlighting
+	let rendered: RenderOutput | null = $state(null)
 
-	// Update the bindable output when rendered changes
+	// Track the latest render request to handle race conditions
+	let renderVersion = 0
+
+	// Re-render when dependencies change
 	$effect(() => {
-		output = rendered
+		// Capture dependencies for reactive tracking
+		const currentRoot = root
+		const currentPlaceholders = placeholders
+		const currentStyle = style
+		
+		if (!currentRoot) {
+			rendered = null
+			output = null
+			return
+		}
+
+		// Track this render request
+		const thisVersion = ++renderVersion
+		
+		// Perform async render
+		renderTree(currentRoot, { placeholders: currentPlaceholders, style: currentStyle })
+			.then((result) => {
+				// Only update if this is still the latest request
+				if (thisVersion === renderVersion) {
+					rendered = result
+					output = result
+				}
+			})
+			.catch(() => {
+				// Render failures are typically user errors in the email template
+				// The error will surface through the UI or SSR error handling
+				if (thisVersion === renderVersion) {
+					rendered = null
+					output = null
+				}
+			})
 	})
 </script>
 
@@ -95,12 +129,10 @@ Sets up the IR tree collector context and provides bindable output.
 <!-- Display based on mode -->
 {#if rendered}
 	{#if mode === 'preview'}
-		<iframe
-			title="Email Preview"
-			srcdoc={rendered.html}
-			sandbox="allow-popups allow-popups-to-escape-sandbox"
-			style="width: 100%; height: 100%; border: none;"
-		></iframe>
+		<IframePreview 
+			html={rendered.html}
+			sandbox="allow-popups allow-popups-to-escape-sandbox allow-scripts"
+		/>
 	{:else if mode === 'text'}
 		<pre style="white-space: pre-wrap; font-family: monospace; margin: 0; padding: 16px; background: #f5f5f5; overflow: auto; height: 100%;">{rendered.text}</pre>
 	{:else if mode === 'html'}

@@ -31,9 +31,9 @@ Variable interpolation: `[[variable_name]]` replaced at render time.
 <script lang='ts'>
 	import { onDestroy } from 'svelte'
 	import type { TextAttributes } from '../../style-attributes'
-	import { getEmailParent, addChild, type Mail } from '../../context'
+	import { getEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 
-	interface Props extends TextAttributes {
+	export interface Props extends TextAttributes {
 		/** Text content with markdown-like syntax support */
 		content: string
 	}
@@ -45,9 +45,9 @@ Variable interpolation: `[[variable_name]]` replaced at render time.
 
 	const node: Mail.TextNode = $state({
 		type: 'text',
-		content,
 		variant: 'default',
-		attrs: Object.keys(attrs)
+		attrs: normalizeAttrs(attrs),
+		get content() { return content }
 	})
 
 	// Add to parent's children and setup cleanup

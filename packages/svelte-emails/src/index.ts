@@ -1,5 +1,6 @@
 import _Email from './Email.svelte'
 import _Render from './Render.svelte'
+import _IframePreview from './IframePreview.svelte'
 import Div from './Elements/Div.svelte'
 import _Text from './Elements/Text/Text.svelte'
 import _TextH1 from './Elements/Text/H1.svelte'
@@ -10,6 +11,8 @@ import _TextH5 from './Elements/Text/H5.svelte'
 import _TextH6 from './Elements/Text/H6.svelte'
 import _TextParagraph from './Elements/Text/Paragraph.svelte'
 import _TextSmall from './Elements/Text/Small.svelte'
+import _TextCode from './Elements/Text/Code.svelte'
+import _TextCodeblock from './Elements/Text/Codeblock.svelte'
 import Button from './Elements/Button.svelte'
 import Link from './Elements/Link.svelte'
 import Img from './Elements/Img.svelte'
@@ -24,15 +27,28 @@ import _TableRow from './Elements/Table/Row.svelte'
 import { renderTree } from './renderer'
 import type { RenderOutput, RenderOptions } from './renderer'
 import type { Mail, Collector } from './context'
-import { setSSRCollector } from './context'
+import { EMAIL_ROOT_CONTEXT_KEY } from './context'
 import type { StyleConfig } from './styles'
 import type { Component } from 'svelte'
 import { render as svelteRender } from 'svelte/server'
 
+// <Email.Render ...>
+// <Email.IframePreview ...>
 const Email = Object.assign(_Email, { 
-	Render: _Render
+	Render: _Render,
+	IframePreview: _IframePreview
 })
-
+// <Text content='...' />
+// <Text.H1 content='...' />
+// <Text.H2 content='...' />
+// <Text.H3 content='...' />
+// <Text.H4 content='...' />
+// <Text.H5 content='...' />
+// <Text.H6 content='...' />
+// <Text.Paragraph content='...' />
+// <Text.Small content='...' />
+// <Text.Code content='...' />
+// <Text.Codeblock content='...' />
 const Text = Object.assign(_Text, {
 	H1: _TextH1,
 	H2: _TextH2,
@@ -41,9 +57,12 @@ const Text = Object.assign(_Text, {
 	H5: _TextH5,
 	H6: _TextH6,
 	Paragraph: _TextParagraph,
-	Small: _TextSmall
+	Small: _TextSmall,
+	Code: _TextCode,
+	Codeblock: _TextCodeblock
 })
-
+// <Table> ...
+// <Table.Row> ...
 const Table = Object.assign(_Table, {
 	Row: _TableRow
 })
@@ -56,8 +75,8 @@ const Table = Object.assign(_Table, {
  * Options for the render() function.
  */
 export interface RenderEmailOptions<TProps extends Record<string, unknown> = Record<string, unknown>> {
-	/** Variables for content interpolation (e.g., { first_name: 'Alice' }) */
-	vars?: Record<string, string>
+	/** Placeholder values for [[variable]] interpolation (e.g., { first_name: 'Alice' }) */
+	placeholders?: Record<string, string>
 	/** Style configuration (component theming, rem base size, etc.) */
 	style?: StyleConfig
 	/** Props to pass to the email component */
@@ -71,7 +90,7 @@ export interface RenderEmailOptions<TProps extends Record<string, unknown> = Rec
  * collects the IR tree, and converts it to email-safe HTML.
  * 
  * @param EmailComponent - The email component to render (must contain <Email> at root)
- * @param options - Render options (vars, style, props)
+ * @param options - Render options (placeholders, style, props)
  * @returns Object containing html, text, and headers
  * 
  * @example
@@ -80,7 +99,7 @@ export interface RenderEmailOptions<TProps extends Record<string, unknown> = Rec
  * import MyEmail from './MyEmail.email.svelte'
  * 
  * const result = await render(MyEmail, {
- *   vars: { first_name: 'Alice', order_id: '12345' },
+ *   placeholders: { first_name: 'Alice', order_id: '12345' },
  *   style: presets.minimal,
  *   props: { orderTotal: 99.99 }
  * })
@@ -90,11 +109,11 @@ export interface RenderEmailOptions<TProps extends Record<string, unknown> = Rec
  * console.log(result.headers)  // { 'List-Unsubscribe': '...' }
  * ```
  */
-export function render<TProps extends Record<string, unknown> = Record<string, unknown>>(
+export async function render<TProps extends Record<string, unknown> = Record<string, unknown>>(
 	EmailComponent: Component<TProps>,
 	options: RenderEmailOptions<TProps> = {}
-): RenderOutput {
-	const { vars = {}, style, props = {} as TProps } = options
+): Promise<RenderOutput> {
+	const { placeholders = {}, style, props = {} as TProps } = options
 
 	// Create a collector to capture the IR tree
 	let root: Mail.EmailNode | null = null
@@ -104,21 +123,14 @@ export function render<TProps extends Record<string, unknown> = Record<string, u
 		}
 	}
 
-	// Set the SSR collector before rendering
-	// This is used as a fallback when Svelte's context API doesn't work in SSR
-	setSSRCollector(collector)
+	// Use Svelte's server-side render with context Map
+	// The context Map is the canonical way to pass context in SSR
+	// Using the same Symbol.for() key as getContext() uses in Email.svelte
+	await svelteRender(EmailComponent, {
+		props,
+		context: new Map([[EMAIL_ROOT_CONTEXT_KEY, collector]])
+	})
 
-	try {
-		// Use Svelte's server-side render directly with the email component
-		svelteRender(EmailComponent, {
-			props: props as Record<string, unknown>
-		})
-	} finally {
-		// Clear the SSR collector after rendering
-		setSSRCollector(null)
-	}
-
-	// Check if root was collected
 	if (!root) {
 		throw new Error(
 			'render() failed: No <Email> component found in the component tree. ' +
@@ -127,7 +139,7 @@ export function render<TProps extends Record<string, unknown> = Record<string, u
 	}
 
 	// Render the IR tree to HTML and text
-	return renderTree(root, { vars, style })
+	return renderTree(root, { placeholders, style })
 }
 
 export {
@@ -142,8 +154,12 @@ export {
 	Br,
 	Unsubscribe,
 	Table,
-	renderTree
+	renderTree,
+	formatHtml
 }
+
+// Re-export formatHtml from rendering
+import { formatHtml } from './rendering'
 
 // Re-export render types
 export type { RenderOutput, RenderOptions }
@@ -152,18 +168,22 @@ export type { RenderOutput, RenderOptions }
 export * from './context'
 
 // Re-export style utilities and presets
-export { merge, presets, getRootSize } from './styles'
+export { merge, presets, getRootSize, prependFontFamily, basePreset } from './styles'
 export type {
 	StyleConfig,
 	RootStyle,
 	TextStyle,
 	HeadingStyle,
+	SpanStyle,
 	LinkStyle,
 	ButtonStyle,
 	SpacerStyle,
 	DividerStyle,
 	CodeStyle,
 	CodeblockStyle,
+	CodeblockBorderStyle,
+	BorderStyle,
+	DirectionalWidth,
 	HighlightStyle,
 	UnsubscribeStyle,
 	TableStyle
@@ -171,3 +191,7 @@ export type {
 
 // Re-export all style attribute types
 export type * from './style-attributes'
+
+// Re-export Shiki utilities for advanced usage
+export { highlightCode, isShikiAvailable } from './shiki'
+export type { HighlightOptions, HighlightResult } from './shiki'

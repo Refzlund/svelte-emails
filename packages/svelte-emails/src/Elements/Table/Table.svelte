@@ -27,10 +27,10 @@ Use `Table.Row` for each row. Row styles are inherited by child elements.
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { TableAttributes } from '../../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, type Mail } from '../../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 	import { parseColumnTemplate, parseCellPadding } from '../../rendering/parse-attrs'
 
-	interface Props extends TableAttributes {
+	export interface Props extends TableAttributes {
 		/** Table rows (Table.Row components) */
 		children?: Snippet
 	}
@@ -38,24 +38,33 @@ Use `Table.Row` for each row. Row styles are inherited by child elements.
 	const { children, ...attrs }: Props = $props()
 
 	const parent = getEmailParent()
-	const attrKeys = Object.keys(attrs)
+	// normalizeAttrs converts value-attributes (bg="#fff") to bracket syntax (bg-[#fff])
+	const attrKeys = normalizeAttrs(attrs)
 
 	// Parse column template from attrs
-	const colWidths = parseColumnTemplate(attrKeys)
+	const colWidths = $derived(parseColumnTemplate(attrKeys))
 
-	// Check for cell-border attribute
-	const cellBorder = 'cell-border' in attrs
+	// Extract table flags from attrs
+	const border = $derived(attrs.border === true)
+	const borderOuter = $derived(attrs['border-outer'] === true)
+	const cellBorder = $derived(attrs['cell-border'] === true)
+	const striped = $derived(attrs.striped === true)
+	const compact = $derived(attrs.compact === true)
 
 	// Parse cell padding from attrs
-	const cellPadding = parseCellPadding(attrKeys)
+	const cellPadding = $derived(parseCellPadding(attrKeys))
 
 	const node: Mail.TableNode = $state({
 		type: 'table',
 		attrs: attrKeys,
 		children: [],
-		...(colWidths && { colWidths }),
-		...(cellBorder && { cellBorder }),
-		...(cellPadding !== undefined && { cellPadding })
+		get colWidths() { return colWidths },
+		get border() { return border },
+		get borderOuter() { return borderOuter },
+		get cellBorder() { return cellBorder },
+		get striped() { return striped },
+		get compact() { return compact },
+		get cellPadding() { return cellPadding }
 	})
 
 	onDestroy(addChild(parent, node))

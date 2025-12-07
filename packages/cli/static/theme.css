@@ -1,0 +1,72 @@
+:root {
+	/* Viewer header (top bar) */
+	--viewer-header-bg: #3B3C54;
+	--tabs-bg: #35354B;
+	--tab-active-gradient: linear-gradient(100deg, #5949A2 0%, #564181 100%);
+	
+	/* Toggle switch */
+	--toggle-off-bg: var(--tabs-bg);
+	--toggle-off-thumb: #7B7CB0;
+	--toggle-on-bg: #4F4F7D;
+	--toggle-on-thumb: #9B8ED8;
+	
+	/* Nav sidebar (left side) */
+	--nav-bg: #3F405A;
+	
+	/* Nav left email listing - alternating rows */
+	--nav-item-even: #454661;
+	--nav-item-odd: #484965;
+	--nav-item-selected: #545575;
+	
+	/* Nav left selected item border */
+	--nav-item-selected-border: #777BDB;
+	--nav-item-selected-border-width: 4px;
+	
+	/* Nav left items padding */
+	--nav-item-padding-y: 16px;
+	--nav-item-padding-x: 20px;
+	
+	/* Nav left items text colors */
+	--nav-item-text: #ffffff;
+	--nav-item-preview-opacity: 0.5;
+	--nav-item-preview-opacity-selected: 0.75;
+	
+	/* Nav top (main content area header) */
+	--nav-top-bg: #3B3C54;
+	--nav-top-border-left: #545575;
+	
+	/* Scrollbar */
+	--scrollbar-width: 10px;
+	--scrollbar-track: transparent;
+	--scrollbar-thumb: hsla(238, 65%, 75%, 0.3);
+	--scrollbar-thumb-hover: hsla(238, 65%, 75%, 0.5);
+}
+
+/* Custom scrollbar styles */
+* {
+	scrollbar-width: initial;
+	scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+	width: var(--scrollbar-width);
+	height: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+	background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--scrollbar-thumb);
+	border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: var(--scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-corner {
+	background: var(--scrollbar-track);
+}

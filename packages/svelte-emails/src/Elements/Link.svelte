@@ -6,10 +6,10 @@ inline anchor links within text content.
 
 @example
 ```svelte
-	<Text>
-		Visit <Link href='https://example.com'>our website</Link> for more info.
-	</Text>
+	// Prefer inline markdown links within Text
+	<Text content='Visit [our website](https://example.com) for more info.' />
 
+	// Or use Link component with content prop
 	<Link href='https://example.com' content='Click here' text-[#2563eb] />
 ```
 
@@ -19,7 +19,7 @@ inline anchor links within text content.
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { LinkAttributes } from '../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, type Mail } from '../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../context'
 
 	interface Props extends LinkAttributes {
 		/** Link destination URL */
@@ -36,10 +36,10 @@ inline anchor links within text content.
 
 	const node: Mail.LinkNode = $state({
 		type: 'link',
-		href,
-		content,
-		attrs: Object.keys(attrs),
-		children: []
+		attrs: normalizeAttrs(attrs),
+		children: [],
+		get href() { return href },
+		get content() { return content }
 	})
 
 	onDestroy(addChild(parent, node))

@@ -9,8 +9,9 @@ Renders as a table cell in the final HTML for email compatibility.
 - `rows` — Vertical layout (children stacked)
 - `responsive` — Collapse columns to single-column on mobile (only with `cols`)
 
-**Column/Row Templates:** Define sizes using `cols-[...]` or `rows-[...]`.
-Widths are underscore-separated (e.g., `cols-[40%_30%_30%]`).
+**Column/Row Templates:** Define sizes in two ways:
+- Value syntax: `cols="35% 65%"` or `rows="100px auto"`
+- Bracket syntax: `cols-[35%_65%]` or `rows-[100px_auto]`
 
 **Gap Spacing:** Use `gap-*` (gap-1 through gap-12) or `gap-[20px]` for custom values.
 
@@ -24,7 +25,7 @@ Widths are underscore-separated (e.g., `cols-[40%_30%_30%]`).
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { DivAttributes } from '../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, type Mail } from '../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../context'
 	import { parseColumnTemplate, parseRowTemplate, parseGap } from '../rendering/parse-attrs'
 
 	interface Props extends DivAttributes {
@@ -38,26 +39,33 @@ Widths are underscore-separated (e.g., `cols-[40%_30%_30%]`).
 	const parent = getEmailParent()
 
 	// Determine direction from boolean attrs
-	const direction: 'cols' | 'rows' | undefined = cols ? 'cols' : rows ? 'rows' : undefined
+	const direction: 'cols' | 'rows' | undefined = $derived(cols ? 'cols' : rows ? 'rows' : undefined)
 
 	// Don't auto-add w-full - let the renderer handle default widths
 	// This allows parent grids to control child widths via auto-calculation
-	const attrKeys = Object.keys(attrs)
+	// normalizeAttrs converts value-attributes (bg="#fff") to bracket syntax (bg-[#fff])
+	// Include cols/rows if they are strings (e.g., cols="35% 65%") so they get normalized
+	const attrsWithColsRows = $derived({
+		...attrs,
+		...(typeof cols === 'string' ? { cols } : {}),
+		...(typeof rows === 'string' ? { rows } : {})
+	})
+	const attrKeys = $derived(normalizeAttrs(attrsWithColsRows))
 
 	// Parse column/row templates from attrs
-	const colWidths = parseColumnTemplate(attrKeys)
-	const rowHeights = parseRowTemplate(attrKeys)
-	const gap = parseGap(attrKeys)
+	const colWidths = $derived(parseColumnTemplate(attrKeys))
+	const rowHeights = $derived(parseRowTemplate(attrKeys))
+	const gap = $derived(parseGap(attrKeys))
 
 	const node: Mail.DivNode = $state({
 		type: 'div',
-		direction,
-		responsiveGrid: responsive,
-		attrs: attrKeys,
+		get attrs() { return attrKeys },
 		children: [],
-		...(colWidths && { colWidths }),
-		...(rowHeights && { rowHeights }),
-		...(gap && { gap })
+		get direction() { return direction },
+		get responsiveGrid() { return responsive },
+		get colWidths() { return colWidths },
+		get rowHeights() { return rowHeights },
+		get gap() { return gap }
 	})
 
 	// Add to parent's children and setup cleanup

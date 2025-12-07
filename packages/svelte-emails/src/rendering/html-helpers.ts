@@ -14,6 +14,27 @@ import type { InheritedStyles, ParsedAttrs } from './types'
 // ============================================================================
 
 /**
+ * CSS properties that should be inherited from parent to child elements.
+ * These are applied by toInlineCSS when not explicitly set.
+ */
+const INHERITABLE_PROPERTIES = [
+	'color',
+	'fontFamily',
+	'fontSize',
+	'fontWeight',
+	'fontStyle',
+	'textDecoration',
+	'textTransform',
+	'textAlign',
+	'lineHeight',
+	'letterSpacing',
+	'whiteSpace',
+	'wordBreak',
+	'verticalAlign',
+	'visibility'
+] as const
+
+/**
  * Convert a camelCase CSS property name to kebab-case.
  * 
  * @example
@@ -22,13 +43,29 @@ import type { InheritedStyles, ParsedAttrs } from './types'
  * toKebabCase('borderTopWidth')  // → 'border-top-width'
  * ```
  */
-export function toKebabCase(str: string): string {
+function toKebabCase(str: string): string {
 	return str.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
+}
+
+/**
+ * Escape double quotes in CSS values for safe inclusion in HTML style attributes.
+ * Converts double quotes to single quotes in CSS values like font-family.
+ * 
+ * CSS allows both single and double quotes, so 'font-family: "Segoe UI"' becomes
+ * 'font-family: 'Segoe UI'' which is valid CSS and doesn't conflict with 
+ * double-quoted HTML attributes.
+ * 
+ * @param value - CSS property value
+ * @returns Value with double quotes converted to single quotes
+ */
+function escapeQuotesForStyleAttr(value: string): string {
+	return value.replace(/"/g, "'")
 }
 
 /**
  * Convert parsed attributes to inline CSS string.
  * Applies inherited values where needed for typography properties.
+ * Escapes double quotes to single quotes for HTML attribute safety.
  * 
  * @param css - CSS property-value record
  * @param inherited - Optional inherited styles to apply as defaults
@@ -41,6 +78,9 @@ export function toKebabCase(str: string): string {
  * 
  * toInlineCSS({ padding: '16px' }, { color: '#333', fontSize: '14px' })
  * // → 'padding: 16px; color: #333; font-size: 14px'
+ * 
+ * toInlineCSS({ fontFamily: '"Segoe UI", Arial' })
+ * // → "font-family: 'Segoe UI', Arial" (quotes escaped for HTML safety)
  * ```
  */
 export function toInlineCSS(
@@ -49,55 +89,18 @@ export function toInlineCSS(
 ): string {
 	const finalCss = { ...css }
 
-	// Apply inherited typography if not explicitly set
+	// Apply inherited typography properties if not explicitly set
 	if (inherited) {
-		if (!finalCss.color && inherited.color) {
-			finalCss.color = inherited.color
-		}
-		if (!finalCss.fontFamily && inherited.fontFamily) {
-			finalCss.fontFamily = inherited.fontFamily
-		}
-		if (!finalCss.fontSize && inherited.fontSize) {
-			finalCss.fontSize = inherited.fontSize
-		}
-		if (!finalCss.fontWeight && inherited.fontWeight) {
-			finalCss.fontWeight = inherited.fontWeight
-		}
-		if (!finalCss.fontStyle && inherited.fontStyle) {
-			finalCss.fontStyle = inherited.fontStyle
-		}
-		if (!finalCss.textDecoration && inherited.textDecoration) {
-			finalCss.textDecoration = inherited.textDecoration
-		}
-		if (!finalCss.textTransform && inherited.textTransform) {
-			finalCss.textTransform = inherited.textTransform
-		}
-		if (!finalCss.textAlign && inherited.textAlign) {
-			finalCss.textAlign = inherited.textAlign
-		}
-		if (!finalCss.lineHeight && inherited.lineHeight) {
-			finalCss.lineHeight = inherited.lineHeight
-		}
-		if (!finalCss.letterSpacing && inherited.letterSpacing) {
-			finalCss.letterSpacing = inherited.letterSpacing
-		}
-		if (!finalCss.whiteSpace && inherited.whiteSpace) {
-			finalCss.whiteSpace = inherited.whiteSpace
-		}
-		if (!finalCss.wordBreak && inherited.wordBreak) {
-			finalCss.wordBreak = inherited.wordBreak
-		}
-		if (!finalCss.verticalAlign && inherited.verticalAlign) {
-			finalCss.verticalAlign = inherited.verticalAlign
-		}
-		if (!finalCss.visibility && inherited.visibility) {
-			finalCss.visibility = inherited.visibility
+		for (const prop of INHERITABLE_PROPERTIES) {
+			if (!finalCss[prop] && inherited[prop]) {
+				finalCss[prop] = inherited[prop]
+			}
 		}
 	}
 
 	return Object.entries(finalCss)
 		.filter(([_, value]) => value !== undefined && value !== '')
-		.map(([property, value]) => `${toKebabCase(property)}: ${value}`)
+		.map(([property, value]) => `${toKebabCase(property)}: ${escapeQuotesForStyleAttr(value)}`)
 		.join('; ')
 }
 
@@ -170,8 +173,32 @@ export function presentationTable(
 
 	const tableAttrStr = htmlAttrs(baseTableAttrs)
 	const tdAttrStr = Object.keys(tdAttrs).length > 0 ? ` ${htmlAttrs(tdAttrs)}` : ''
+	
+	// When table has height, propagate to <tr> for proper height chain
+	const trStyle = tableAttrs.height ? ` style="height: ${tableAttrs.height}"` : ''
 
-	return `<table ${tableAttrStr}><tr><td${tdAttrStr}>${content}</td></tr></table>`
+	return `<table ${tableAttrStr}><tr${trStyle}><td${tdAttrStr}>${content}</td></tr></table>`
+}
+
+// ============================================================================
+// Gap Spacer Tables
+// ============================================================================
+
+/**
+ * Create a gap spacer table for vertical spacing.
+ * Used when implementing gap between children as content (not table rows).
+ * 
+ * @param gap - Gap size (e.g., "16px", "1rem")
+ * @returns HTML table with fixed height for spacing
+ * 
+ * @example
+ * ```ts
+ * gapSpacerTable('16px')
+ * // → '<table role="presentation" width="100%" ...><tr><td style="height: 16px; ...">...</td></tr></table>'
+ * ```
+ */
+export function gapSpacerTable(gap: string): string {
+	return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height: ${gap}; line-height: ${gap}; font-size: 0;">&nbsp;</td></tr></table>`
 }
 
 // ============================================================================
@@ -236,16 +263,16 @@ export function wrapWithMargin(
 // ============================================================================
 
 /**
- * Merge inherited styles with node's parsed attributes.
+ * Compute inherited styles for child nodes from parsed attributes.
  * Explicit attributes override inherited values.
  * 
- * @param inherited - Current inherited styles
- * @param parsed - Parsed attributes from the node
- * @returns Merged inherited styles for child nodes
+ * @param parsed - Parsed attributes from current node
+ * @param inherited - Current inherited styles from parent
+ * @returns InheritedStyles to pass to children
  */
-export function mergeWithInherited(
-	inherited: InheritedStyles,
-	parsed: ParsedAttrs
+export function extractInheritable(
+	parsed: ParsedAttrs,
+	inherited: InheritedStyles
 ): InheritedStyles {
 	// Compute new color value (explicit or inherited)
 	const newColor = parsed.css.color || inherited.color
@@ -262,6 +289,8 @@ export function mergeWithInherited(
 
 		// Font properties
 		fontFamily: parsed.css.fontFamily || inherited.fontFamily,
+		baseFontFamily: inherited.baseFontFamily, // Always pass through (not settable via attrs)
+		monoFontFamily: inherited.monoFontFamily, // Always pass through (not settable via attrs)
 		fontSize: parsed.css.fontSize || inherited.fontSize,
 		fontWeight: parsed.css.fontWeight || inherited.fontWeight,
 		fontStyle: parsed.css.fontStyle || inherited.fontStyle,
@@ -302,41 +331,6 @@ export function mergeWithInherited(
 	}
 }
 
-/**
- * Extract inheritable values from parsed attributes.
- * Creates the InheritedStyles object to pass to child nodes.
- * 
- * This is essentially the same as mergeWithInherited but named
- * for clarity at call sites where we're preparing styles for children.
- * 
- * @param parsed - Parsed attributes from current node
- * @param inherited - Current inherited styles
- * @returns InheritedStyles to pass to children
- */
-export function extractInheritable(
-	parsed: ParsedAttrs,
-	inherited: InheritedStyles
-): InheritedStyles {
-	return mergeWithInherited(inherited, parsed)
-}
-
-// ============================================================================
-// Default Inherited Styles
-// ============================================================================
-
-/**
- * Create default inherited styles for the root node.
- * 
- * @param backgroundColor - Optional initial background color (default: #ffffff)
- * @returns Default InheritedStyles object
- */
-export function createDefaultInherited(backgroundColor = '#ffffff'): InheritedStyles {
-	return {
-		backgroundColor,
-		opacity: 1
-	}
-}
-
 // ============================================================================
 // Responsive Wrappers
 // ============================================================================
@@ -362,7 +356,7 @@ export function createDefaultInherited(backgroundColor = '#ffffff'): InheritedSt
  * // → '<div class="desktop-only">...</div>'
  * ```
  */
-export function wrapWithResponsive(
+function wrapWithResponsive(
 	html: string,
 	responsive: 'mobile-only' | 'desktop-only'
 ): string {
@@ -373,4 +367,40 @@ export function wrapWithResponsive(
 		// Shown by default, hidden by media query
 		return `<div class="desktop-only">${html}</div>`
 	}
+}
+
+/**
+ * Apply standard post-processing wrappings to rendered HTML.
+ * Combines margin emulation and responsive wrapping in a consistent order.
+ * 
+ * Order of wrapping (inside → outside):
+ * 1. Base HTML
+ * 2. Margin wrapper (if margin exists)
+ * 3. Responsive wrapper (if responsive mode specified)
+ * 
+ * @param html - The base rendered HTML
+ * @param parsed - Parsed attributes containing margin and responsive info
+ * @returns Wrapped HTML with all applicable layers
+ * 
+ * @example
+ * ```ts
+ * applyWrappers('<p>Content</p>', { margin: { top: '16px' }, responsive: 'mobile-only' })
+ * // → wrapped with margin table, then responsive div
+ * 
+ * applyWrappers('<p>Content</p>', { margin: undefined, responsive: undefined })
+ * // → '<p>Content</p>' (no wrapping)
+ * ```
+ */
+export function applyWrappers(
+	html: string,
+	parsed: Pick<ParsedAttrs, 'margin' | 'responsive'>
+): string {
+	let result = html
+	if (parsed.margin) {
+		result = wrapWithMargin(result, parsed.margin)
+	}
+	if (parsed.responsive) {
+		result = wrapWithResponsive(result, parsed.responsive)
+	}
+	return result
 }

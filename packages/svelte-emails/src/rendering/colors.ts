@@ -49,6 +49,11 @@ export function blendColor(foreground: string, background: string, opacity: numb
  * Parse a hex color to RGB components.
  * Supports #RGB, #RRGGBB, #RRGGBBAA formats.
  * 
+ * TODO(QUESTION): No input validation - what happens with invalid hex?
+ * Currently returns NaN for invalid input. Should we validate and throw,
+ * return a default color, or document this as undefined behavior?
+ * The isValidHex() function exists but isn't used here.
+ * 
  * @param hex - Hex color string (with or without #)
  * @returns RGB components (0-255 each)
  * 
@@ -58,7 +63,7 @@ export function blendColor(foreground: string, background: string, opacity: numb
  * parseHex('#ff0000') // → { r: 255, g: 0, b: 0 }
  * ```
  */
-export function parseHex(hex: string): RGB {
+function parseHex(hex: string): RGB {
 	hex = hex.replace('#', '')
 
 	// Expand shorthand (#RGB → #RRGGBB)
@@ -86,7 +91,7 @@ export function parseHex(hex: string): RGB {
  * rgbToHex(255, 128, 0) // → '#ff8000'
  * ```
  */
-export function rgbToHex(r: number, g: number, b: number): string {
+function rgbToHex(r: number, g: number, b: number): string {
 	return '#' + [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('')
 }
 
@@ -118,54 +123,4 @@ export function parseColorWithOpacity(color: string, opacityPart?: string): Colo
 		: parseInt(opacityPart) / 100
 
 	return { color, opacity }
-}
-
-// ============================================================================
-// Color Validation
-// ============================================================================
-
-/**
- * Check if a string is a valid hex color.
- * 
- * @param str - String to validate
- * @returns True if valid hex color
- * 
- * @example
- * ```ts
- * isValidHex('#fff')      // → true
- * isValidHex('#ff0000')   // → true
- * isValidHex('#ff0000aa') // → true (with alpha)
- * isValidHex('red')       // → false
- * ```
- */
-export function isValidHex(str: string): boolean {
-	return /^#[0-9a-fA-F]{3,8}$/.test(str)
-}
-
-/**
- * Normalize a hex color to 6-digit lowercase format.
- * 
- * @param hex - Hex color string
- * @returns Normalized 6-digit hex (e.g., '#ff0000')
- * 
- * @example
- * ```ts
- * normalizeHex('#FFF')    // → '#ffffff'
- * normalizeHex('#FF0000') // → '#ff0000'
- * ```
- */
-export function normalizeHex(hex: string): string {
-	hex = hex.replace('#', '').toLowerCase()
-
-	// Expand shorthand
-	if (hex.length === 3) {
-		hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2]
-	}
-
-	// Strip alpha if present
-	if (hex.length === 8) {
-		hex = hex.slice(0, 6)
-	}
-
-	return '#' + hex
 }

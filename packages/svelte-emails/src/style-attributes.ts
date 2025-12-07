@@ -4,6 +4,21 @@
  * This module defines Tailwind-like style attributes that are compatible with
  * email clients. Each category is documented with support levels.
  * 
+ * ## Attribute Syntax Options
+ * 
+ * All bracket-style attributes support two syntax options:
+ * 
+ * 1. **Boolean syntax** (Tailwind-like): `<Div bg-[#ffffff] />`
+ * 2. **Value syntax** (for variables): `<Div bg="#ffffff" />` or `<Div bg={myColor} />`
+ * 
+ * The value syntax enables using Svelte variables:
+ * ```svelte
+ * <script>
+ *   let brandColor = '#ff6600'
+ * </script>
+ * <Div bg={brandColor}>Dynamic background!</Div>
+ * ```
+ * 
  * Support Legend:
  * - ✅ Safe (~95-100%) - Works in virtually all email clients
  * - ⚠️ Partial (~70-85%) - Works in most clients, but Outlook may ignore
@@ -13,7 +28,11 @@
  * @see CSS_UTILITIES_REFERENCE.md for utility-specific support matrices
  */
 
-export type Attributes<T extends string> = { [K in T]?: true }
+/** Boolean attributes: `{ 'attr-name': true }` - These are optional and accept true or boolean */
+export type Attributes<T extends string> = { [K in T]?: boolean }
+
+/** Value attributes: `{ 'attr': 'value' }` for use with Svelte variables */
+export type ValueAttributes<T extends string> = { [K in T]?: string | number }
 
 /** Numeric scales for spacing, sizing, etc. */
 type Scales<T extends string> = 
@@ -28,6 +47,147 @@ type Scales<T extends string> =
 
 
 // ============================================================================
+// VALUE ATTRIBUTE TYPES (for Svelte variable support)
+// ============================================================================
+
+/**
+ * Value-based sizing attributes.
+ * Use these with Svelte variables: `<Div w={myWidth} />`
+ */
+export type SizingValueAttributes = ValueAttributes<
+	| 'w' | 'h' | 'min-w' | 'max-w' | 'min-h'
+>
+
+/**
+ * Value-based spacing attributes.
+ * Use these with Svelte variables: `<Div p={myPadding} m={myMargin} />`
+ */
+export type SpacingValueAttributes = ValueAttributes<
+	| 'p' | 'pt' | 'pr' | 'pb' | 'pl' | 'px' | 'py'
+	| 'm' | 'mt' | 'mr' | 'mb' | 'ml' | 'mx' | 'my'
+>
+
+/**
+ * Value-based color attributes.
+ * Use these with Svelte variables: `<Div bg={myColor} text={textColor} />`
+ */
+export type ColorValueAttributes = ValueAttributes<
+	| 'text' | 'bg'
+	| 'text-opacity' | 'bg-opacity' | 'border-opacity'
+>
+
+/**
+ * Value-based typography attributes.
+ * Use these with Svelte variables: `<Text leading={myLineHeight} />`
+ */
+export type TypographyValueAttributes = ValueAttributes<
+	| 'leading' | 'tracking'
+>
+
+/**
+ * Value-based border attributes (excluding properties that have dual-purpose types).
+ * Note: rounded and border properties are handled in dual-purpose types below.
+ */
+export type BorderValueAttributes = ValueAttributes<never>
+
+/**
+ * Dual-purpose border attributes.
+ * These can be either boolean (enable border) or string (set border color/width).
+ * - Boolean: `<Div border>` - enables default border
+ * - String: `<Div border={colors.border}>` - sets border color
+ * 
+ * **Directional border behavior:**
+ * When using directional colors (e.g., `border-l={color}`), the uniform width
+ * from `border-N` is applied **only to sides with colors set**. This allows
+ * creating partial borders without specifying width on each side.
+ * 
+ * @example
+ * ```svelte
+ * <Div border-l={color} border-4 />       <!-- Left border only -->
+ * <Div border-x={color} border-2 />       <!-- Left + right borders -->
+ * <Div border-t="#ccc" border-b="#ccc" border-1 />  <!-- Top + bottom -->
+ * ```
+ */
+export type BorderDualAttributes = {
+	border?: boolean | string
+	'border-t'?: boolean | string
+	'border-r'?: boolean | string
+	'border-b'?: boolean | string
+	'border-l'?: boolean | string
+	'border-x'?: boolean | string
+	'border-y'?: boolean | string
+}
+
+/**
+ * Dual-purpose rounded attributes.
+ * These can be either boolean (enable rounding) or string/number (set radius).
+ * - Boolean: `<Div rounded>` - enables default border radius
+ * - String: `<Div rounded={radius}>` - sets custom radius
+ */
+export type RoundedDualAttributes = {
+	rounded?: boolean | string | number
+	'rounded-t'?: boolean | string | number
+	'rounded-r'?: boolean | string | number
+	'rounded-b'?: boolean | string | number
+	'rounded-l'?: boolean | string | number
+	'rounded-tl'?: boolean | string | number
+	'rounded-tr'?: boolean | string | number
+	'rounded-br'?: boolean | string | number
+	'rounded-bl'?: boolean | string | number
+}
+
+/**
+ * Value-based layout attributes.
+ * Use these with Svelte variables: `<Div gap={myGap} />`
+ * Note: cols and rows are handled separately as they accept both boolean and string values.
+ */
+export type LayoutValueAttributes = ValueAttributes<
+	| 'gap' | 'span' | 'row-span' | 'cell-padding'
+>
+
+/**
+ * Dual-purpose cols/rows attributes.
+ * These can be either boolean (enable layout) or string (set template).
+ * - Boolean: `<Div cols>` - enables column layout with auto-sizing
+ * - String: `<Div cols="25% 75%">` - sets column widths
+ */
+export type ColsRowsAttributes = {
+	cols?: boolean | string
+	rows?: boolean | string
+}
+
+/**
+ * Value-based effect attributes.
+ * Use these with Svelte variables: `<Div opacity={myOpacity} />`
+ */
+export type EffectValueAttributes = ValueAttributes<
+	| 'opacity'
+>
+
+/**
+ * Value-based email-specific attributes.
+ * Use these with Svelte variables: `<Email body-bg={myBg} mobile-threshold={breakpoint} />`
+ */
+export type EmailValueAttributes = ValueAttributes<
+	| 'body-bg'
+	| 'mobile-threshold'
+>
+
+/**
+ * All value-based attributes combined.
+ * These attributes accept string/number values for use with Svelte variables.
+ */
+export type AllValueAttributes = 
+	& SizingValueAttributes
+	& SpacingValueAttributes
+	& ColorValueAttributes
+	& TypographyValueAttributes
+	& BorderValueAttributes
+	& LayoutValueAttributes
+	& EffectValueAttributes
+
+
+// ============================================================================
 // SIZING ATTRIBUTES
 // ============================================================================
 
@@ -39,6 +199,8 @@ type Scales<T extends string> =
  * 
  * **Note:** `w-screen` is supported as an alias for `w-full` (100%).
  * Actual viewport units (`100vw`) are not supported in email.
+ * 
+ * **Value syntax:** `<Div w="500px" />` or `<Div w={myWidth} />`
  */
 export type SafeWidthAttributes = Attributes<
 	| Scales<'w'> 
@@ -375,12 +537,26 @@ export type JustifyAttributes = Attributes<
  * Content placement in containers is handled by `AlignmentAttributes` (`align-*`).
  * 
  * Use web-safe font stacks with fallbacks for font-family.
+ * 
+ * **Font Family Switching:**
+ * - `font-mono` — Switches to monospace font stack (configured in StyleConfig.root.monoFontFamily)
+ * - `font-base` — Resets to base font stack (configured in StyleConfig.root.fontFamily)
+ * 
+ * These are useful for code snippets or reverting to the default font:
+ * ```svelte
+ * <Div font-mono>
+ *   <Text content="Monospace text" />
+ *   <Text content="Back to normal" font-base />
+ * </Div>
+ * ```
  */
 export type TypographyAttributes = Attributes<
 	// Font size
 	| 'text-xs' | 'text-sm' | 'text-base' | 'text-lg' | 'text-xl' | 'text-2xl' 
 	| 'text-3xl' | 'text-4xl' | 'text-5xl' | 'text-6xl' | 'text-7xl' | 'text-8xl' | 'text-9xl'
 	| `text-[${string}]`
+	// Font family switching
+	| 'font-mono' | 'font-base'
 	// Font weight
 	| 'font-thin' | 'font-extralight' | 'font-light' | 'font-normal' | 'font-medium' 
 	| 'font-semibold' | 'font-bold' | 'font-extrabold' | 'font-black'
@@ -418,16 +594,19 @@ type BorderWidthScale = '0' | '1' | '2' | '4' | '8'
  * 
  * Border colors support the `/opacity` modifier syntax (see ColorAttributes).
  * Example: `border-[#000000]/20` → renders as blended solid color
+ * 
+ * Note: Plain `border`, `border-t`, etc. are handled in BorderDualAttributes
+ * to support both boolean and value syntax.
  */
 export type SafeBorderAttributes = Attributes<
-	// Border width
-	| 'border' | `border-${BorderWidthScale}` | `border-[${string}]`
-	| `border-t` | `border-t-${BorderWidthScale}` | `border-t-[${string}]`
-	| `border-r` | `border-r-${BorderWidthScale}` | `border-r-[${string}]`
-	| `border-b` | `border-b-${BorderWidthScale}` | `border-b-[${string}]`
-	| `border-l` | `border-l-${BorderWidthScale}` | `border-l-[${string}]`
-	| `border-x` | `border-x-${BorderWidthScale}` | `border-x-[${string}]`
-	| `border-y` | `border-y-${BorderWidthScale}` | `border-y-[${string}]`
+	// Border width (scaled and arbitrary - plain versions are in BorderDualAttributes)
+	| `border-${BorderWidthScale}` | `border-[${string}]`
+	| `border-t-${BorderWidthScale}` | `border-t-[${string}]`
+	| `border-r-${BorderWidthScale}` | `border-r-[${string}]`
+	| `border-b-${BorderWidthScale}` | `border-b-[${string}]`
+	| `border-l-${BorderWidthScale}` | `border-l-[${string}]`
+	| `border-x-${BorderWidthScale}` | `border-x-[${string}]`
+	| `border-y-${BorderWidthScale}` | `border-y-[${string}]`
 	// Border color (with optional opacity modifier)
 	| `border-[#${string}]` | `border-[#${string}]/${string}`
 	| 'border-transparent' | 'border-inherit' | 'border-current'
@@ -448,12 +627,22 @@ export type SafeBorderAttributes = Attributes<
  * For rounded buttons in Outlook, use VML (Vector Markup Language) fallbacks.
  * Design should look acceptable with square corners as fallback.
  */
+type BorderRadiusSizes = 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full'
 export type BorderRadiusAttributes = Attributes<
-	| Scales<'rounded'> | 'rounded' | 'rounded-full' | 'rounded-none'
+	// All corners
+	| Scales<'rounded'> | 'rounded-full' | 'rounded-none'
 	| 'rounded-sm' | 'rounded-md' | 'rounded-lg' | 'rounded-xl' | 'rounded-2xl' | 'rounded-3xl'
 	| `rounded-[${string}]`
-	| `rounded-t-${string}` | `rounded-r-${string}` | `rounded-b-${string}` | `rounded-l-${string}`
-	| `rounded-tl-${string}` | `rounded-tr-${string}` | `rounded-br-${string}` | `rounded-bl-${string}`
+	// Per-side (top, right, bottom, left)
+	| `rounded-t-${BorderRadiusSizes}` | `rounded-t-[${string}]`
+	| `rounded-r-${BorderRadiusSizes}` | `rounded-r-[${string}]`
+	| `rounded-b-${BorderRadiusSizes}` | `rounded-b-[${string}]`
+	| `rounded-l-${BorderRadiusSizes}` | `rounded-l-[${string}]`
+	// Per-corner (tl, tr, br, bl)
+	| `rounded-tl-${BorderRadiusSizes}` | `rounded-tl-[${string}]`
+	| `rounded-tr-${BorderRadiusSizes}` | `rounded-tr-[${string}]`
+	| `rounded-br-${BorderRadiusSizes}` | `rounded-br-[${string}]`
+	| `rounded-bl-${BorderRadiusSizes}` | `rounded-bl-[${string}]`
 >
 
 /**
@@ -480,20 +669,9 @@ export type SafeLayoutAttributes = Attributes<
 >
 
 /**
- * ⚠️ Float/Clear Utilities (~90% support)
- * 
- * Float-based layouts work but tables are strongly preferred for email.
- * Only use floats for simple inline elements, not for major layout structure.
- */
-export type FloatAttributes = Attributes<
-	| 'float-left' | 'float-right' | 'float-none'
-	| 'clear-left' | 'clear-right' | 'clear-both' | 'clear-none'
->
-
-/**
  * All layout attributes
  */
-export type LayoutAttributes = SafeLayoutAttributes & FloatAttributes
+export type LayoutAttributes = SafeLayoutAttributes
 
 
 // ============================================================================
@@ -756,10 +934,14 @@ export type ExtendedSizingAttributes =
  * - `max-w-[value]` — Override the default 600px content width
  * - `max-w-xl`, `max-w-2xl`, etc. — Use preset widths
  * 
+ * Responsive breakpoint can be customized:
+ * - `mobile-threshold-[480px]` — Default breakpoint for responsive styles
+ * - Lower values = tighter (stacks later), higher = looser (stacks earlier)
+ * 
  * **Example:**
  * ```svelte
- * <Email body-bg-[#f5f5f5] bg-[#ffffff] max-w-[700px]>
- *   <!-- Light gray body, white content area, 700px wide -->
+ * <Email body-bg-[#f5f5f5] bg-[#ffffff] max-w-[700px] mobile-threshold-[425px]>
+ *   <!-- Light gray body, white content area, 700px wide, stacks at 425px -->
  * </Email>
  * ```
  * 
@@ -768,6 +950,15 @@ export type ExtendedSizingAttributes =
  */
 export type BodyBackgroundAttributes = Attributes<
 	| `body-bg-[${string}]`
+>
+
+/**
+ * Mobile breakpoint attribute for responsive styles.
+ * Controls when `responsive` columns stack and when `mobile-only`/`desktop-only` toggle.
+ * Default: 480px
+ */
+export type MobileThresholdAttributes = Attributes<
+	| `mobile-threshold-[${string}]`
 >
 
 /**
@@ -787,16 +978,24 @@ export type EmailMaxWidthAttributes = Attributes<
  * - `body-bg-[#hex]` — Body/wrapper background color (solid only, no opacity)
  * - `bg-[#hex]` — Content container background (supports opacity modifiers)
  * - `max-w-*` — Content container max width (default: 600px)
+ * - `mobile-threshold-[px]` — Responsive breakpoint (default: 480px)
  * - Standard styling attributes (padding, colors, typography, etc.)
  */
 export type EmailAttributes =
 	& BodyBackgroundAttributes
+	& MobileThresholdAttributes
 	& EmailMaxWidthAttributes
 	& CoreStyleAttributes
 	& SpacingAttributes
 	& ColorAttributes
 	& TypographyAttributes
 	& AlignmentAttributes
+	& SafeBorderAttributes
+	& BorderRadiusAttributes
+	& EffectsAttributes
+	& EmailValueAttributes  // Value syntax support (body-bg, mobile-threshold)
+	& ColorValueAttributes  // Value syntax support (bg, text)
+	& RoundedDualAttributes  // rounded properties can be boolean or string
 
 // ============================================================================
 // COMPONENT-SPECIFIC ATTRIBUTE TYPES
@@ -838,6 +1037,15 @@ export type EmailAttributes =
  *   <Div w-[50%]>Column 2</Div>
  * </Div>
  * ```
+ * 
+ * **Value syntax:** All bracket attributes support value syntax for Svelte variables:
+ * ```svelte
+ * <script>
+ *   let bgColor = '#f0f0f0'
+ *   let padding = '1rem'
+ * </script>
+ * <Div bg={bgColor} p={padding}>Dynamic styling!</Div>
+ * ```
  */
 export type DivAttributes = 
 	& CoreStyleAttributes 
@@ -853,8 +1061,11 @@ export type DivAttributes =
 	& SpanAttributes
 	& ColumnTemplateAttributes
 	& GapAttributes
+	& AllValueAttributes  // Value syntax support
+	& ColsRowsAttributes  // cols/rows can be boolean or string
+	& BorderDualAttributes  // border properties can be boolean or string
+	& RoundedDualAttributes  // rounded properties can be boolean or string
 	& Attributes<
-		| 'cols' | 'rows'
 		| 'responsive'  // Collapse columns to single-column on mobile (only with cols)
 	>
 
@@ -863,12 +1074,25 @@ export type DivAttributes =
  * 
  * All typography properties are well-supported in email.
  * Use `justify-*` for text alignment within the text block.
+ * Use `align-*` for positioning when used inside Table.Row or Div cols/rows.
+ * Use `span-*` to span multiple columns in table layouts.
+ * 
+ * **Value syntax:** Supports value syntax for Svelte variables:
+ * ```svelte
+ * <script>
+ *   let textColor = '#333333'
+ * </script>
+ * <Text text={textColor} content='Dynamic color!' />
+ * ```
  */
 export type TextAttributes = 
 	& CoreStyleAttributes 
 	& SpacingAttributes 
 	& TypographyAttributes
 	& JustifyAttributes
+	& AlignmentAttributes
+	& SpanAttributes
+	& AllValueAttributes  // Value syntax support
 
 /**
  * Table component attributes.
@@ -907,12 +1131,17 @@ export type TableAttributes =
 	& SafeBorderAttributes
 	& BorderRadiusAttributes
 	& AlignmentAttributes
+	& TypographyAttributes
 	& EffectsAttributes
 	& ColumnTemplateAttributes
+	& GapAttributes
+	& AllValueAttributes  // Value syntax support
+	& ColsRowsAttributes  // cols can specify column widths
+	& BorderDualAttributes  // border properties can be boolean or string (includes 'border' for "show all borders")
+	& RoundedDualAttributes  // rounded properties can be boolean or string
 	& Attributes<
 		// Table-specific display options
 		| 'striped'       // Alternating row backgrounds
-		| 'border'        // Show all borders (table + cells)
 		| 'border-outer'  // Only outer border on table (no cell borders)
 		| 'cell-border'   // Show cell borders only
 		| 'compact'       // Reduced cell padding
@@ -961,6 +1190,8 @@ export type TableRowAttributes =
 	& JustifyAttributes
 	& EffectsAttributes
 	& ColorAttributes
+	& AllValueAttributes  // Value syntax support
+	& BorderDualAttributes  // border properties can be boolean or string
 	& Attributes<
 		| 'header'  // Marks this row as a header row (renders as <th> cells)
 	>
@@ -982,9 +1213,14 @@ export type ImgAttributes =
 	& CoreStyleAttributes 
 	& LimitedWidthAttributes
 	& LimitedHeightAttributes
-	& PaddingAttributes 
+	& SpacingAttributes 
 	& SafeBorderAttributes 
 	& BorderRadiusAttributes
+	& SizingValueAttributes  // Value syntax for w, h
+	& SpacingValueAttributes  // Value syntax for p, m
+	& BorderValueAttributes  // (currently empty, kept for future)
+	& BorderDualAttributes  // border properties can be boolean or string
+	& RoundedDualAttributes  // rounded properties can be boolean or string
 
 /**
  * Button component attributes.
@@ -999,6 +1235,9 @@ export type ButtonAttributes =
 	& BorderRadiusAttributes 
 	& TypographyAttributes
 	& JustifyAttributes
+	& AllValueAttributes  // Value syntax support
+	& BorderDualAttributes  // border properties can be boolean or string
+	& RoundedDualAttributes  // rounded properties can be boolean or string
 
 /**
  * Link component attributes.
@@ -1015,4 +1254,9 @@ export type ButtonAttributes =
  */
 export type LinkAttributes = 
 	& CoreStyleAttributes
+	& PaddingAttributes
 	& TypographyAttributes
+	& EffectsAttributes
+	& ColorValueAttributes  // Value syntax for text, bg
+	& SpacingValueAttributes  // Value syntax for p
+	& EffectValueAttributes  // Value syntax for opacity

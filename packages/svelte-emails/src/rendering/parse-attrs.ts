@@ -25,8 +25,99 @@ import {
 import { blendColor, parseColorWithOpacity } from './colors'
 
 // ============================================================================
+// Regex Patterns
+// ============================================================================
+// Pre-compiled regex patterns for performance and maintainability.
+// Grouped by parser function.
+
+// Unit conversion
+const REM_VALUE_RE = /^([\d.]+)rem$/
+
+// Padding patterns
+const PADDING_ARBITRARY_RE = /^p-\[([^\]]+)\]$/
+const PADDING_SCALE_RE = /^p-(\d+(?:\.\d+)?)$/
+const PADDING_X_RE = /^px-(?:\[([^\]]+)\]|(\d+(?:\.\d+)?))$/
+const PADDING_Y_RE = /^py-(?:\[([^\]]+)\]|(\d+(?:\.\d+)?))$/
+const PADDING_SIDE_RE = /^p([trbl])-(?:\[([^\]]+)\]|(\d+(?:\.\d+)?))$/
+
+// Margin patterns
+const MARGIN_ARBITRARY_RE = /^m-\[([^\]]+)\]$/
+const MARGIN_SCALE_RE = /^m-(\d+(?:\.\d+)?)$/
+const MARGIN_X_RE = /^mx-(?:\[([^\]]+)\]|(\d+(?:\.\d+)?))$/
+const MARGIN_Y_RE = /^my-(?:\[([^\]]+)\]|(\d+(?:\.\d+)?))$/
+const MARGIN_SIDE_RE = /^m([trbl])-(auto|\[([^\]]+)\]|(\d+(?:\.\d+)?))$/
+
+// Width patterns
+const WIDTH_ARBITRARY_RE = /^w-\[([^\]]+)\]$/
+const WIDTH_SCALE_RE = /^w-(\d+(?:\.\d+)?)$/
+
+// Height patterns
+const HEIGHT_ARBITRARY_RE = /^h-\[([^\]]+)\]$/
+const HEIGHT_SCALE_RE = /^h-(\d+(?:\.\d+)?)$/
+
+// Min/max width patterns
+const MIN_WIDTH_ARBITRARY_RE = /^min-w-\[([^\]]+)\]$/
+const MIN_WIDTH_SCALE_RE = /^min-w-(\d+(?:\.\d+)?)$/
+const MAX_WIDTH_ARBITRARY_RE = /^max-w-\[([^\]]+)\]$/
+const MAX_WIDTH_PRESET_RE = /^max-w-(\d?xl|xs|sm|md|lg)$/
+const MAX_WIDTH_SCALE_RE = /^max-w-(\d+(?:\.\d+)?)$/
+
+// Min height patterns
+const MIN_HEIGHT_ARBITRARY_RE = /^min-h-\[([^\]]+)\]$/
+const MIN_HEIGHT_SCALE_RE = /^min-h-(\d+(?:\.\d+)?)$/
+
+// Color patterns
+const TEXT_COLOR_RE = /^text-\[(#[0-9a-fA-F]{3,8})\](?:\/(\d+|\[[\d.]+\]))?$/
+const BG_COLOR_RE = /^bg-\[(#[0-9a-fA-F]{3,8})\](?:\/(\d+|\[[\d.]+\]))?$/
+
+// Typography patterns
+const TEXT_SIZE_PRESET_RE = /^text-(xs|sm|base|lg|xl|\d+xl)$/
+const TEXT_SIZE_ARBITRARY_RE = /^text-\[([^#][^\]]*)\]$/
+const FONT_WEIGHT_RE = /^font-(thin|extralight|light|normal|medium|semibold|bold|extrabold|black)$/
+const LINE_HEIGHT_PRESET_RE = /^leading-(none|tight|snug|normal|relaxed|loose)$/
+const LINE_HEIGHT_SCALE_RE = /^leading-(\d+(?:\.\d+)?)$/
+const LINE_HEIGHT_ARBITRARY_RE = /^leading-\[([^\]]+)\]$/
+const LETTER_SPACING_PRESET_RE = /^tracking-(tighter|tight|normal|wide|wider|widest)$/
+const LETTER_SPACING_ARBITRARY_RE = /^tracking-\[([^\]]+)\]$/
+const WHITESPACE_RE = /^whitespace-(normal|nowrap|pre|pre-line|pre-wrap)$/
+
+// Border patterns
+const BORDER_WIDTH_SCALE_RE = /^border-([0-8])$/
+const BORDER_WIDTH_ARBITRARY_RE = /^border-\[(\d+(?:px)?)\]$/
+const BORDER_SIDE_RE = /^border-([trbl])(?:-([0-8]|\[([^\]]+)\]))?$/
+const BORDER_AXIS_RE = /^border-([xy])(?:-([0-8]|\[([^\]]+)\]))?$/
+const BORDER_COLOR_RE = /^border-\[(#[0-9a-fA-F]{3,8})\](?:\/(\d+|\[[\d.]+\]))?$/
+const BORDER_STYLE_RE = /^border-(solid|dashed|dotted|double|hidden|none)$/
+const ROUNDED_PRESET_RE = /^rounded-(none|sm|md|lg|xl|2xl|3xl|full)$/
+const ROUNDED_ARBITRARY_RE = /^rounded-\[([^\]]+)\]$/
+const ROUNDED_SIDE_RE = /^rounded-([trbl])-(none|sm|md|lg|xl|2xl|3xl|full|\[([^\]]+)\])$/
+const ROUNDED_CORNER_RE = /^rounded-(tl|tr|br|bl)-(none|sm|md|lg|xl|2xl|3xl|full|\[([^\]]+)\])$/
+
+// Opacity patterns
+const TEXT_OPACITY_RE = /^text-opacity-(\d+|\[[\d.]+\])$/
+const BG_OPACITY_RE = /^bg-opacity-(\d+|\[[\d.]+\])$/
+const BORDER_OPACITY_RE = /^border-opacity-(\d+|\[[\d.]+\])$/
+const OPACITY_RE = /^opacity-(\d+|\[[\d.]+\])$/
+
+// Grid/cell patterns
+const COLS_TEMPLATE_RE = /^cols-\[([^\]]+)\]$/
+const ROWS_TEMPLATE_RE = /^rows-\[([^\]]+)\]$/
+const CELL_PADDING_ARBITRARY_RE = /^cell-padding-\[([^\]]+)\]$/
+const CELL_PADDING_SCALE_RE = /^cell-padding-(\d+)$/
+const GAP_ARBITRARY_RE = /^gap-\[([^\]]+)\]$/
+const GAP_SCALE_RE = /^gap-(\d+)$/
+const SPAN_RE = /^span-(\d+)$/
+const SPAN_ARBITRARY_RE = /^span-\[(\d+)\]$/
+const ROW_SPAN_RE = /^row-span-(\d+)$/
+const ROW_SPAN_ARBITRARY_RE = /^row-span-\[(\d+)\]$/
+
+// List style patterns
+const WIDTH_FRACTION_RE = /^w-(\d+(?:\/\d+)?)$/
+
+// ============================================================================
 // Unit Conversion
 // ============================================================================
+
 
 /**
  * Convert a CSS value with rem units to px.
@@ -47,7 +138,7 @@ import { blendColor, parseColorWithOpacity } from './colors'
  */
 export function remToPx(value: string, rootSize: number = DEFAULT_ROOT_SIZE): string {
 	// Match rem values (e.g., '1rem', '0.5rem', '1.25rem')
-	const match = value.match(/^([\d.]+)rem$/)
+	const match = value.match(REM_VALUE_RE)
 	if (match) {
 		const remValue = parseFloat(match[1])
 		const pxValue = remValue * rootSize
@@ -85,26 +176,91 @@ export function parseAttrs(
 ): ParsedAttrs {
 	const result: ParsedAttrs = { css: {} }
 
-	// Pre-parse color opacity modifiers first so they're available when parsing colors
+	// Pre-parse opacity modifiers first so they're available when parsing colors
+	// This includes both color-specific opacities (text-opacity, bg-opacity, border-opacity)
+	// and element-wide opacity (opacity-50), which compounds with all color opacities
 	for (const attr of attrs) {
 		parseColorOpacity(attr, result)
+		parseOpacity(attr, result)
 	}
 
-	// Parse all other attributes
+	// Calculate effective inherited opacity: parent opacity × this element's opacity
+	// This allows opacity-50 to affect all colors on this element, not just children
+	const effectiveInherited: InheritedStyles = {
+		...inherited,
+		opacity: inherited.opacity * (result.opacity ?? 1)
+	}
+
+	// Parse all other attributes using the effective inherited opacity
 	for (const attr of attrs) {
-		parseAttr(attr, result, inherited, rootSize)
+		parseAttr(attr, result, effectiveInherited, rootSize)
 	}
 
 	// Apply inherited border color with opacity if border-opacity-* was used 
-	// but no explicit border-[#color] was specified
+	// but no explicit border-[#color] was specified.
+	// ONLY apply to sides that don't already have a directional color set.
 	if (result.borderOpacity !== undefined && !result.css.borderColor) {
-		// Use inherited border color (which defaults to text color)
-		const inheritedBorderColor = inherited.borderColor ?? inherited.color ?? '#000000'
-		const finalOpacity = result.borderOpacity * inherited.opacity
-		if (finalOpacity < 1) {
-			result.css.borderColor = blendColor(inheritedBorderColor, inherited.backgroundColor, finalOpacity)
+		const sides = result.borderSidesWithColor
+		
+		// Only apply uniform borderColor if NO directional colors are set
+		// (If directional colors exist, they already have opacity applied)
+		if (!sides || sides.size === 0) {
+			// Use inherited border color (which defaults to text color)
+			const inheritedBorderColor = inherited.borderColor ?? inherited.color ?? '#000000'
+			const finalOpacity = result.borderOpacity * effectiveInherited.opacity
+			if (finalOpacity < 1) {
+				result.css.borderColor = blendColor(inheritedBorderColor, inherited.backgroundColor, finalOpacity)
+			} else {
+				result.css.borderColor = inheritedBorderColor
+			}
+		}
+	}
+
+	// Post-process uniform border width and style:
+	// If directional colors are set, apply width/style only to those sides.
+	// If no directional colors, apply to all sides (normal behavior).
+	const sides = result.borderSidesWithColor
+	
+	if (result.uniformBorderWidth) {
+		const width = result.uniformBorderWidth
+
+		if (sides && sides.size > 0) {
+			// Apply width only to sides that have directional colors
+			if (sides.has('top') && !result.css.borderTopWidth) {
+				result.css.borderTopWidth = width
+			}
+			if (sides.has('right') && !result.css.borderRightWidth) {
+				result.css.borderRightWidth = width
+			}
+			if (sides.has('bottom') && !result.css.borderBottomWidth) {
+				result.css.borderBottomWidth = width
+			}
+			if (sides.has('left') && !result.css.borderLeftWidth) {
+				result.css.borderLeftWidth = width
+			}
 		} else {
-			result.css.borderColor = inheritedBorderColor
+			// No directional colors - apply to all sides via shorthand
+			result.css.borderWidth = width
+		}
+	}
+
+	// If we have a uniform border style but directional colors, convert to directional styles
+	if (result.css.borderStyle && sides && sides.size > 0) {
+		const style = result.css.borderStyle
+		delete result.css.borderStyle // Remove uniform style
+		
+		// Apply style only to sides with colors
+		if (sides.has('top') && !result.css.borderTopStyle) {
+			result.css.borderTopStyle = style
+		}
+		if (sides.has('right') && !result.css.borderRightStyle) {
+			result.css.borderRightStyle = style
+		}
+		if (sides.has('bottom') && !result.css.borderBottomStyle) {
+			result.css.borderBottomStyle = style
+		}
+		if (sides.has('left') && !result.css.borderLeftStyle) {
+			result.css.borderLeftStyle = style
 		}
 	}
 
@@ -130,7 +286,7 @@ function parseAttr(
 	if (parseColor(attr, result, inherited)) return
 	if (parseAlignment(attr, result)) return
 	if (parseJustify(attr, result)) return
-	if (parseTypography(attr, result, rootSize)) return
+	if (parseTypography(attr, result, inherited, rootSize)) return
 	if (parseBorder(attr, result, inherited, rootSize)) return
 	if (parseDisplay(attr, result)) return
 	if (parseOpacity(attr, result)) return
@@ -154,16 +310,16 @@ function parseAttr(
  * - pb-{scale}   → padding-bottom
  * - pl-{scale}   → padding-left
  */
-export function parsePadding(attr: string, result: ParsedAttrs, rootSize: number): boolean {
+function parsePadding(attr: string, result: ParsedAttrs, rootSize: number): boolean {
 	// p-[value]
-	let match = attr.match(/^p-\[([^\]]+)\]$/)
+	let match = attr.match(PADDING_ARBITRARY_RE)
 	if (match) {
 		result.css.padding = remToPx(match[1], rootSize)
 		return true
 	}
 
 	// p-{scale}
-	match = attr.match(/^p-(\d+(?:\.\d+)?)$/)
+	match = attr.match(PADDING_SCALE_RE)
 	if (match) {
 		const value = SPACING_SCALE[match[1]]
 		if (value) result.css.padding = remToPx(value, rootSize)
@@ -171,7 +327,7 @@ export function parsePadding(attr: string, result: ParsedAttrs, rootSize: number
 	}
 
 	// px-[value] / px-{scale}
-	match = attr.match(/^px-(?:\[([^\]]+)\]|(\d+(?:\.\d+)?))$/)
+	match = attr.match(PADDING_X_RE)
 	if (match) {
 		const value = match[1] ? remToPx(match[1], rootSize) : remToPx(SPACING_SCALE[match[2]], rootSize)
 		if (value) {
@@ -182,7 +338,7 @@ export function parsePadding(attr: string, result: ParsedAttrs, rootSize: number
 	}
 
 	// py-[value] / py-{scale}
-	match = attr.match(/^py-(?:\[([^\]]+)\]|(\d+(?:\.\d+)?))$/)
+	match = attr.match(PADDING_Y_RE)
 	if (match) {
 		const value = match[1] ? remToPx(match[1], rootSize) : remToPx(SPACING_SCALE[match[2]], rootSize)
 		if (value) {
@@ -193,7 +349,7 @@ export function parsePadding(attr: string, result: ParsedAttrs, rootSize: number
 	}
 
 	// pt-*, pr-*, pb-*, pl-*
-	match = attr.match(/^p([trbl])-(?:\[([^\]]+)\]|(\d+(?:\.\d+)?))$/)
+	match = attr.match(PADDING_SIDE_RE)
 	if (match) {
 		const side = { t: 'Top', r: 'Right', b: 'Bottom', l: 'Left' }[match[1]]
 		const value = match[2] ? remToPx(match[2], rootSize) : remToPx(SPACING_SCALE[match[3]], rootSize)
@@ -217,7 +373,7 @@ export function parsePadding(attr: string, result: ParsedAttrs, rootSize: number
  * Note: Email clients don't reliably support margin.
  * We emulate margins using wrapper table padding.
  */
-export function parseMargin(attr: string, result: ParsedAttrs, rootSize: number): boolean {
+function parseMargin(attr: string, result: ParsedAttrs, rootSize: number): boolean {
 	const ensureMargin = () => {
 		if (!result.margin) result.margin = {}
 	}
@@ -233,7 +389,7 @@ export function parseMargin(attr: string, result: ParsedAttrs, rootSize: number)
 	}
 
 	// m-[value]
-	let match = attr.match(/^m-\[([^\]]+)\]$/)
+	let match = attr.match(MARGIN_ARBITRARY_RE)
 	if (match) {
 		ensureMargin()
 		const value = remToPx(match[1], rootSize)
@@ -245,7 +401,7 @@ export function parseMargin(attr: string, result: ParsedAttrs, rootSize: number)
 	}
 
 	// m-{scale}
-	match = attr.match(/^m-(\d+(?:\.\d+)?)$/)
+	match = attr.match(MARGIN_SCALE_RE)
 	if (match) {
 		const value = remToPx(SPACING_SCALE[match[1]], rootSize)
 		if (value) {
@@ -267,7 +423,7 @@ export function parseMargin(attr: string, result: ParsedAttrs, rootSize: number)
 	}
 
 	// mx-[value] / mx-{scale}
-	match = attr.match(/^mx-(?:\[([^\]]+)\]|(\d+(?:\.\d+)?))$/)
+	match = attr.match(MARGIN_X_RE)
 	if (match) {
 		const value = match[1] ? remToPx(match[1], rootSize) : remToPx(SPACING_SCALE[match[2]], rootSize)
 		if (value) {
@@ -287,7 +443,7 @@ export function parseMargin(attr: string, result: ParsedAttrs, rootSize: number)
 	}
 
 	// my-[value] / my-{scale}
-	match = attr.match(/^my-(?:\[([^\]]+)\]|(\d+(?:\.\d+)?))$/)
+	match = attr.match(MARGIN_Y_RE)
 	if (match) {
 		const value = match[1] ? remToPx(match[1], rootSize) : remToPx(SPACING_SCALE[match[2]], rootSize)
 		if (value) {
@@ -299,7 +455,7 @@ export function parseMargin(attr: string, result: ParsedAttrs, rootSize: number)
 	}
 
 	// mt-*, mr-*, mb-*, ml-* (including auto)
-	match = attr.match(/^m([trbl])-(auto|\[([^\]]+)\]|(\d+(?:\.\d+)?))$/)
+	match = attr.match(MARGIN_SIDE_RE)
 	if (match) {
 		const sideMap = { t: 'top', r: 'right', b: 'bottom', l: 'left' } as const
 		const side = sideMap[match[1] as keyof typeof sideMap]
@@ -328,7 +484,7 @@ export function parseMargin(attr: string, result: ParsedAttrs, rootSize: number)
 /**
  * Parse width attributes: w-*, w-full, w-screen, w-auto, w-[value]
  */
-export function parseWidth(attr: string, result: ParsedAttrs, rootSize: number): boolean {
+function parseWidth(attr: string, result: ParsedAttrs, rootSize: number): boolean {
 	if (attr === 'w-full' || attr === 'w-screen') {
 		result.css.width = '100%'
 		return true
@@ -340,14 +496,14 @@ export function parseWidth(attr: string, result: ParsedAttrs, rootSize: number):
 	}
 
 	// w-[value]
-	let match = attr.match(/^w-\[([^\]]+)\]$/)
+	let match = attr.match(WIDTH_ARBITRARY_RE)
 	if (match) {
 		result.css.width = remToPx(match[1], rootSize)
 		return true
 	}
 
 	// w-{scale}
-	match = attr.match(/^w-(\d+(?:\.\d+)?)$/)
+	match = attr.match(WIDTH_SCALE_RE)
 	if (match) {
 		const value = SPACING_SCALE[match[1]]
 		if (value) result.css.width = remToPx(value, rootSize)
@@ -364,7 +520,7 @@ export function parseWidth(attr: string, result: ParsedAttrs, rootSize: number):
 /**
  * Parse height attributes: h-*, h-full, h-screen, h-auto, h-[value]
  */
-export function parseHeight(attr: string, result: ParsedAttrs, rootSize: number): boolean {
+function parseHeight(attr: string, result: ParsedAttrs, rootSize: number): boolean {
 	if (attr === 'h-full' || attr === 'h-screen') {
 		result.css.height = '100%'
 		return true
@@ -376,14 +532,14 @@ export function parseHeight(attr: string, result: ParsedAttrs, rootSize: number)
 	}
 
 	// h-[value]
-	let match = attr.match(/^h-\[([^\]]+)\]$/)
+	let match = attr.match(HEIGHT_ARBITRARY_RE)
 	if (match) {
 		result.css.height = remToPx(match[1], rootSize)
 		return true
 	}
 
 	// h-{scale}
-	match = attr.match(/^h-(\d+(?:\.\d+)?)$/)
+	match = attr.match(HEIGHT_SCALE_RE)
 	if (match) {
 		const value = SPACING_SCALE[match[1]]
 		if (value) result.css.height = remToPx(value, rootSize)
@@ -401,7 +557,7 @@ export function parseHeight(attr: string, result: ParsedAttrs, rootSize: number)
  * Parse min/max width attributes.
  * Note: Outlook ignores min-width and max-width, but useful for modern clients.
  */
-export function parseMinMaxWidth(attr: string, result: ParsedAttrs, rootSize: number): boolean {
+function parseMinMaxWidth(attr: string, result: ParsedAttrs, rootSize: number): boolean {
 	// min-w-full
 	if (attr === 'min-w-full') {
 		result.css.minWidth = '100%'
@@ -409,14 +565,14 @@ export function parseMinMaxWidth(attr: string, result: ParsedAttrs, rootSize: nu
 	}
 
 	// min-w-[value]
-	let match = attr.match(/^min-w-\[([^\]]+)\]$/)
+	let match = attr.match(MIN_WIDTH_ARBITRARY_RE)
 	if (match) {
 		result.css.minWidth = remToPx(match[1], rootSize)
 		return true
 	}
 
 	// min-w-{scale}
-	match = attr.match(/^min-w-(\d+(?:\.\d+)?)$/)
+	match = attr.match(MIN_WIDTH_SCALE_RE)
 	if (match) {
 		const value = SPACING_SCALE[match[1]]
 		if (value) result.css.minWidth = remToPx(value, rootSize)
@@ -436,14 +592,14 @@ export function parseMinMaxWidth(attr: string, result: ParsedAttrs, rootSize: nu
 	}
 
 	// max-w-[value]
-	match = attr.match(/^max-w-\[([^\]]+)\]$/)
+	match = attr.match(MAX_WIDTH_ARBITRARY_RE)
 	if (match) {
 		result.css.maxWidth = remToPx(match[1], rootSize)
 		return true
 	}
 
 	// max-w-{preset} (xs, sm, md, lg, xl, 2xl, etc.)
-	match = attr.match(/^max-w-(\d?xl|xs|sm|md|lg)$/)
+	match = attr.match(MAX_WIDTH_PRESET_RE)
 	if (match) {
 		const value = MAX_WIDTHS[match[1]]
 		if (value) result.css.maxWidth = remToPx(value, rootSize)
@@ -451,7 +607,7 @@ export function parseMinMaxWidth(attr: string, result: ParsedAttrs, rootSize: nu
 	}
 
 	// max-w-{scale}
-	match = attr.match(/^max-w-(\d+(?:\.\d+)?)$/)
+	match = attr.match(MAX_WIDTH_SCALE_RE)
 	if (match) {
 		const value = SPACING_SCALE[match[1]]
 		if (value) result.css.maxWidth = remToPx(value, rootSize)
@@ -468,21 +624,21 @@ export function parseMinMaxWidth(attr: string, result: ParsedAttrs, rootSize: nu
 /**
  * Parse min height attributes.
  */
-export function parseMinHeight(attr: string, result: ParsedAttrs, rootSize: number): boolean {
+function parseMinHeight(attr: string, result: ParsedAttrs, rootSize: number): boolean {
 	if (attr === 'min-h-full' || attr === 'min-h-screen') {
 		result.css.minHeight = '100%'
 		return true
 	}
 
 	// min-h-[value]
-	let match = attr.match(/^min-h-\[([^\]]+)\]$/)
+	let match = attr.match(MIN_HEIGHT_ARBITRARY_RE)
 	if (match) {
 		result.css.minHeight = remToPx(match[1], rootSize)
 		return true
 	}
 
 	// min-h-{scale}
-	match = attr.match(/^min-h-(\d+(?:\.\d+)?)$/)
+	match = attr.match(MIN_HEIGHT_SCALE_RE)
 	if (match) {
 		const value = SPACING_SCALE[match[1]]
 		if (value) result.css.minHeight = remToPx(value, rootSize)
@@ -503,7 +659,7 @@ export function parseMinHeight(attr: string, result: ParsedAttrs, rootSize: numb
  * Opacity is emulated by blending against background color since
  * email clients don't reliably support rgba() or CSS opacity.
  */
-export function parseColor(
+function parseColor(
 	attr: string,
 	result: ParsedAttrs,
 	inherited: InheritedStyles
@@ -537,7 +693,7 @@ export function parseColor(
 	}
 
 	// text-[#hex] or text-[#hex]/opacity
-	let match = attr.match(/^text-\[(#[0-9a-fA-F]{3,8})\](?:\/(\d+|\[[\d.]+\]))?$/)
+	let match = attr.match(TEXT_COLOR_RE)
 	if (match) {
 		const { color, opacity } = parseColorWithOpacity(match[1], match[2])
 		// Apply text-opacity-* modifier if present, then inherited opacity
@@ -552,7 +708,7 @@ export function parseColor(
 	}
 
 	// bg-[#hex] or bg-[#hex]/opacity
-	match = attr.match(/^bg-\[(#[0-9a-fA-F]{3,8})\](?:\/(\d+|\[[\d.]+\]))?$/)
+	match = attr.match(BG_COLOR_RE)
 	if (match) {
 		const { color, opacity } = parseColorWithOpacity(match[1], match[2])
 		// Apply bg-opacity-* modifier if present, then inherited opacity
@@ -580,7 +736,7 @@ export function parseColor(
  * Parse alignment attributes: align-*
  * Combines text-align and vertical-align for table cell positioning.
  */
-export function parseAlignment(attr: string, result: ParsedAttrs): boolean {
+function parseAlignment(attr: string, result: ParsedAttrs): boolean {
 	const alignments: Record<string, { textAlign: string; verticalAlign: string }> = {
 		// Top row
 		'align-top-left': { textAlign: 'left', verticalAlign: 'top' },
@@ -616,7 +772,7 @@ export function parseAlignment(attr: string, result: ParsedAttrs): boolean {
 /**
  * Parse justify attributes: justify-*
  */
-export function parseJustify(attr: string, result: ParsedAttrs): boolean {
+function parseJustify(attr: string, result: ParsedAttrs): boolean {
 	const justifications: Record<string, string> = {
 		'justify-left': 'left',
 		'justify-center': 'center',
@@ -638,10 +794,33 @@ export function parseJustify(attr: string, result: ParsedAttrs): boolean {
 
 /**
  * Parse typography attributes: text-*, font-*, italic, underline, etc.
+ * 
+ * Includes font-mono and font-base for switching between font stacks:
+ * - font-mono: Uses monoFontFamily from inherited styles (set via StyleConfig.root.monoFontFamily)
+ * - font-base: Resets to baseFontFamily from inherited styles (set via StyleConfig.root.fontFamily)
  */
-export function parseTypography(attr: string, result: ParsedAttrs, rootSize: number): boolean {
+function parseTypography(
+	attr: string,
+	result: ParsedAttrs,
+	inherited: InheritedStyles,
+	rootSize: number
+): boolean {
+	// Font family: font-mono, font-base
+	if (attr === 'font-mono') {
+		if (inherited.monoFontFamily) {
+			result.css.fontFamily = inherited.monoFontFamily
+		}
+		return true
+	}
+	if (attr === 'font-base') {
+		if (inherited.baseFontFamily) {
+			result.css.fontFamily = inherited.baseFontFamily
+		}
+		return true
+	}
+
 	// Font size presets: text-xs, text-sm, etc.
-	let match = attr.match(/^text-(xs|sm|base|lg|xl|\d+xl)$/)
+	let match = attr.match(TEXT_SIZE_PRESET_RE)
 	if (match) {
 		const preset = FONT_SIZES[match[1]]
 		if (preset) {
@@ -653,14 +832,14 @@ export function parseTypography(attr: string, result: ParsedAttrs, rootSize: num
 
 	// Font size arbitrary: text-[value]
 	// Note: This can conflict with text-[#color], so we check it doesn't start with #
-	match = attr.match(/^text-\[([^#][^\]]*)\]$/)
+	match = attr.match(TEXT_SIZE_ARBITRARY_RE)
 	if (match) {
 		result.css.fontSize = remToPx(match[1], rootSize)
 		return true
 	}
 
 	// Font weight: font-*
-	match = attr.match(/^font-(thin|extralight|light|normal|medium|semibold|bold|extrabold|black)$/)
+	match = attr.match(FONT_WEIGHT_RE)
 	if (match) {
 		result.css.fontWeight = FONT_WEIGHTS[match[1]]
 		return true
@@ -713,14 +892,14 @@ export function parseTypography(attr: string, result: ParsedAttrs, rootSize: num
 	}
 
 	// Line height presets: leading-*
-	match = attr.match(/^leading-(none|tight|snug|normal|relaxed|loose)$/)
+	match = attr.match(LINE_HEIGHT_PRESET_RE)
 	if (match) {
 		result.css.lineHeight = LINE_HEIGHTS[match[1]]
 		return true
 	}
 
 	// Line height scale: leading-{scale}
-	match = attr.match(/^leading-(\d+(?:\.\d+)?)$/)
+	match = attr.match(LINE_HEIGHT_SCALE_RE)
 	if (match) {
 		const value = SPACING_SCALE[match[1]]
 		if (value) result.css.lineHeight = remToPx(value, rootSize)
@@ -728,28 +907,28 @@ export function parseTypography(attr: string, result: ParsedAttrs, rootSize: num
 	}
 
 	// Line height arbitrary: leading-[value]
-	match = attr.match(/^leading-\[([^\]]+)\]$/)
+	match = attr.match(LINE_HEIGHT_ARBITRARY_RE)
 	if (match) {
 		result.css.lineHeight = remToPx(match[1], rootSize)
 		return true
 	}
 
 	// Letter spacing presets: tracking-*
-	match = attr.match(/^tracking-(tighter|tight|normal|wide|wider|widest)$/)
+	match = attr.match(LETTER_SPACING_PRESET_RE)
 	if (match) {
 		result.css.letterSpacing = LETTER_SPACINGS[match[1]]
 		return true
 	}
 
 	// Letter spacing arbitrary: tracking-[value]
-	match = attr.match(/^tracking-\[([^\]]+)\]$/)
+	match = attr.match(LETTER_SPACING_ARBITRARY_RE)
 	if (match) {
 		result.css.letterSpacing = remToPx(match[1], rootSize)
 		return true
 	}
 
 	// Whitespace
-	match = attr.match(/^whitespace-(normal|nowrap|pre|pre-line|pre-wrap)$/)
+	match = attr.match(WHITESPACE_RE)
 	if (match) {
 		result.css.whiteSpace = match[1]
 		return true
@@ -764,72 +943,140 @@ export function parseTypography(attr: string, result: ParsedAttrs, rootSize: num
 
 /**
  * Parse border attributes: border-*, rounded-*
+ * 
+ * Border width/color interaction:
+ * - `border-N` sets uniform width (stored in uniformBorderWidth for post-processing)
+ * - `border-l={color}` sets directional color AND marks that side as active
+ * - Post-processing applies uniform width to active sides only (or all sides if none marked)
+ * 
  * Note: border-radius is not supported in Outlook Windows.
  */
-export function parseBorder(
+function parseBorder(
 	attr: string,
 	result: ParsedAttrs,
 	inherited: InheritedStyles,
 	rootSize: number
 ): boolean {
-	// Border width shortcuts
+	// Helper to mark a side as having a directional color
+	const markSide = (side: 'top' | 'right' | 'bottom' | 'left') => {
+		if (!result.borderSidesWithColor) result.borderSidesWithColor = new Set()
+		result.borderSidesWithColor.add(side)
+	}
+
+	// Border width shortcut: border (1px default)
 	if (attr === 'border') {
-		result.css.borderWidth = '1px'
-		result.css.borderStyle = 'solid'
+		result.uniformBorderWidth = '1px'
+		if (!result.css.borderStyle) result.css.borderStyle = 'solid'
 		return true
 	}
 
 	// Border width scale: border-{0|1|2|4|8}
-	let match = attr.match(/^border-([0-8])$/)
+	let match = attr.match(BORDER_WIDTH_SCALE_RE)
 	if (match) {
-		result.css.borderWidth = BORDER_WIDTHS[match[1]] || `${match[1]}px`
-		if (match[1] !== '0') result.css.borderStyle = 'solid'
+		result.uniformBorderWidth = BORDER_WIDTHS[match[1]] || `${match[1]}px`
+		if (match[1] !== '0' && !result.css.borderStyle) result.css.borderStyle = 'solid'
 		return true
 	}
 
-	// Border width arbitrary: border-[value]
-	match = attr.match(/^border-\[(\d+(?:px)?)\]$/)
+	// Border width arbitrary: border-[Npx] (non-color value)
+	match = attr.match(BORDER_WIDTH_ARBITRARY_RE)
 	if (match) {
-		result.css.borderWidth = match[1].includes('px') ? match[1] : `${match[1]}px`
-		result.css.borderStyle = 'solid'
+		result.uniformBorderWidth = match[1].includes('px') ? match[1] : `${match[1]}px`
+		if (!result.css.borderStyle) result.css.borderStyle = 'solid'
 		return true
 	}
 
-	// Border per-side: border-{t|r|b|l}
-	match = attr.match(/^border-([trbl])(?:-([0-8]|\[([^\]]+)\]))?$/)
+	// Border per-side: border-{t|r|b|l} (can be width or color)
+	match = attr.match(BORDER_SIDE_RE)
 	if (match) {
-		const sideMap = { t: 'Top', r: 'Right', b: 'Bottom', l: 'Left' }
-		const side = sideMap[match[1] as keyof typeof sideMap]
-		const value = match[3] || (match[2] ? BORDER_WIDTHS[match[2]] : '1px')
-		result.css[`border${side}Width`] = value
-		if (value !== '0') result.css[`border${side}Style`] = 'solid'
+		const sideMapUpper = { t: 'Top', r: 'Right', b: 'Bottom', l: 'Left' } as const
+		const sideMapLower = { t: 'top', r: 'right', b: 'bottom', l: 'left' } as const
+		const side = sideMapUpper[match[1] as keyof typeof sideMapUpper]
+		const sideLower = sideMapLower[match[1] as keyof typeof sideMapLower]
+		const arbitraryValue = match[3] // value inside brackets, e.g., '#10b981' or '2px'
+
+		// Check if the value is a color (starts with #) or a width
+		if (arbitraryValue && arbitraryValue.startsWith('#')) {
+			// It's a color: border-l-[#hex] or border-l={color}
+			// This marks the side as active for directional border
+			markSide(sideLower)
+			
+			const { color, opacity } = parseColorWithOpacity(arbitraryValue)
+			const modifierOpacity = result.borderOpacity ?? 1
+			const finalOpacity = opacity * modifierOpacity * inherited.opacity
+			if (finalOpacity < 1) {
+				result.css[`border${side}Color`] = blendColor(color, inherited.backgroundColor, finalOpacity)
+			} else {
+				result.css[`border${side}Color`] = color
+			}
+			// Only set solid as default if no explicit border style was specified
+			if (!result.css[`border${side}Style`]) result.css[`border${side}Style`] = 'solid'
+		} else {
+			// It's a width: border-l-2, border-l-[3px], or just border-l (default 1px)
+			// Explicit directional width overrides uniform width for this side
+			const value = arbitraryValue || (match[2] ? BORDER_WIDTHS[match[2]] : '1px')
+			result.css[`border${side}Width`] = value
+			// Only set solid as default if no explicit border style was specified
+			if (value !== '0' && !result.css[`border${side}Style`]) result.css[`border${side}Style`] = 'solid'
+		}
 		return true
 	}
 
-	// Border x/y: border-{x|y}
-	match = attr.match(/^border-([xy])(?:-([0-8]|\[([^\]]+)\]))?$/)
+	// Border x/y: border-{x|y} (can be width or color)
+	match = attr.match(BORDER_AXIS_RE)
 	if (match) {
-		const value = match[3] || (match[2] ? BORDER_WIDTHS[match[2]] : '1px')
-		if (match[1] === 'x') {
-			result.css.borderLeftWidth = value
-			result.css.borderRightWidth = value
-			if (value !== '0') {
-				result.css.borderLeftStyle = 'solid'
-				result.css.borderRightStyle = 'solid'
+		const arbitraryValue = match[3] // value inside brackets
+
+		// Check if the value is a color (starts with #) or a width
+		if (arbitraryValue && arbitraryValue.startsWith('#')) {
+			// It's a color: border-x-[#hex] or border-x={color}
+			const { color, opacity } = parseColorWithOpacity(arbitraryValue)
+			const modifierOpacity = result.borderOpacity ?? 1
+			const finalOpacity = opacity * modifierOpacity * inherited.opacity
+			const blendedColor = finalOpacity < 1
+				? blendColor(color, inherited.backgroundColor, finalOpacity)
+				: color
+
+			if (match[1] === 'x') {
+				markSide('left')
+				markSide('right')
+				result.css.borderLeftColor = blendedColor
+				result.css.borderRightColor = blendedColor
+				if (!result.css.borderLeftStyle) result.css.borderLeftStyle = 'solid'
+				if (!result.css.borderRightStyle) result.css.borderRightStyle = 'solid'
+			} else {
+				markSide('top')
+				markSide('bottom')
+				result.css.borderTopColor = blendedColor
+				result.css.borderBottomColor = blendedColor
+				if (!result.css.borderTopStyle) result.css.borderTopStyle = 'solid'
+				if (!result.css.borderBottomStyle) result.css.borderBottomStyle = 'solid'
 			}
 		} else {
-			result.css.borderTopWidth = value
-			result.css.borderBottomWidth = value
-			if (value !== '0') {
-				result.css.borderTopStyle = 'solid'
-				result.css.borderBottomStyle = 'solid'
+			// It's a width: border-x-2, border-x-[3px], or just border-x (default 1px)
+			// Explicit directional width
+			const value = arbitraryValue || (match[2] ? BORDER_WIDTHS[match[2]] : '1px')
+			if (match[1] === 'x') {
+				result.css.borderLeftWidth = value
+				result.css.borderRightWidth = value
+				if (value !== '0') {
+					if (!result.css.borderLeftStyle) result.css.borderLeftStyle = 'solid'
+					if (!result.css.borderRightStyle) result.css.borderRightStyle = 'solid'
+				}
+			} else {
+				result.css.borderTopWidth = value
+				result.css.borderBottomWidth = value
+				if (value !== '0') {
+					if (!result.css.borderTopStyle) result.css.borderTopStyle = 'solid'
+					if (!result.css.borderBottomStyle) result.css.borderBottomStyle = 'solid'
+				}
 			}
 		}
 		return true
 	}
 
 	// Border color: border-[#hex] or border-[#hex]/opacity
-	match = attr.match(/^border-\[(#[0-9a-fA-F]{3,8})\](?:\/(\d+|\[[\d.]+\]))?$/)
+	match = attr.match(BORDER_COLOR_RE)
 	if (match) {
 		const { color, opacity } = parseColorWithOpacity(match[1], match[2])
 		// Apply border-opacity-* modifier if present, then inherited opacity
@@ -839,6 +1086,21 @@ export function parseBorder(
 			result.css.borderColor = blendColor(color, inherited.backgroundColor, finalOpacity)
 		} else {
 			result.css.borderColor = color
+		}
+		// Set default width and style ONLY if no border width is already specified
+		// (including directional borders like border-t-2)
+		// This allows `border={color}` alone to show a visible border,
+		// but doesn't override directional borders
+		const hasBorderWidth = result.css.borderWidth ||
+			result.css.borderTopWidth || result.css.borderRightWidth ||
+			result.css.borderBottomWidth || result.css.borderLeftWidth
+		if (!hasBorderWidth) {
+			result.css.borderWidth = '1px'
+		}
+		if (!result.css.borderStyle && !result.css.borderTopStyle &&
+			!result.css.borderRightStyle && !result.css.borderBottomStyle &&
+			!result.css.borderLeftStyle) {
+			result.css.borderStyle = 'solid'
 		}
 		return true
 	}
@@ -858,7 +1120,7 @@ export function parseBorder(
 	}
 
 	// Border style
-	match = attr.match(/^border-(solid|dashed|dotted|double|hidden|none)$/)
+	match = attr.match(BORDER_STYLE_RE)
 	if (match) {
 		result.css.borderStyle = match[1]
 		return true
@@ -870,21 +1132,21 @@ export function parseBorder(
 		return true
 	}
 
-	match = attr.match(/^rounded-(none|sm|md|lg|xl|2xl|3xl|full)$/)
+	match = attr.match(ROUNDED_PRESET_RE)
 	if (match) {
 		result.css.borderRadius = remToPx(BORDER_RADII[match[1]], rootSize)
 		return true
 	}
 
 	// Rounded arbitrary: rounded-[value]
-	match = attr.match(/^rounded-\[([^\]]+)\]$/)
+	match = attr.match(ROUNDED_ARBITRARY_RE)
 	if (match) {
 		result.css.borderRadius = remToPx(match[1], rootSize)
 		return true
 	}
 
 	// Rounded per-side: rounded-{t|r|b|l}-{size}
-	match = attr.match(/^rounded-([trbl])-(none|sm|md|lg|xl|2xl|3xl|full|\[([^\]]+)\])$/)
+	match = attr.match(ROUNDED_SIDE_RE)
 	if (match) {
 		const corners: Record<string, string[]> = {
 			t: ['borderTopLeftRadius', 'borderTopRightRadius'],
@@ -902,7 +1164,7 @@ export function parseBorder(
 	}
 
 	// Rounded per-corner: rounded-{tl|tr|br|bl}-{size}
-	match = attr.match(/^rounded-(tl|tr|br|bl)-(none|sm|md|lg|xl|2xl|3xl|full|\[([^\]]+)\])$/)
+	match = attr.match(ROUNDED_CORNER_RE)
 	if (match) {
 		const cornerMap: Record<string, string> = {
 			tl: 'borderTopLeftRadius',
@@ -927,7 +1189,7 @@ export function parseBorder(
 /**
  * Parse display attributes: block, inline-block, inline, hidden
  */
-export function parseDisplay(attr: string, result: ParsedAttrs): boolean {
+function parseDisplay(attr: string, result: ParsedAttrs): boolean {
 	const displays: Record<string, string> = {
 		'block': 'block',
 		'inline-block': 'inline-block',
@@ -973,23 +1235,23 @@ export function parseDisplay(attr: string, result: ParsedAttrs): boolean {
  * - `text-opacity-75 text-[#ff0000]` → 75% opacity red text
  * - `border-opacity-25 border-[#0000ff]` → 25% opacity blue border
  */
-export function parseColorOpacity(attr: string, result: ParsedAttrs): boolean {
+function parseColorOpacity(attr: string, result: ParsedAttrs): boolean {
 	// text-opacity-{0-100} or text-opacity-[value]
-	let match = attr.match(/^text-opacity-(\d+|\[[\d.]+\])$/)
+	let match = attr.match(TEXT_OPACITY_RE)
 	if (match) {
 		result.textOpacity = parseOpacityValue(match[1])
 		return true
 	}
 
 	// bg-opacity-{0-100} or bg-opacity-[value]
-	match = attr.match(/^bg-opacity-(\d+|\[[\d.]+\])$/)
+	match = attr.match(BG_OPACITY_RE)
 	if (match) {
 		result.bgOpacity = parseOpacityValue(match[1])
 		return true
 	}
 
 	// border-opacity-{0-100} or border-opacity-[value]
-	match = attr.match(/^border-opacity-(\d+|\[[\d.]+\])$/)
+	match = attr.match(BORDER_OPACITY_RE)
 	if (match) {
 		result.borderOpacity = parseOpacityValue(match[1])
 		return true
@@ -1019,9 +1281,9 @@ function parseOpacityValue(value: string): number {
  * Note: CSS opacity is not well supported in email clients.
  * We compound this with color opacities and blend colors instead.
  */
-export function parseOpacity(attr: string, result: ParsedAttrs): boolean {
+function parseOpacity(attr: string, result: ParsedAttrs): boolean {
 	// opacity-{0-100} or opacity-[value]
-	const match = attr.match(/^opacity-(\d+|\[[\d.]+\])$/)
+	const match = attr.match(OPACITY_RE)
 	if (match) {
 		if (match[1].startsWith('[')) {
 			result.opacity = parseFloat(match[1].slice(1, -1))
@@ -1041,11 +1303,16 @@ export function parseOpacity(attr: string, result: ParsedAttrs): boolean {
 /**
  * Parse responsive attributes: mobile-only, desktop-only
  * These control visibility via media queries.
+ * 
+ * Note: We do NOT set display: none here. The wrapWithResponsive() function
+ * in html-helpers.ts handles hiding by wrapping the element in a div with
+ * the appropriate inline styles and class. Setting display: none in parsed.css
+ * would cause the inner element to stay hidden even when the outer wrapper
+ * is revealed by the media query.
  */
-export function parseResponsive(attr: string, result: ParsedAttrs): boolean {
+function parseResponsive(attr: string, result: ParsedAttrs): boolean {
 	if (attr === 'mobile-only') {
 		result.responsive = 'mobile-only'
-		result.css.display = 'none'  // Hidden by default, revealed via media query
 		return true
 	}
 
@@ -1085,12 +1352,12 @@ export function extractWidthFromAttrs(attrs: string[], rootSize: number = DEFAUL
 			return 'auto'
 		}
 		// w-[value]
-		let match = attr.match(/^w-\[([^\]]+)\]$/)
+		let match = attr.match(WIDTH_ARBITRARY_RE)
 		if (match) {
 			return remToPx(match[1], rootSize)
 		}
 		// w-{scale}
-		match = attr.match(/^w-(\d+(?:\.\d+)?)$/)
+		match = attr.match(WIDTH_SCALE_RE)
 		if (match) {
 			const value = SPACING_SCALE[match[1]]
 			if (value) return remToPx(value, rootSize)
@@ -1100,135 +1367,25 @@ export function extractWidthFromAttrs(attrs: string[], rootSize: number = DEFAUL
 }
 
 /**
- * Extract vertical-align value from an attrs array without full parsing.
- * Used by Grid and Table to apply child alignment to the <td> cell.
+ * Check if an attribute is a width attribute (w-*, w-full, w-screen, w-auto, w-[value]).
+ * Used to filter width attrs from children when parent grid applies width to <td>.
  * 
- * @param attrs - Array of Tailwind-like attributes
- * @returns Vertical align value ('top', 'middle', 'bottom') or undefined
- */
-export function extractValignFromAttrs(attrs: string[]): 'top' | 'middle' | 'bottom' | undefined {
-	for (const attr of attrs) {
-		// Top row
-		if (attr === 'align-top' || attr === 'align-top-left' || attr === 'align-top-right') return 'top'
-		// Middle row (including aliases)
-		if (attr === 'align-middle' || attr === 'align-middle-left' || attr === 'align-middle-right' ||
-		    attr === 'align-left' || attr === 'align-center' || attr === 'align-right') return 'middle'
-		// Bottom row
-		if (attr === 'align-bottom' || attr === 'align-bottom-left' || attr === 'align-bottom-right') return 'bottom'
-	}
-	return undefined
-}
-
-/**
- * Extract text-align value from an attrs array without full parsing.
- * Used by Table to apply child alignment to the <td> cell.
- * 
- * Checks both align-* and justify-* attributes.
- * 
- * @param attrs - Array of Tailwind-like attributes
- * @returns Text align value ('left', 'center', 'right') or undefined
- */
-export function extractTextAlignFromAttrs(attrs: string[]): 'left' | 'center' | 'right' | undefined {
-	for (const attr of attrs) {
-		// align-* attributes
-		if (attr === 'align-top-left' || attr === 'align-left' || attr === 'align-middle-left' || attr === 'align-bottom-left') return 'left'
-		if (attr === 'align-top' || attr === 'align-middle' || attr === 'align-center' || attr === 'align-bottom') return 'center'
-		if (attr === 'align-top-right' || attr === 'align-right' || attr === 'align-middle-right' || attr === 'align-bottom-right') return 'right'
-		// justify-* attributes
-		if (attr === 'justify-left') return 'left'
-		if (attr === 'justify-center') return 'center'
-		if (attr === 'justify-right') return 'right'
-	}
-	return undefined
-}
-
-/**
- * Extract responsive visibility from an attrs array without full parsing.
- * Used by Grid to apply visibility class to the <td> cell.
- * 
- * @param attrs - Array of Tailwind-like attributes
- * @returns Responsive mode ('mobile-only', 'desktop-only') or undefined
- */
-export function extractResponsiveFromAttrs(attrs: string[]): 'mobile-only' | 'desktop-only' | undefined {
-	for (const attr of attrs) {
-		if (attr === 'mobile-only') return 'mobile-only'
-		if (attr === 'desktop-only') return 'desktop-only'
-	}
-	return undefined
-}
-
-// ============================================================================
-// Column Span Extraction (for Table and Grid cells)
-// ============================================================================
-
-/**
- * Extract colspan value from attrs array without full parsing.
- * Used by Table and Grid to set colspan attribute on <td> cells.
- * 
- * Patterns:
- * - span-{2-12} → colspan="N"
- * - span-[value] → colspan="value" (arbitrary)
- * 
- * @param attrs - Array of Tailwind-like attributes
- * @returns Colspan value as number, or undefined if not specified
+ * @param attr - A single Tailwind-like attribute
+ * @returns true if the attribute sets width
  * 
  * @example
  * ```ts
- * extractColspanFromAttrs(['span-2', 'p-4'])        // → 2
- * extractColspanFromAttrs(['span-[3]', 'w-full'])   // → 3
- * extractColspanFromAttrs(['p-4', 'bg-[#fff]'])    // → undefined
+ * isWidthAttr('w-[40%]')  // → true
+ * isWidthAttr('w-full')   // → true
+ * isWidthAttr('w-32')     // → true
+ * isWidthAttr('p-4')      // → false
+ * isWidthAttr('bg-white') // → false
  * ```
  */
-export function extractColspanFromAttrs(attrs: string[]): number | undefined {
-	for (const attr of attrs) {
-		// span-{2-12}
-		let match = attr.match(/^span-(\d+)$/)
-		if (match) {
-			const value = parseInt(match[1])
-			if (value >= 2 && value <= 12) return value
-		}
-		// span-[value]
-		match = attr.match(/^span-\[(\d+)\]$/)
-		if (match) {
-			return parseInt(match[1])
-		}
-	}
-	return undefined
-}
-
-/**
- * Extract rowspan value from attrs array without full parsing.
- * Used by Table and Grid to set rowspan attribute on <td> cells.
- * 
- * Patterns:
- * - row-span-{2-12} → rowspan="N"
- * - row-span-[value] → rowspan="value" (arbitrary)
- * 
- * @param attrs - Array of Tailwind-like attributes
- * @returns Rowspan value as number, or undefined if not specified
- * 
- * @example
- * ```ts
- * extractRowspanFromAttrs(['row-span-2', 'p-4'])        // → 2
- * extractRowspanFromAttrs(['row-span-[4]', 'w-full'])   // → 4
- * extractRowspanFromAttrs(['p-4', 'bg-[#fff]'])        // → undefined
- * ```
- */
-export function extractRowspanFromAttrs(attrs: string[]): number | undefined {
-	for (const attr of attrs) {
-		// row-span-{2-12}
-		let match = attr.match(/^row-span-(\d+)$/)
-		if (match) {
-			const value = parseInt(match[1])
-			if (value >= 2 && value <= 12) return value
-		}
-		// row-span-[value]
-		match = attr.match(/^row-span-\[(\d+)\]$/)
-		if (match) {
-			return parseInt(match[1])
-		}
-	}
-	return undefined
+export function isWidthAttr(attr: string): boolean {
+	// Reuse extractWidthValue logic - if it returns a value, it's a width attr
+	// Using rootSize=16 as default since we only care about matching, not the actual value
+	return extractWidthValue(attr, 16) !== undefined
 }
 
 // ============================================================================
@@ -1253,7 +1410,7 @@ export function extractRowspanFromAttrs(attrs: string[]): number | undefined {
  */
 export function parseColumnTemplate(attrs: string[]): string[] | undefined {
 	for (const attr of attrs) {
-		const match = attr.match(/^cols-\[([^\]]+)\]$/)
+		const match = attr.match(COLS_TEMPLATE_RE)
 		if (match) {
 			// Split by underscore and return array of widths
 			return match[1].split('_')
@@ -1280,7 +1437,7 @@ export function parseColumnTemplate(attrs: string[]): string[] | undefined {
  */
 export function parseRowTemplate(attrs: string[]): string[] | undefined {
 	for (const attr of attrs) {
-		const match = attr.match(/^rows-\[([^\]]+)\]$/)
+		const match = attr.match(ROWS_TEMPLATE_RE)
 		if (match) {
 			// Split by underscore and return array of heights
 			return match[1].split('_')
@@ -1296,38 +1453,26 @@ export function parseRowTemplate(attrs: string[]): string[] | undefined {
  * - cell-padding-0 through cell-padding-12 (scale values)
  * - cell-padding-[8px] (arbitrary value)
  * 
- * Scale mapping (same as Tailwind spacing):
- * - 0 → 0px, 1 → 4px, 2 → 8px, 3 → 12px, 4 → 16px
- * - 5 → 20px, 6 → 24px, 8 → 32px, 10 → 40px, 12 → 48px
+ * Returns a raw representation that should be resolved with `resolveSpacingValue()`
+ * at render time to respect the configured root size.
  * 
  * @param attrs - Array of attribute strings
- * @returns Cell padding value or undefined
+ * @returns Raw spacing value (scale key like "4" or arbitrary like "[20px]") or undefined
  */
 export function parseCellPadding(attrs: string[]): string | undefined {
-	const scaleMap: Record<string, string> = {
-		'0': '0',
-		'1': '4px',
-		'2': '8px',
-		'3': '12px',
-		'4': '16px',
-		'5': '20px',
-		'6': '24px',
-		'8': '32px',
-		'10': '40px',
-		'12': '48px'
-	}
-	
 	for (const attr of attrs) {
 		// Check for arbitrary value: cell-padding-[8px]
-		const arbitraryMatch = attr.match(/^cell-padding-\[([^\]]+)\]$/)
+		const arbitraryMatch = attr.match(CELL_PADDING_ARBITRARY_RE)
 		if (arbitraryMatch) {
-			return arbitraryMatch[1]
+			// Return arbitrary value with marker prefix for resolution
+			return `[${arbitraryMatch[1]}]`
 		}
 		
 		// Check for scale value: cell-padding-0 through cell-padding-12
-		const scaleMatch = attr.match(/^cell-padding-(\d+)$/)
-		if (scaleMatch && scaleMap[scaleMatch[1]]) {
-			return scaleMap[scaleMatch[1]]
+		const scaleMatch = attr.match(CELL_PADDING_SCALE_RE)
+		if (scaleMatch && SPACING_SCALE[scaleMatch[1]]) {
+			// Return scale key for resolution at render time
+			return scaleMatch[1]
 		}
 	}
 	return undefined
@@ -1340,39 +1485,225 @@ export function parseCellPadding(attrs: string[]): string | undefined {
  * - gap-0 through gap-12 (scale values)
  * - gap-[20px] (arbitrary value)
  * 
- * Scale mapping (same as Tailwind spacing):
- * - 0 → 0px, 1 → 4px, 2 → 8px, 3 → 12px, 4 → 16px
- * - 5 → 20px, 6 → 24px, 8 → 32px, 10 → 40px, 12 → 48px
+ * Returns a raw representation that should be resolved with `resolveSpacingValue()`
+ * at render time to respect the configured root size.
  * 
  * @param attrs - Array of attribute strings
- * @returns Gap value or undefined
+ * @returns Raw spacing value (scale key like "4" or arbitrary like "[20px]") or undefined
  */
 export function parseGap(attrs: string[]): string | undefined {
-	const scaleMap: Record<string, string> = {
-		'0': '0',
-		'1': '4px',
-		'2': '8px',
-		'3': '12px',
-		'4': '16px',
-		'5': '20px',
-		'6': '24px',
-		'8': '32px',
-		'10': '40px',
-		'12': '48px'
-	}
-	
 	for (const attr of attrs) {
 		// Check for arbitrary value: gap-[20px]
-		const arbitraryMatch = attr.match(/^gap-\[([^\]]+)\]$/)
+		const arbitraryMatch = attr.match(GAP_ARBITRARY_RE)
 		if (arbitraryMatch) {
-			return arbitraryMatch[1]
+			// Return arbitrary value with marker prefix for resolution
+			return `[${arbitraryMatch[1]}]`
 		}
 		
 		// Check for scale value: gap-0 through gap-12
-		const scaleMatch = attr.match(/^gap-(\d+)$/)
-		if (scaleMatch && scaleMap[scaleMatch[1]]) {
-			return scaleMap[scaleMatch[1]]
+		const scaleMatch = attr.match(GAP_SCALE_RE)
+		if (scaleMatch && SPACING_SCALE[scaleMatch[1]]) {
+			// Return scale key for resolution at render time
+			return scaleMatch[1]
 		}
 	}
+	return undefined
+}
+
+/**
+ * Resolve a raw spacing value to px using the configured root size.
+ * 
+ * Handles two formats:
+ * - Scale key (e.g., "4", "8") → Looks up in SPACING_SCALE and converts rem to px
+ * - Arbitrary value (e.g., "[20px]", "[2rem]") → Extracts value and converts if rem
+ * 
+ * This function should be called at render time when rootSize is available.
+ * 
+ * @param value - Raw spacing value from parseGap/parseCellPadding
+ * @param rootSize - Root font size for rem→px conversion
+ * @returns Resolved px value string (e.g., "16px")
+ * 
+ * @example
+ * ```ts
+ * resolveSpacingValue("4", 16)      // → "16px"
+ * resolveSpacingValue("4", 18)      // → "18px"  
+ * resolveSpacingValue("[20px]", 16) // → "20px"
+ * resolveSpacingValue("[2rem]", 16) // → "32px"
+ * ```
+ */
+export function resolveSpacingValue(value: string, rootSize: number): string {
+	// Check if it's an arbitrary value (wrapped in brackets)
+	if (value.startsWith('[') && value.endsWith(']')) {
+		const innerValue = value.slice(1, -1)
+		return remToPx(innerValue, rootSize)
+	}
+	
+	// It's a scale key - look up rem value and convert
+	const remValue = SPACING_SCALE[value]
+	if (remValue) {
+		return remToPx(remValue, rootSize)
+	}
+	
+	// Fallback: return as-is (shouldn't happen with valid input)
+	return value
+}
+
+// ============================================================================
+// Cell Attributes Extraction (Consolidated)
+// ============================================================================
+
+/**
+ * Result of extractCellAttrs - all cell-related attributes in one pass.
+ */
+export interface CellAttrs {
+	colspan?: number
+	rowspan?: number
+	valign?: 'top' | 'middle' | 'bottom'
+	textAlign?: 'left' | 'center' | 'right'
+	width?: string
+	height?: string
+	responsive?: 'mobile-only' | 'desktop-only'
+}
+
+/**
+ * Extract all cell-related attributes from an attrs array in a single pass.
+ * Used by Grid and Table renderers to get <td> attributes efficiently.
+ * 
+ * Extracts:
+ * - colspan: span-{2-12} or span-[N]
+ * - rowspan: row-span-{2-12} or row-span-[N]
+ * - valign: align-top, align-middle, align-bottom (and compound forms)
+ * - textAlign: align-* or justify-* for horizontal alignment
+ * - width: w-{value}, w-[value], or w-full
+ * - height: h-full, h-screen (signals cell should expand to fill row height)
+ * - responsive: mobile-only or desktop-only
+ * 
+ * @param attrs - Array of Tailwind-like attributes
+ * @param rootSize - Root font size for rem conversion
+ * @returns Object with all extracted cell attributes
+ * 
+ * @example
+ * ```ts
+ * extractCellAttrs(['span-2', 'align-top-left', 'w-[200px]', 'h-full'], 16)
+ * // → { colspan: 2, valign: 'top', textAlign: 'left', width: '200px', height: '100%' }
+ * ```
+ */
+export function extractCellAttrs(attrs: string[], rootSize: number): CellAttrs {
+	const result: CellAttrs = {}
+	
+	for (const attr of attrs) {
+		// colspan: span-{2-12} or span-[N]
+		if (!result.colspan) {
+			let match = attr.match(SPAN_RE)
+			if (match) {
+				const value = parseInt(match[1])
+				if (value >= 2 && value <= 12) result.colspan = value
+			} else {
+				match = attr.match(SPAN_ARBITRARY_RE)
+				if (match) result.colspan = parseInt(match[1])
+			}
+		}
+		
+		// rowspan: row-span-{2-12} or row-span-[N]
+		if (!result.rowspan) {
+			let match = attr.match(ROW_SPAN_RE)
+			if (match) {
+				const value = parseInt(match[1])
+				if (value >= 2 && value <= 12) result.rowspan = value
+			} else {
+				match = attr.match(ROW_SPAN_ARBITRARY_RE)
+				if (match) result.rowspan = parseInt(match[1])
+			}
+		}
+		
+		// valign: vertical alignment from align-* compound attributes
+		if (!result.valign) {
+			if (attr === 'align-top' || attr === 'align-top-left' || attr === 'align-top-right') {
+				result.valign = 'top'
+			} else if (
+				attr === 'align-middle' || attr === 'align-middle-left' || attr === 'align-middle-right' ||
+				attr === 'align-left' || attr === 'align-center' || attr === 'align-right'
+			) {
+				result.valign = 'middle'
+			} else if (attr === 'align-bottom' || attr === 'align-bottom-left' || attr === 'align-bottom-right') {
+				result.valign = 'bottom'
+			}
+		}
+		
+		// textAlign: horizontal alignment from align-* and justify-*
+		if (!result.textAlign) {
+			if (attr === 'align-top-left' || attr === 'align-left' || attr === 'align-middle-left' || attr === 'align-bottom-left' || attr === 'justify-left') {
+				result.textAlign = 'left'
+			} else if (attr === 'align-top' || attr === 'align-middle' || attr === 'align-center' || attr === 'align-bottom' || attr === 'justify-center') {
+				result.textAlign = 'center'
+			} else if (attr === 'align-top-right' || attr === 'align-right' || attr === 'align-middle-right' || attr === 'align-bottom-right' || attr === 'justify-right') {
+				result.textAlign = 'right'
+			}
+		}
+		
+		// width: w-{value}, w-[value], w-full, w-screen
+		if (!result.width) {
+			result.width = extractWidthValue(attr, rootSize)
+		}
+		
+		// height: h-full or h-screen signals the cell should expand to fill row height
+		if (!result.height) {
+			if (attr === 'h-full' || attr === 'h-screen') {
+				result.height = '100%'
+			}
+		}
+		
+		// responsive: mobile-only or desktop-only
+		if (!result.responsive) {
+			if (attr === 'mobile-only') result.responsive = 'mobile-only'
+			else if (attr === 'desktop-only') result.responsive = 'desktop-only'
+		}
+	}
+	
+	return result
+}
+
+/**
+ * Extract width value from a single attribute.
+ * Internal helper for extractCellAttrs.
+ */
+function extractWidthValue(attr: string, rootSize: number): string | undefined {
+	// w-full → 100%
+	if (attr === 'w-full') return '100%'
+	// w-screen → 100% (aliased, not actual viewport width)
+	if (attr === 'w-screen') return '100%'
+	
+	// w-{n} → scale lookup (including fractions)
+	let match = attr.match(WIDTH_FRACTION_RE)
+	if (match) {
+		// Handle fraction: w-1/2, w-1/3, etc.
+		if (match[1].includes('/')) {
+			const [num, denom] = match[1].split('/').map(Number)
+			return `${(num / denom) * 100}%`
+		}
+		// Scale lookup: w-0, w-1, w-2, etc.
+		const scale: Record<string, string> = {
+			'0': '0px', '1': '4px', '2': '8px', '3': '12px', '4': '16px',
+			'5': '20px', '6': '24px', '7': '28px', '8': '32px', '9': '36px',
+			'10': '40px', '11': '44px', '12': '48px', '14': '56px', '16': '64px',
+			'20': '80px', '24': '96px', '28': '112px', '32': '128px', '36': '144px',
+			'40': '160px', '44': '176px', '48': '192px', '52': '208px', '56': '224px',
+			'60': '240px', '64': '256px', '72': '288px', '80': '320px', '96': '384px'
+		}
+		if (scale[match[1]]) return scale[match[1]]
+	}
+	
+	// w-[value] → arbitrary
+	match = attr.match(WIDTH_ARBITRARY_RE)
+	if (match) {
+		const value = match[1]
+		// Handle rem values
+		if (value.endsWith('rem')) {
+			const rem = parseFloat(value)
+			return `${rem * rootSize}px`
+		}
+		return value
+	}
+	
 	return undefined
 }

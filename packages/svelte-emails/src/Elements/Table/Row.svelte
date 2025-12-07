@@ -14,9 +14,9 @@ and alignment (`align-*`, `justify-*`). Children can override with their own att
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { TableRowAttributes } from '../../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, type Mail } from '../../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
 
-	interface Props extends TableRowAttributes {
+	export interface Props extends TableRowAttributes {
 		/** Row cells (Text or other components) */
 		children?: Snippet
 	}
@@ -25,10 +25,14 @@ and alignment (`align-*`, `justify-*`). Children can override with their own att
 
 	const parent = getEmailParent()
 
+	// Extract header flag
+	const header = $derived(attrs.header === true)
+
 	const node: Mail.TableRowNode = $state({
 		type: 'table-row',
-		attrs: Object.keys(attrs),
-		children: []
+		attrs: normalizeAttrs(attrs),
+		children: [],
+		get header() { return header }
 	})
 
 	onDestroy(addChild(parent, node))
