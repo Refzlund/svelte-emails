@@ -72,6 +72,7 @@ for smooth updates without flash, scroll reset, or image reloading.
 </script>
 
 <script lang='ts'>
+	import { untrack } from 'svelte'
 	import {
 		stripScriptTags,
 		snapshotWidthAnchor,
@@ -211,9 +212,14 @@ for smooth updates without flash, scroll reset, or image reloading.
 	}
 
 	/** Handle iframe load event */
-	function handleIframeLoad() {
-		const doc = iframeElement?.contentDocument
+	function handleIframeLoad(event: Event) {
+		// Get iframe from event target since bind:this may not be ready yet
+		const iframe = event.currentTarget as HTMLIFrameElement
+		const doc = iframe?.contentDocument
 		if (!doc) return
+		
+		// Update the bound reference if needed
+		if (!iframeElement) iframeElement = iframe
 		
 		if (srcdocContent) loadedHtml = srcdocContent
 		
@@ -230,36 +236,45 @@ for smooth updates without flash, scroll reset, or image reloading.
 	}
 
 	// Sync html prop to iframe
+	// Only the `html` prop should trigger this effect - internal state reads are untracked
 	$effect(() => {
-		if (!html) {
-			srcdocContent = undefined
+		// Track ONLY the html prop as the reactive dependency
+		const currentHtml = html
+		
+		// All internal state reads are untracked to prevent re-triggering
+		untrack(() => {
+			if (!currentHtml) {
+				srcdocContent = undefined
+				loadedHtml = ''
+				pendingHtml = ''
+				return
+			}
+			
+			const safeContent = stripScriptTags(currentHtml)
+			
+			// Skip if already showing this exact content
+			if (safeContent === loadedHtml && iframeElement?.contentDocument?.body) {
+				return
+			}
+			
+			// Use morphdom if iframe has loaded content and is ready
+			const doc = iframeElement?.contentDocument
+			if (loadedHtml && doc?.body && doc?.head) {
+				morphToDocument(doc, safeContent)
+				loadedHtml = safeContent
+				return
+			}
+			
+			// Queue for morphdom if iframe is currently loading (srcdoc set but onload not fired)
+			if (srcdocContent && !loadedHtml) {
+				pendingHtml = safeContent
+				return
+			}
+			
+			// Initial load via srcdoc (or reset after clearing)
+			srcdocContent = safeContent
 			loadedHtml = ''
-			pendingHtml = ''
-			return
-		}
-		
-		const safeContent = stripScriptTags(html)
-		
-		// Skip if already showing this content
-		if (safeContent === loadedHtml && iframeElement?.contentDocument?.body) return
-		
-		// Use morphdom if iframe has loaded content
-		const doc = iframeElement?.contentDocument
-		if (loadedHtml && doc?.body && doc?.head) {
-			morphToDocument(doc, safeContent)
-			loadedHtml = safeContent
-			return
-		}
-		
-		// Queue for morphdom if iframe is currently loading
-		if (srcdocContent && !loadedHtml) {
-			pendingHtml = safeContent
-			return
-		}
-		
-		// Initial load via srcdoc
-		srcdocContent = safeContent
-		loadedHtml = ''
+		})
 	})
 
 	// Cleanup
