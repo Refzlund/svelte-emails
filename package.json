@@ -8,7 +8,7 @@
 		"build": "bun run scripts/build.ts",
 		"changeset": "changeset",
 		"version": "changeset version",
-		"publish": "bun run build && cd packages/svelte-emails && npm publish"
+		"publish": "bun run build && cd packages/svelte-emails && bunx npm publish"
 	},
 	"workspaces": {
 		"packages": [

@@ -138,6 +138,20 @@ await emailProvider.send({
 
 ---
 
+<br>
+
+## Share Your Designs!
+
+Built something beautiful? **We want to see it!**
+
+Contribute your email templates to `packages/cli/src/examples` and inspire the community. Your designs will be featured in the Studio's example gallery for everyone to learn from.
+
+**[Open a PR →](https://github.com/Refzlund/svelte-emails/pulls)**
+
+<br>
+
+---
+
 <br><br>
 
 ## License

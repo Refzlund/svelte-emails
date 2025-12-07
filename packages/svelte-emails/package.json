@@ -1,6 +1,6 @@
 {
 	"name": "svelte-emails",
-	"version": "0.0.4",
+	"version": "0.0.15",
 	"description": "Email template library for Svelte with a development server",
 	"type": "module",
 	"bin": {
