@@ -49,7 +49,7 @@ Use `h-*` or `w-*` attributes to override the default size based on context.
 <script lang='ts'>
 	import { onDestroy } from 'svelte'
 	import type { Attributes, SpanAttributes, SafeWidthAttributes, ResponsiveAttributes } from '../style-attributes'
-	import { getEmailParent, addChild, normalizeAttrs, type Mail } from '../context'
+	import { getEmailParent, addChild, normalizeAttrs, generateMarkerId, type Mail } from '../context'
 
 	type SpacerScales = 
 		| 'h-0' | 'h-0.25' | 'h-0.5' | 'h-0.75' | 'h-1' | 'h-1.5' 
@@ -105,5 +105,8 @@ Use `h-*` or `w-*` attributes to override the default size based on context.
 		get size() { return size }
 	})
 
-	onDestroy(addChild(parent, node))
+	const markerId = generateMarkerId()
+	onDestroy(addChild(parent, node, markerId))
 </script>
+
+<svelte-email-marker id={markerId}></svelte-email-marker>

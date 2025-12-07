@@ -41,11 +41,11 @@ function greet(name) {
 <script lang='ts'>
 	import { onDestroy } from 'svelte'
 	import type { TextAttributes } from '../../style-attributes'
-	import { getEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
+	import { getEmailParent, addChild, normalizeAttrs, normalizeContent, generateMarkerId, type Mail, type ContentValue } from '../../context'
 
 	export interface Props extends TextAttributes {
 		/** Code content (will be HTML-escaped unless highlight is used) */
-		content: string
+		content: ContentValue
 		/**
 		 * Programming language for syntax highlighting.
 		 * Requires `shiki` to be installed.
@@ -62,16 +62,21 @@ function greet(name) {
 
 	const { content, highlight, theme, ...attrs }: Props = $props()
 
+	const normalizedContent = $derived(normalizeContent(content, 'Text.Codeblock'))
+
 	const parent = getEmailParent()
+	const markerId = generateMarkerId()
 
 	const node: Mail.TextNode = $state({
 		type: 'text',
 		variant: 'codeblock',
 		attrs: normalizeAttrs(attrs),
-		get content() { return content },
+		get content() { return normalizedContent ?? '' },
 		get highlight() { return highlight },
 		get highlightTheme() { return theme }
 	})
 
-	onDestroy(addChild(parent, node))
+	onDestroy(addChild(parent, node, markerId))
 </script>
+
+<svelte-email-marker id={markerId}></svelte-email-marker>

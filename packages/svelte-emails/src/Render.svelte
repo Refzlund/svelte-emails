@@ -30,7 +30,7 @@ Sets up the IR tree collector context and provides bindable output.
 -->
 <script lang='ts'>
 	import type { Snippet } from 'svelte'
-	import { setEmailRoot, type Mail, type Collector } from './context'
+	import { setEmailRoot, reorderChildrenByDom, type Mail, type Collector } from './context'
 	import { renderTree, type RenderOptions, type RenderOutput } from './renderer'
 	import { formatHtml } from './rendering'
 	import type { StyleConfig } from './styles'
@@ -64,6 +64,9 @@ Sets up the IR tree collector context and provides bindable output.
 		output = $bindable(null),
 		children 
 	}: Props = $props()
+
+	// Reference to the virtualtree element for DOM-based ordering
+	let virtualtreeEl: HTMLElement | undefined = $state()
 
 	// IR tree root - populated by Email component via collector
 	let root: Mail.EmailNode | null = $state(null)
@@ -116,6 +119,12 @@ Sets up the IR tree collector context and provides bindable output.
 			return
 		}
 
+		// Reorder children based on DOM marker order (client-side only)
+		// This fixes ordering issues with conditional rendering ({#if}, {#each})
+		if (virtualtreeEl) {
+			reorderChildrenByDom(virtualtreeEl, currentRoot)
+		}
+
 		// Assign ID to this render request
 		const thisRequestId = ++latestRequestId
 		
@@ -162,7 +171,7 @@ Sets up the IR tree collector context and provides bindable output.
 	})
 </script>
 
-<virtualtree hidden>
+<virtualtree bind:this={virtualtreeEl} hidden>
 	<!-- Render children to build IR tree (produces no visible output) -->
 	{@render children?.()}
 </virtualtree>

@@ -24,6 +24,25 @@ export const EMAIL_ROOT_CONTEXT_KEY = Symbol.for('svelte-emails:root-collector')
 export const EMAIL_PARENT_CONTEXT_KEY = Symbol.for('svelte-emails:parent-node')
 
 // ============================================================================
+// Marker ID Generation (for DOM-based ordering)
+// ============================================================================
+
+/**
+ * Counter for generating unique marker IDs.
+ * Used to correlate IR nodes with their DOM position.
+ */
+let markerIdCounter = 0
+
+/**
+ * Generate a unique marker ID for DOM-based ordering.
+ * Each IR node gets a marker ID that's used to emit a DOM element,
+ * allowing us to determine correct source order from the DOM.
+ */
+export function generateMarkerId(): string {
+	return `sem-${++markerIdCounter}`
+}
+
+// ============================================================================
 // IR (Intermediate Representation) Types
 // ============================================================================
 
@@ -38,6 +57,11 @@ export namespace Mail {
 		type: T
 		/** Tailwind-like utility attributes (e.g., 'p-4', 'bg-[#fff]') */
 		attrs: string[]
+		/** 
+		 * Unique marker ID for DOM-based ordering (client-side preview only).
+		 * Used to correlate IR nodes with DOM position for correct source order.
+		 */
+		_markerId?: string
 	}
 
 	/**
@@ -410,25 +434,36 @@ export function normalizeAttrs(attrs: Record<string, unknown>): string[] {
  * Note: TableNode only accepts TableRowNode children - this is enforced
  * at runtime with an error if violated.
  * 
+ * @param parent - The parent node to add the child to
+ * @param child - The child node to add
+ * @param markerId - Optional marker ID for DOM-based ordering (client-side only)
+ * 
  * @example
  * ```svelte
  * <script lang='ts'>
  *   import { onDestroy } from 'svelte'
- *   import { getEmailParent, addChild } from '../context'
+ *   import { getEmailParent, addChild, generateMarkerId } from '../context'
  *   
  *   const parent = getEmailParent()
- *   const node = { type: 'div', attrs: [], children: [] }
+ *   const markerId = generateMarkerId()
+ *   const node = { type: 'div', attrs: [], children: [], _markerId: markerId }
  *   onDestroy(addChild(parent, node))
  * </script>
+ * <svelte-email-marker id={markerId} />
  * ```
  */
-export function addChild(parent: Mail.IRParentNode, child: Mail.IRNode): () => void {
+export function addChild(parent: Mail.IRParentNode, child: Mail.IRNode, markerId?: string): () => void {
 	// Validate table children must be rows
 	if (parent.type === 'table' && child.type !== 'table-row') {
 		throw new Error(
 			`<Table> can only contain <Table.Row> children, got <${child.type}>. ` +
 			`Wrap your content in <Table.Row> components.`
 		)
+	}
+
+	// Store marker ID on the node for DOM-based ordering
+	if (markerId) {
+		child._markerId = markerId
 	}
 
 	const children = parent.children as Mail.IRNode[]
@@ -446,4 +481,134 @@ export function addChild(parent: Mail.IRParentNode, child: Mail.IRNode): () => v
 		const index = children.indexOf(child)
 		if (index !== -1) children.splice(index, 1)
 	}
+}
+
+// ============================================================================
+// Content Value Handling
+// ============================================================================
+
+/**
+ * Type for content prop values.
+ * Accepts string, number, boolean, null, or undefined.
+ * - string: Used as-is
+ * - number/boolean: Converted to string
+ * - null/undefined: Component will not render and a warning is emitted
+ */
+export type ContentValue = string | number | boolean | null | undefined
+
+/**
+ * Normalize content value to string or null (with warning).
+ * 
+ * Use this for components where content is required (Text, H1, etc.).
+ * For optional content (Button, Link), use `normalizeOptionalContent` instead.
+ * 
+ * - string: returned as-is
+ * - number/boolean: converted to string
+ * - null/undefined: returns null and emits console warning
+ * 
+ * @param content - The content value to normalize
+ * @param componentName - Name of the component for the warning message
+ * @returns Normalized string content, or null if content should not render
+ * 
+ * @example
+ * ```ts
+ * normalizeContent('Hello', 'Text')        // → 'Hello'
+ * normalizeContent(42, 'Text')             // → '42'
+ * normalizeContent(true, 'Text')           // → 'true'
+ * normalizeContent(undefined, 'Text')      // → null (+ console.warn)
+ * normalizeContent(null, 'Text')           // → null (+ console.warn)
+ * ```
+ */
+export function normalizeContent(content: ContentValue, componentName: string): string | null {
+	if (content === null || content === undefined) {
+		console.warn(
+			`[svelte-emails] <${componentName}> received ${content === null ? 'null' : 'undefined'} content. ` +
+			`The component will not render. If this is intentional, consider using conditional rendering ({#if}) instead.`
+		)
+		return null
+	}
+	
+	return String(content)
+}
+
+/**
+ * Normalize optional content value to string or undefined (no warning).
+ * 
+ * Use this for components where content is optional (Button, Link, Unsubscribe).
+ * These components may use children snippet instead of content prop.
+ * 
+ * - string: returned as-is
+ * - number/boolean: converted to string
+ * - null/undefined: returns undefined (silent)
+ * 
+ * @param content - The content value to normalize
+ * @returns Normalized string content, or undefined if not provided
+ */
+export function normalizeOptionalContent(content: ContentValue): string | undefined {
+	if (content === null || content === undefined) {
+		return undefined
+	}
+	return String(content)
+}
+
+// ============================================================================
+// DOM-based Child Ordering
+// ============================================================================
+
+/**
+ * Reorder children of an IR node based on DOM marker order.
+ * 
+ * This function reads marker elements from a container element and reorders
+ * the IR node's children to match the DOM order. This ensures correct ordering
+ * when using conditional rendering ({#if}, {#each}) which may cause children
+ * to be added to the IR tree out of source order.
+ * 
+ * @param container - The DOM element containing marker elements
+ * @param root - The root IR node whose children (and descendants) should be reordered
+ */
+export function reorderChildrenByDom(container: Element, root: Mail.EmailNode): void {
+	// Collect all marker IDs from DOM in order (depth-first)
+	const markerOrder: string[] = []
+	const markers = container.querySelectorAll('svelte-email-marker')
+	markers.forEach(marker => {
+		const id = marker.getAttribute('id')
+		if (id) markerOrder.push(id)
+	})
+
+	if (markerOrder.length === 0) return
+
+	// Create a map of markerId → position
+	const orderMap = new Map<string, number>()
+	markerOrder.forEach((id, index) => orderMap.set(id, index))
+
+	// Recursively reorder children in all parent nodes
+	function reorderNode(node: Mail.IRParentNode) {
+		const children = node.children as Mail.IRNode[]
+		
+		// Filter to only children with markers, sort them
+		const withMarkers = children.filter(c => c._markerId && orderMap.has(c._markerId))
+		const withoutMarkers = children.filter(c => !c._markerId || !orderMap.has(c._markerId))
+		
+		if (withMarkers.length > 0) {
+			// Sort children with markers by their DOM order
+			withMarkers.sort((a, b) => {
+				const orderA = orderMap.get(a._markerId!) ?? Infinity
+				const orderB = orderMap.get(b._markerId!) ?? Infinity
+				return orderA - orderB
+			})
+			
+			// Reconstruct children array: sorted markers + unmarked items at end
+			children.length = 0
+			children.push(...withMarkers, ...withoutMarkers)
+		}
+		
+		// Recurse into children that are parent nodes
+		for (const child of children) {
+			if ('children' in child && Array.isArray(child.children)) {
+				reorderNode(child as Mail.IRParentNode)
+			}
+		}
+	}
+
+	reorderNode(root)
 }

@@ -14,14 +14,17 @@ Note: For line breaks within text content, use `\n` in the content string instea
 -->
 <script lang='ts'>
 	import { onDestroy } from 'svelte'
-	import { getEmailParent, addChild, type Mail } from '../context'
+	import { getEmailParent, addChild, generateMarkerId, type Mail } from '../context'
 
 	const parent = getEmailParent()
+	const markerId = generateMarkerId()
 
 	const node: Mail.BrNode = $state({
 		type: 'br',
 		attrs: []
 	})
 
-	onDestroy(addChild(parent, node))
+	onDestroy(addChild(parent, node, markerId))
 </script>
+
+<svelte-email-marker id={markerId}></svelte-email-marker>

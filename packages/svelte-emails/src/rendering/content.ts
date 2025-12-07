@@ -796,8 +796,16 @@ const ESCAPED_CLOSE_BRACKET = '\uE101'
  * ```
  */
 export function interpolatePlaceholders(content: string, context: RenderContext): string {
+	// Handle undefined/null content gracefully
+	if (content == null) {
+		return ''
+	}
+	
+	// Ensure content is a string (handle numbers, booleans, etc.)
+	const str = String(content)
+	
 	// Protect escaped brackets before processing
-	let result = content
+	let result = str
 		.replace(/\\\[\[/g, ESCAPED_OPEN_BRACKET)
 		.replace(/\\\]\]/g, ESCAPED_CLOSE_BRACKET)
 	
