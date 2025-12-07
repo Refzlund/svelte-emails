@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://refzlund.github.io/svelte-emails/documentation/svelteemails">📚 Documentation</a> •
-  <a href="#quick-start">🚀 Quick Start</a> •
+  <a href="https://refzlund.github.io/svelte-emails/documentation/svelteemails">📚 Documentation</a>  • 
+  <a href="#quick-start">🚀 Quick Start</a>  • 
   <a href="#why-svelte-emails">🤔 Why?</a>
 </p>
 
