@@ -93,78 +93,78 @@ This affects `responsive` columns, `mobile-only`, and `desktop-only` elements.
 		)
 	}
 
-	// normalizeAttrs converts value-attributes (body-bg="#f5f5f5") to bracket syntax (body-bg-[#f5f5f5])
-	
-	let bodyBackground: string | undefined
-	let maxWidth: number | undefined
-	let mobileBreakpoint: number | undefined
+	// Helper function to process attrs and extract special values
+	function processAttrs(inputAttrs: Record<string, unknown>) {
+		const attrKeys = normalizeAttrs(inputAttrs)
+		let bodyBg: string | undefined
+		let maxW: number | undefined
+		let mobileBp: number | undefined
+		const filtered: string[] = []
 
-	const filteredAttrs: string[] = $derived.by(() => {
-		const result: string[] = []
-		const attrKeys = normalizeAttrs(attrs)
+		const presetWidths: Record<string, number> = {
+			'max-w-xs': 320,
+			'max-w-sm': 384,
+			'max-w-md': 448,
+			'max-w-lg': 512,
+			'max-w-xl': 576,
+			'max-w-2xl': 672,
+			'max-w-3xl': 768,
+			'max-w-4xl': 896,
+			'max-w-5xl': 1024,
+			'max-w-6xl': 1152,
+			'max-w-7xl': 1280
+		}
 
 		for (const attr of attrKeys) {
 			// Extract body-bg-[#hex]
 			const bodyBgMatch = attr.match(/^body-bg-\[(#[0-9a-fA-F]{3,8})\]$/)
 			if (bodyBgMatch) {
-				bodyBackground = bodyBgMatch[1]
+				bodyBg = bodyBgMatch[1]
 				continue
 			}
 
 			// Extract mobile-threshold-[value] for responsive breakpoint
 			const mobileThresholdMatch = attr.match(/^mobile-threshold-\[(\d+)(?:px)?\]$/)
 			if (mobileThresholdMatch) {
-				mobileBreakpoint = parseInt(mobileThresholdMatch[1])
+				mobileBp = parseInt(mobileThresholdMatch[1])
 				continue
 			}
 
 			// Extract max-w-[value] or max-w-{preset}
 			const maxWArbitraryMatch = attr.match(/^max-w-\[(\d+)(?:px)?\]$/)
 			if (maxWArbitraryMatch) {
-				maxWidth = parseInt(maxWArbitraryMatch[1])
+				maxW = parseInt(maxWArbitraryMatch[1])
 				continue
 			}
 
 			// Extract max-w-{preset}
-			const presetWidths: Record<string, number> = {
-				'max-w-xs': 320,
-				'max-w-sm': 384,
-				'max-w-md': 448,
-				'max-w-lg': 512,
-				'max-w-xl': 576,
-				'max-w-2xl': 672,
-				'max-w-3xl': 768,
-				'max-w-4xl': 896,
-				'max-w-5xl': 1024,
-				'max-w-6xl': 1152,
-				'max-w-7xl': 1280
-			}
 			if (attr in presetWidths) {
-				maxWidth = presetWidths[attr]
+				maxW = presetWidths[attr]
 				continue
 			}
 
 			// Keep all other attrs (including bg-[#...] for content background)
-			result.push(attr)
+			filtered.push(attr)
 		}
-		return result
-	})
 
-	const node: Mail.EmailNode = $derived({
+		return { bodyBackground: bodyBg, maxWidth: maxW, mobileBreakpoint: mobileBp, filteredAttrs: filtered }
+	}
+
+	// Create node with getters to maintain reactivity
+	// The getters ensure that when attrs/preview/style change, the node reflects the current values
+	const node: Mail.EmailNode = $state({
 		type: 'email',
 		children: [],
-		attrs: filteredAttrs,
-		preview: preview,
-		bodyBackground: bodyBackground,
-		maxWidth: maxWidth,
-		mobileBreakpoint: mobileBreakpoint,
-		style: style
-	}) as Mail.EmailNode
-	
-	// Register with collector - re-register whenever node changes
-	$effect(() => {
-		collector.registerRoot(node)
+		get attrs() { return processAttrs(attrs).filteredAttrs },
+		get preview() { return preview },
+		get bodyBackground() { return processAttrs(attrs).bodyBackground },
+		get maxWidth() { return processAttrs(attrs).maxWidth },
+		get mobileBreakpoint() { return processAttrs(attrs).mobileBreakpoint },
+		get style() { return style }
 	})
+	
+	// Register with collector synchronously (required for SSR - effects don't run during SSR)
+	collector.registerRoot(node)
 
 	// Set this node as parent for children
 	setEmailParent(node)
