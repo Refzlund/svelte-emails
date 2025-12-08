@@ -51,8 +51,9 @@ footer: {footer === undefined ? 'undefined' : footer}</pre>
 	<div class="preview">
 		<h2>Email Preview</h2>
 		<p class="hint">
-			<strong>Test page:</strong> Tests conditional rendering ({'{#if}'}, {'{#each}'}) and 
-			undefined content handling. Add/remove items and toggle footer to verify correct behavior.
+			<strong>Scroll persistence test:</strong> Scroll down in the preview, then modify controls 
+			(message, color, add items). The scroll position should persist. If scroll jumps to top 
+			on each change, the issue is confirmed.
 		</p>
 		<Email.Render>
 			<TestEmail {message} {bgColor} {items} {footer} />
