@@ -1,5 +1,13 @@
 # svelte-emails
 
+## 1.0.4
+
+### Patch Changes
+
+- fix(context): filter out undefined/null children in reorderChildrenByDom ([#10](https://github.com/Refzlund/svelte-emails/pull/10))
+
+- chore: add link/unlink scripts to package.json ([#10](https://github.com/Refzlund/svelte-emails/pull/10))
+
 ## 1.0.3
 
 ### Patch Changes

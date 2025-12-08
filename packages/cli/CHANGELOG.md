@@ -1,5 +1,12 @@
 # svelte-emails-cli
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [[`626509e`](https://github.com/Refzlund/svelte-emails/commit/626509e060aa980f8cde27497fa9b9bee42858e8), [`626509e`](https://github.com/Refzlund/svelte-emails/commit/626509e060aa980f8cde27497fa9b9bee42858e8)]:
+  - svelte-emails@1.0.4
+
 ## 0.0.5
 
 ### Patch Changes
