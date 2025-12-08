@@ -585,9 +585,12 @@ export function reorderChildrenByDom(container: Element, root: Mail.EmailNode): 
 	function reorderNode(node: Mail.IRParentNode) {
 		const children = node.children as Mail.IRNode[]
 		
+		// Filter out undefined/null children first (can happen during reactive updates)
+		const validChildren = children.filter((c): c is Mail.IRNode => c != null)
+		
 		// Filter to only children with markers, sort them
-		const withMarkers = children.filter(c => c._markerId && orderMap.has(c._markerId))
-		const withoutMarkers = children.filter(c => !c._markerId || !orderMap.has(c._markerId))
+		const withMarkers = validChildren.filter(c => c._markerId && orderMap.has(c._markerId))
+		const withoutMarkers = validChildren.filter(c => !c._markerId || !orderMap.has(c._markerId))
 		
 		if (withMarkers.length > 0) {
 			// Sort children with markers by their DOM order
