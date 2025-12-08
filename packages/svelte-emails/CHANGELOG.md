@@ -1,5 +1,31 @@
 # svelte-emails
 
+## 1.0.3
+
+### Patch Changes
+
+- fix(context): correct child ordering for conditional rendering with DOM markers ([#8](https://github.com/Refzlund/svelte-emails/pull/8))
+
+  - Add `generateMarkerId()` to create unique IDs for correlating IR nodes with DOM position
+  - Add `<svelte-email-marker>` elements to all components for DOM-based ordering
+  - Add `reorderChildrenByDom()` function to sort IR tree children based on actual DOM order
+  - Fix ordering issues when using `{#if}` and `{#each}` blocks which caused children to register out of source order
+  - Note: This only affects client-side preview; SSR renders synchronously in correct order
+
+- docs(architecture): add patterns for defensive child handling and DOM-based ordering ([#8](https://github.com/Refzlund/svelte-emails/pull/8))
+
+  - Document the "Defensive Child Handling" pattern for filtering undefined/null children
+  - Document the "DOM-Based Ordering for Conditional Content" pattern explaining marker-based sorting
+  - List all affected renderer functions and component patterns
+
+- fix(renderer): handle undefined/null content and children in conditional rendering ([#8](https://github.com/Refzlund/svelte-emails/pull/8))
+
+  - Add `normalizeContent()` and `normalizeOptionalContent()` helpers to gracefully handle null/undefined content props with console warnings
+  - Filter out undefined/null children before processing in renderer functions to prevent "Cannot read properties of undefined" errors
+  - Add defensive child handling in `renderChildren()`, `renderDivNode()`, `renderDivAsGrid()`, `renderTableNode()`, `renderTableRowNode()`, and plain text renderers
+  - Components with required content (Text, H1-H6, etc.) now show helpful warnings when receiving null/undefined values
+  - Components with optional content (Button, Link, Unsubscribe) silently accept null/undefined
+
 ## 1.0.2
 
 ### Patch Changes
