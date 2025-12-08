@@ -14,7 +14,7 @@ and alignment (`align-*`, `justify-*`). Children can override with their own att
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { TableRowAttributes } from '../../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, generateMarkerId, type Mail } from '../../context'
 
 	export interface Props extends TableRowAttributes {
 		/** Row cells (Text or other components) */
@@ -24,6 +24,7 @@ and alignment (`align-*`, `justify-*`). Children can override with their own att
 	const { children, ...attrs }: Props = $props()
 
 	const parent = getEmailParent()
+	const markerId = generateMarkerId()
 
 	// Extract header flag
 	const header = $derived(attrs.header === true)
@@ -35,8 +36,9 @@ and alignment (`align-*`, `justify-*`). Children can override with their own att
 		get header() { return header }
 	})
 
-	onDestroy(addChild(parent, node))
+	onDestroy(addChild(parent, node, markerId))
 	setEmailParent(node)
 </script>
 
+<svelte-email-marker id={markerId}></svelte-email-marker>
 {@render children?.()}

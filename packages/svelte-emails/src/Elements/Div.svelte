@@ -25,7 +25,7 @@ Renders as a table cell in the final HTML for email compatibility.
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { DivAttributes } from '../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, generateMarkerId, type Mail } from '../context'
 	import { parseColumnTemplate, parseRowTemplate, parseGap } from '../rendering/parse-attrs'
 
 	interface Props extends DivAttributes {
@@ -37,6 +37,9 @@ Renders as a table cell in the final HTML for email compatibility.
 
 	// Get parent and register this node
 	const parent = getEmailParent()
+
+	// Generate unique marker ID for DOM-based ordering
+	const markerId = generateMarkerId()
 
 	// Determine direction from boolean attrs
 	const direction: 'cols' | 'rows' | undefined = $derived(cols ? 'cols' : rows ? 'rows' : undefined)
@@ -69,10 +72,11 @@ Renders as a table cell in the final HTML for email compatibility.
 	})
 
 	// Add to parent's children and setup cleanup
-	onDestroy(addChild(parent, node))
+	onDestroy(addChild(parent, node, markerId))
 
 	// Set this node as parent for nested children
 	setEmailParent(node)
 </script>
 
+<svelte-email-marker id={markerId}></svelte-email-marker>
 {@render children?.()}

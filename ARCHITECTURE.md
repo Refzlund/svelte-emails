@@ -1083,6 +1083,65 @@ This section documents reusable patterns for working around HTML email limitatio
 
 This keeps the media query CSS static while allowing per-element configuration.
 
+#### Pattern: Defensive Child Handling
+
+**Problem:** When using Svelte's conditional rendering (`{#if}`, `{#each}`), the children array may contain `undefined` or `null` entries. This causes runtime errors like "Cannot read properties of undefined (reading 'type')" when the renderer tries to access `node.type`.
+
+**Solution:** Filter out `undefined`/`null` children before processing:
+
+```ts
+// In all functions that iterate over children
+const validChildren = node.children.filter((child) => child != null)
+
+// Then use validChildren instead of node.children
+const childrenHtml = validChildren.map((child) => renderNodeToHtml(child, ...))
+```
+
+**Affected functions:**
+- `renderChildren()` — Base helper used by most container nodes
+- `renderDivNode()` / `renderDivAsGrid()` — Grid layouts with conditional items
+- `renderTableNode()` / `renderTableRowNode()` — Tables with conditional rows/cells
+- All plain text renderers (`renderEmailNodeToText`, `renderContainerToText`, etc.)
+- `interpolatePlaceholders()` — Content processing (returns empty string for `null`/`undefined`)
+
+**Note:** Components use `normalizeContent()` (required content) or `normalizeOptionalContent()` (optional) from `context.ts` to handle `null`/`undefined` props gracefully with appropriate warnings.
+
+#### Pattern: DOM-Based Ordering for Conditional Content
+
+**Problem:** When using Svelte's `{#if}` or `{#each}` blocks, components register to the IR tree as they mount. Conditional content mounts *after* unconditional content, causing incorrect ordering:
+
+```svelte
+<Email>
+  <Div><Text content='Header' /></Div>
+  
+  {#if showItems}
+    <Div><Text content='Items' /></Div>  <!-- Mounts late! -->
+  {/if}
+  
+  <Div><Text content='Footer' /></Div>  <!-- Registered before "Items" -->
+</Email>
+```
+
+**Solution:** Use DOM markers to determine source order. Each component emits a hidden `<svelte-email-marker>` element with a unique ID. Before rendering, we read the DOM order of markers and reorder the IR tree accordingly.
+
+```svelte
+<!-- Component pattern -->
+<script>
+  const markerId = generateMarkerId()
+  onDestroy(addChild(parent, node, markerId))
+</script>
+
+<svelte-email-marker id={markerId}></svelte-email-marker>
+{@render children?.()}
+```
+
+The `reorderChildrenByDom()` function in `context.ts`:
+1. Queries all `<svelte-email-marker>` elements in DOM order
+2. Builds a position map from marker IDs
+3. Sorts IR node children to match DOM order
+
+**Note:** This only affects client-side preview. SSR renders synchronously, so components register in source order naturally.
+
 ---
 
 ## Email Client Compatibility

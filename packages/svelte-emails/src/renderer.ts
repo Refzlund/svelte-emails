@@ -406,6 +406,7 @@ function renderNodeToHtml(
 
 /**
  * Helper to render all children of a container node.
+ * Filters out undefined/null children that may result from conditional rendering.
  */
 function renderChildren(
 	children: Mail.IRNode[],
@@ -414,6 +415,7 @@ function renderChildren(
 	rootSize: number
 ): string {
 	return children
+		.filter((child) => child != null)
 		.map((child) => renderNodeToHtml(child, inherited, context, rootSize))
 		.join('')
 }
@@ -599,11 +601,14 @@ function renderDivNode(
 
 	// Normal Div (or rows with h-full): single cell containing all children
 	// For rows with h-full, insert gap spacers between children
+	// Filter out undefined children that may result from conditional rendering
+	const validChildren = node.children.filter((child) => child != null)
+	
 	let childrenHtml: string
 	const resolvedGap = node.gap ? resolveSpacingValue(node.gap, rootSize) : undefined
 	if (isRowsWithFullHeight && resolvedGap) {
 		// Render children with gap spacers as content (not table rows)
-		childrenHtml = node.children.map((child, index) => {
+		childrenHtml = validChildren.map((child, index) => {
 			const childHtml = renderNodeToHtml(child, childInherited, context, rootSize)
 			if (index > 0) {
 				return gapSpacerTable(resolvedGap) + childHtml
@@ -611,7 +616,7 @@ function renderDivNode(
 			return childHtml
 		}).join('')
 	} else {
-		childrenHtml = renderChildren(node.children, childInherited, context, rootSize)
+		childrenHtml = renderChildren(validChildren, childInherited, context, rootSize)
 	}
 
 	// Table attrs: use explicit width if provided, otherwise 100% to fill container
@@ -683,6 +688,14 @@ function renderDivAsGrid(
 	context: RenderContext,
 	rootSize: number
 ): string {
+	// Filter out undefined children that may result from conditional rendering
+	const validChildren = node.children.filter((child) => child != null)
+	
+	// Return empty string for empty grids (no children to render)
+	if (validChildren.length === 0) {
+		return ''
+	}
+	
 	const isResponsive = node.responsiveGrid
 	const isColumns = node.direction === 'cols'
 	const gap = node.gap ? resolveSpacingValue(node.gap, rootSize) : undefined // Resolved to px
@@ -699,14 +712,14 @@ function renderDivAsGrid(
 		// Calculate auto-widths if cols-[...] not specified
 		let autoWidths: string[] | undefined
 		
-		if (!node.colWidths && node.children.length > 0) {
+		if (!node.colWidths && validChildren.length > 0) {
 			// No explicit column template - auto-calculate widths
 			// First, find children with explicit widths and sum them
 			let usedPercentage = 0
 			let childrenWithoutWidth = 0
 			let hasFixedWidthChildren = false
 			
-			for (const child of node.children) {
+			for (const child of validChildren) {
 				const childWidth = extractWidthFromAttrs(child.attrs, rootSize)
 				if (childWidth && childWidth.endsWith('%')) {
 					usedPercentage += parseFloat(childWidth)
@@ -736,7 +749,7 @@ function renderDivAsGrid(
 			
 			// Build auto-widths array (only if we have something to distribute)
 			if (autoWidth || hasFixedWidthChildren) {
-				autoWidths = node.children.map((child) => {
+				autoWidths = validChildren.map((child) => {
 					const childWidth = extractWidthFromAttrs(child.attrs, rootSize)
 					return childWidth ?? autoWidth!
 				})
@@ -769,10 +782,10 @@ function renderDivAsGrid(
 		}
 		
 		// Extract width, valign, responsive, and span from each child's attrs to apply to <td>
-		const childCount = node.children.length
+		const childCount = validChildren.length
 		
 		// Check if any child will be unwrapped (h-full Div or rows h-full Div) - if so, use gap spacer cells
-		const hasUnwrappedChildren = node.children.some(child => {
+		const hasUnwrappedChildren = validChildren.some(child => {
 			const attrs = extractCellAttrs(child.attrs, rootSize)
 			// Plain Div with h-full, OR rows Div with h-full (which gets unwrapped to plain)
 			const isPlainDivWithHeight = child.type === 'div' && !child.direction && attrs.height === '100%'
@@ -784,7 +797,7 @@ function renderDivAsGrid(
 		const effectiveUseGapAsPadding = useGapAsPadding && !useGapCells
 		
 		let colIndex = 0
-		const cells = node.children.map((child, index) => {
+		const cells = validChildren.map((child, index) => {
 			// Extract all cell-related attrs in single pass
 			const cellAttrs = extractCellAttrs(child.attrs, rootSize)
 			
@@ -896,7 +909,7 @@ function renderDivAsGrid(
 			return cell
 		}).join('')
 		// If any child has h-full, the row should also have height to enable cell stretching
-		const hasHeightChild = node.children.some(child => {
+		const hasHeightChild = validChildren.some(child => {
 			const attrs = extractCellAttrs(child.attrs, rootSize)
 			return attrs.height === '100%'
 		})
@@ -914,7 +927,7 @@ function renderDivAsGrid(
 		// single cell to stretch to 100% height like a plain Div does.
 		if (hasFullHeight) {
 			// Render as single-cell table with children as content and gap spacers
-			const childrenWithGaps = node.children.map((child, index) => {
+			const childrenWithGaps = validChildren.map((child, index) => {
 				const childHtml = renderNodeToHtml(child, childInherited, context, rootSize)
 				// Insert gap spacer (as content, not as table row) between children
 				if (gap && index > 0) {
@@ -926,7 +939,7 @@ function renderDivAsGrid(
 			innerHtml = `<tr style="height: 100%"><td style="height: 100%">${childrenWithGaps}</td></tr>`
 		} else {
 			// Normal rows rendering: multiple <tr> elements
-			innerHtml = node.children.map((child, index) => {
+			innerHtml = validChildren.map((child, index) => {
 				const childHtml = renderNodeToHtml(child, childInherited, context, rootSize)
 				
 				// Apply row height from rowHeights array if available
@@ -1571,6 +1584,14 @@ function renderTableNode(
 	context: RenderContext,
 	rootSize: number
 ): string {
+	// Filter out undefined children that may result from conditional rendering
+	const validChildren = node.children.filter((child) => child != null)
+	
+	// Return empty string for empty tables (no rows to render)
+	if (validChildren.length === 0) {
+		return ''
+	}
+	
 	const parsed = parseAttrs(node.attrs, inherited, rootSize)
 	const childInherited = extractInheritable(parsed, inherited)
 
@@ -1602,7 +1623,7 @@ function renderTableNode(
 	}
 
 	// Render rows with column widths and border info
-	const rowsHtml = node.children.map((child, index) => {
+	const rowsHtml = validChildren.map((child, index) => {
 		// For striped tables, alternate row background
 		if (node.striped && child.type === 'table-row' && !child.header && index % 2 === 1) {
 			const stripeColor = tableConfig?.stripedBackground ?? '#f9fafb'
@@ -1614,7 +1635,7 @@ function renderTableNode(
 				cellPadding
 			})
 		}
-		return renderTableRowNode(node.children[index] as Mail.TableRowNode, childInherited, context, rootSize, {
+		return renderTableRowNode(validChildren[index] as Mail.TableRowNode, childInherited, context, rootSize, {
 			colWidths: node.colWidths,
 			borderColor: needCellBorders ? borderColor : undefined,
 			cellPadding
@@ -1708,6 +1729,9 @@ function renderTableRowNode(
 	rootSize: number,
 	options: TableRowRenderOptions = {}
 ): string {
+	// Filter out undefined children that may result from conditional rendering
+	const validChildren = node.children.filter((child) => child != null)
+	
 	const { rowBackground, colWidths, borderColor, cellPadding } = options
 	const parsed = parseAttrs(node.attrs, inherited, rootSize)
 	const cellTag = node.header ? 'th' : 'td'
@@ -1725,14 +1749,14 @@ function renderTableRowNode(
 
 	// Track column index for width assignment
 	let colIndex = 0
-	const totalChildren = node.children.length
+	const totalChildren = validChildren.length
 
 	// Check if row has any explicit padding
 	const rowHasPadding = rowStyles.padding || rowStyles.paddingTop ||
 		rowStyles.paddingRight || rowStyles.paddingBottom || rowStyles.paddingLeft
 
 	// Each child becomes a cell
-	const cellsHtml = node.children.map((child, childIndex) => {
+	const cellsHtml = validChildren.map((child, childIndex) => {
 		const cellHtml = renderNodeToHtml(child, childInherited, context, rootSize)
 		
 		// Get row styles transferred to this cell
@@ -1841,6 +1865,7 @@ function renderNodeToText(node: Mail.IRNode, context: RenderContext): string {
 
 function renderEmailNodeToText(node: Mail.EmailNode, context: RenderContext): string {
 	const childrenText = node.children
+		.filter((c) => c != null)
 		.map((c) => renderNodeToText(c, context))
 		.filter((text) => text.trim() !== '') // Remove empty sections
 		.join('\n\n')
@@ -1855,7 +1880,7 @@ function renderContainerToText(
 	node: Mail.DivNode,
 	context: RenderContext
 ): string {
-	return node.children.map((c) => renderNodeToText(c, context)).join('\n')
+	return node.children.filter((c) => c != null).map((c) => renderNodeToText(c, context)).join('\n')
 }
 
 function renderTextNodeToText(node: Mail.TextNode, context: RenderContext): string {
@@ -1930,7 +1955,7 @@ function renderLinkLikeToText(
 	const href = interpolatePlaceholders(node.href, context)
 	let content = node.content
 		? interpolatePlaceholders(node.content, context)
-		: node.children.map((c) => renderNodeToText(c, context)).join('')
+		: node.children.filter((c) => c != null).map((c) => renderNodeToText(c, context)).join('')
 	content = content.trim() || 'Link'
 
 	return format === 'markdown'
@@ -1964,11 +1989,13 @@ function normalizeCellContent(text: string): string {
 }
 
 function renderTableNodeToText(node: Mail.TableNode, context: RenderContext): string {
-	if (node.children.length === 0) return ''
+	// Filter out undefined children that may result from conditional rendering
+	const validChildren = node.children.filter((row) => row != null)
+	if (validChildren.length === 0) return ''
 
 	// Pre-render all cells and normalize content
-	const renderedRows = node.children.map((row) => 
-		row.children.map((cell) => normalizeCellContent(renderNodeToText(cell, context)))
+	const renderedRows = validChildren.map((row) => 
+		row.children.filter((cell) => cell != null).map((cell) => normalizeCellContent(renderNodeToText(cell, context)))
 	)
 
 	// Calculate column widths based on actual content
@@ -1999,6 +2026,6 @@ function renderTableNodeToText(node: Mail.TableNode, context: RenderContext): st
 
 function renderTableRowNodeToText(node: Mail.TableRowNode, context: RenderContext): string {
 	// This function is now only used when rows are rendered outside of renderTableNodeToText
-	const cells = node.children.map((c) => normalizeCellContent(renderNodeToText(c, context)))
+	const cells = node.children.filter((c) => c != null).map((c) => normalizeCellContent(renderNodeToText(c, context)))
 	return '| ' + cells.join(' | ') + ' |'
 }

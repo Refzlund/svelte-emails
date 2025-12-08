@@ -31,27 +31,32 @@ Variable interpolation: `[[variable_name]]` replaced at render time.
 <script lang='ts'>
 	import { onDestroy } from 'svelte'
 	import type { TextAttributes } from '../../style-attributes'
-	import { getEmailParent, addChild, normalizeAttrs, type Mail } from '../../context'
+	import { getEmailParent, addChild, normalizeAttrs, normalizeContent, generateMarkerId, type Mail, type ContentValue } from '../../context'
 
 	export interface Props extends TextAttributes {
 		/** Text content with markdown-like syntax support */
-		content: string
+		content: ContentValue
 	}
 
 	const { content, ...attrs }: Props = $props()
 
-	const normalizedAttrs = $derived(normalizeAttrs(attrs))
+	const normalizedContent = $derived(normalizeContent(content, 'Text'))
 
 	// Get parent and register this node
 	const parent = getEmailParent()
 
+	// Generate unique marker ID for DOM-based ordering
+	const markerId = generateMarkerId()
+
 	const node: Mail.TextNode = $state({
 		type: 'text',
 		variant: 'default',
-		get attrs() { return normalizedAttrs },
-		get content() { return content }
+		attrs: normalizeAttrs(attrs),
+		get content() { return normalizedContent ?? '' }
 	})
 
-	// Add to parent's children and setup cleanup
-	onDestroy(addChild(parent, node))
+	// Always register - renderer handles null/empty content gracefully
+	onDestroy(addChild(parent, node, markerId))
 </script>
+
+<svelte-email-marker id={markerId}></svelte-email-marker>

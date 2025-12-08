@@ -30,31 +30,35 @@ Link = inline), but the component code is 95% identical.
 	import { onDestroy } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { ButtonAttributes } from '../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, type Mail } from '../context'
+	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, generateMarkerId, normalizeOptionalContent, type Mail, type ContentValue } from '../context'
 
 	interface Props extends ButtonAttributes {
 		/** URL the button links to */
 		href: string
 		/** Button label text (alternative to children) */
-		content?: string
+		content?: ContentValue
 		/** Button label content */
 		children?: Snippet
 	}
 
 	const { href, content, children, ...attrs }: Props = $props()
 
+	const normalizedContent = $derived(normalizeOptionalContent(content))
+
 	const parent = getEmailParent()
+	const markerId = generateMarkerId()
 
 	const node: Mail.ButtonNode = $state({
 		type: 'button',
 		attrs: normalizeAttrs(attrs),
 		children: [],
 		get href() { return href },
-		get content() { return content }
+		get content() { return normalizedContent }
 	})
 
-	onDestroy(addChild(parent, node))
+	onDestroy(addChild(parent, node, markerId))
 	setEmailParent(node)
 </script>
 
+<svelte-email-marker id={markerId}></svelte-email-marker>
 {@render children?.()}
