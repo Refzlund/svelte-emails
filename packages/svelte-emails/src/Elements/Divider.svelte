@@ -24,9 +24,9 @@ Falls back to `StyleConfig.Divider` defaults if not specified.
 @see style presets for divider customization options
 -->
 <script lang='ts'>
-	import { onDestroy } from 'svelte'
+	import { untrack } from 'svelte'
 	import type { Attributes } from '../style-attributes'
-	import { getEmailParent, addChild, normalizeAttrs, generateMarkerId, type Mail } from '../context'
+	import { getEmailParent, getEmailRoot, addChild, removeChild, normalizeAttrs, generateMarkerId, type Mail } from '../context'
 
 	type DividerBorderWidth = 'border-0' | 'border-1' | 'border-2' | 'border-4' | 'border-8'
 
@@ -48,6 +48,8 @@ Falls back to `StyleConfig.Divider` defaults if not specified.
 	const { border, ...attrs }: Props = $props()
 
 	const parent = getEmailParent()
+	const collector = getEmailRoot()
+	const markerId = generateMarkerId()
 
 	// Convert border prop to attribute syntax if provided
 	const attrs_ = $derived.by(() => {
@@ -63,8 +65,14 @@ Falls back to `StyleConfig.Divider` defaults if not specified.
 		get attrs() { return attrs_ }
 	})
 
-	const markerId = generateMarkerId()
-	onDestroy(addChild(parent, node, markerId))
+	// Synchronous registration for SSR (effects don't run during SSR)
+	addChild(parent, node, markerId, collector)
+
+	// Effect handles client-side lifecycle (see Text.svelte for explanation)
+	$effect(() => {
+		untrack(() => addChild(parent, node, markerId, collector))
+		return () => untrack(() => removeChild(parent, markerId, collector))
+	})
 </script>
 
 <svelte-email-marker id={markerId}></svelte-email-marker>

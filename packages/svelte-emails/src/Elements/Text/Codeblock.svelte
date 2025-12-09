@@ -39,9 +39,9 @@ function greet(name) {
 @see shiki.ts for syntax highlighting implementation
 -->
 <script lang='ts'>
-	import { onDestroy } from 'svelte'
+	import { untrack } from 'svelte'
 	import type { TextAttributes } from '../../style-attributes'
-	import { getEmailParent, addChild, normalizeAttrs, normalizeContent, generateMarkerId, type Mail, type ContentValue } from '../../context'
+	import { getEmailParent, getEmailRoot, addChild, removeChild, normalizeAttrs, normalizeContent, generateMarkerId, type Mail, type ContentValue } from '../../context'
 
 	export interface Props extends TextAttributes {
 		/** Code content (will be HTML-escaped unless highlight is used) */
@@ -65,6 +65,7 @@ function greet(name) {
 	const normalizedContent = $derived(normalizeContent(content, 'Text.Codeblock'))
 
 	const parent = getEmailParent()
+	const collector = getEmailRoot()
 	const markerId = generateMarkerId()
 
 	const node: Mail.TextNode = $state({
@@ -76,7 +77,14 @@ function greet(name) {
 		get highlightTheme() { return theme }
 	})
 
-	onDestroy(addChild(parent, node, markerId))
+	// Synchronous registration for SSR (effects don't run during SSR)
+	addChild(parent, node, markerId, collector)
+
+	// Effect handles client-side lifecycle (see Text.svelte for explanation)
+	$effect(() => {
+		untrack(() => addChild(parent, node, markerId, collector))
+		return () => untrack(() => removeChild(parent, markerId, collector))
+	})
 </script>
 
 <svelte-email-marker id={markerId}></svelte-email-marker>

@@ -11,10 +11,10 @@ and alignment (`align-*`, `justify-*`). Children can override with their own att
 @see ARCHITECTURE.md for style inheritance details
 -->
 <script lang='ts'>
-	import { onDestroy } from 'svelte'
+	import { untrack } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { TableRowAttributes } from '../../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, generateMarkerId, type Mail } from '../../context'
+	import { getEmailParent, getEmailRoot, setEmailParent, addChild, removeChild, normalizeAttrs, generateMarkerId, type Mail } from '../../context'
 
 	export interface Props extends TableRowAttributes {
 		/** Row cells (Text or other components) */
@@ -24,6 +24,7 @@ and alignment (`align-*`, `justify-*`). Children can override with their own att
 	const { children, ...attrs }: Props = $props()
 
 	const parent = getEmailParent()
+	const collector = getEmailRoot()
 	const markerId = generateMarkerId()
 
 	// Extract header flag
@@ -36,7 +37,15 @@ and alignment (`align-*`, `justify-*`). Children can override with their own att
 		get header() { return header }
 	})
 
-	onDestroy(addChild(parent, node, markerId))
+	// Synchronous registration for SSR (effects don't run during SSR)
+	addChild(parent, node, markerId, collector)
+
+	// Effect handles client-side lifecycle (see Text.svelte for explanation)
+	$effect(() => {
+		untrack(() => addChild(parent, node, markerId, collector))
+		return () => untrack(() => removeChild(parent, markerId, collector))
+	})
+
 	setEmailParent(node)
 </script>
 

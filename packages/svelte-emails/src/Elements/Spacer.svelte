@@ -47,9 +47,9 @@ Use `h-*` or `w-*` attributes to override the default size based on context.
 @see ARCHITECTURE.md for detailed context-aware behavior documentation
 -->
 <script lang='ts'>
-	import { onDestroy } from 'svelte'
+	import { untrack } from 'svelte'
 	import type { Attributes, SpanAttributes, SafeWidthAttributes, ResponsiveAttributes } from '../style-attributes'
-	import { getEmailParent, addChild, normalizeAttrs, generateMarkerId, type Mail } from '../context'
+	import { getEmailParent, getEmailRoot, addChild, removeChild, normalizeAttrs, generateMarkerId, type Mail } from '../context'
 
 	type SpacerScales = 
 		| 'h-0' | 'h-0.25' | 'h-0.5' | 'h-0.75' | 'h-1' | 'h-1.5' 
@@ -81,6 +81,8 @@ Use `h-*` or `w-*` attributes to override the default size based on context.
 	const { size, ...attrs }: Props = $props()
 
 	const parent = getEmailParent()
+	const collector = getEmailRoot()
+	const markerId = generateMarkerId()
 
 	/**
 	 * Compute layout context from parent type:
@@ -105,8 +107,14 @@ Use `h-*` or `w-*` attributes to override the default size based on context.
 		get size() { return size }
 	})
 
-	const markerId = generateMarkerId()
-	onDestroy(addChild(parent, node, markerId))
+	// Synchronous registration for SSR (effects don't run during SSR)
+	addChild(parent, node, markerId, collector)
+
+	// Effect handles client-side lifecycle (see Text.svelte for explanation)
+	$effect(() => {
+		untrack(() => addChild(parent, node, markerId, collector))
+		return () => untrack(() => removeChild(parent, markerId, collector))
+	})
 </script>
 
 <svelte-email-marker id={markerId}></svelte-email-marker>

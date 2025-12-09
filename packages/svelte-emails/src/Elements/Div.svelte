@@ -22,10 +22,10 @@ Renders as a table cell in the final HTML for email compatibility.
 @see ARCHITECTURE.md for style inheritance details
 -->
 <script lang='ts'>
-	import { onDestroy } from 'svelte'
+	import { untrack } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { DivAttributes } from '../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, generateMarkerId, type Mail } from '../context'
+	import { getEmailParent, getEmailRoot, setEmailParent, addChild, removeChild, normalizeAttrs, generateMarkerId, type Mail } from '../context'
 	import { parseColumnTemplate, parseRowTemplate, parseGap } from '../rendering/parse-attrs'
 
 	interface Props extends DivAttributes {
@@ -35,8 +35,9 @@ Renders as a table cell in the final HTML for email compatibility.
 
 	const { children, cols, rows, responsive, ...attrs }: Props = $props()
 
-	// Get parent and register this node
+	// Get parent and collector for tree registration
 	const parent = getEmailParent()
+	const collector = getEmailRoot()
 
 	// Generate unique marker ID for DOM-based ordering
 	const markerId = generateMarkerId()
@@ -71,8 +72,14 @@ Renders as a table cell in the final HTML for email compatibility.
 		get gap() { return gap }
 	})
 
-	// Add to parent's children and setup cleanup
-	onDestroy(addChild(parent, node, markerId))
+	// Synchronous registration for SSR (effects don't run during SSR)
+	addChild(parent, node, markerId, collector)
+
+	// Effect handles client-side lifecycle (see Text.svelte for explanation)
+	$effect(() => {
+		untrack(() => addChild(parent, node, markerId, collector))
+		return () => untrack(() => removeChild(parent, markerId, collector))
+	})
 
 	// Set this node as parent for nested children
 	setEmailParent(node)

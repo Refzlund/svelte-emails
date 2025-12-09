@@ -25,10 +25,10 @@ will include both: `<mailto:email>, <href>`
 ```
 -->
 <script lang='ts'>
-	import { onDestroy } from 'svelte'
+	import { untrack } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { TextAttributes } from '../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, generateMarkerId, normalizeOptionalContent, type Mail, type ContentValue } from '../context'
+	import { getEmailParent, getEmailRoot, setEmailParent, addChild, removeChild, normalizeAttrs, generateMarkerId, normalizeOptionalContent, type Mail, type ContentValue } from '../context'
 
 	interface Props extends TextAttributes {
 		/** Unsubscribe URL */
@@ -46,6 +46,7 @@ will include both: `<mailto:email>, <href>`
 	const normalizedContent = $derived(normalizeOptionalContent(content))
 
 	const parent = getEmailParent()
+	const collector = getEmailRoot()
 	const markerId = generateMarkerId()
 
 	const node: Mail.UnsubscribeNode = $state({
@@ -57,7 +58,15 @@ will include both: `<mailto:email>, <href>`
 		get email() { return email }
 	})
 
-	onDestroy(addChild(parent, node, markerId))
+	// Synchronous registration for SSR (effects don't run during SSR)
+	addChild(parent, node, markerId, collector)
+
+	// Effect handles client-side lifecycle (see Text.svelte for explanation)
+	$effect(() => {
+		untrack(() => addChild(parent, node, markerId, collector))
+		return () => untrack(() => removeChild(parent, markerId, collector))
+	})
+
 	setEmailParent(node)
 </script>
 
