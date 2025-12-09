@@ -251,7 +251,7 @@ export namespace Mail {
  */
 export interface Collector {
 	/** Register the root Email node */
-	registerRoot(node: Mail.EmailNode): void
+	registerRoot(node: () => Mail.EmailNode): void
 	/**
 	 * Signal that the tree structure has changed.
 	 * This should be called whenever children are added/removed to trigger re-renders.
@@ -472,7 +472,7 @@ export function addChild(
 	const children = parent.children as Mail.IRNode[]
 	
 	// Skip if already added (idempotent for SSR + client hydration)
-	if (markerId && children.some(c => c._markerId === markerId)) {
+	if (markerId && children.some(c => c?._markerId === markerId)) {
 		return
 	}
 	
@@ -496,7 +496,7 @@ export function removeChild(
 	collector?: Collector
 ): void {
 	const children = parent.children as Mail.IRNode[]
-	const idx = children.findIndex(c => c._markerId === markerId)
+	const idx = children.findIndex(c => c?._markerId === markerId)
 	
 	if (idx >= 0) {
 		children.splice(idx, 1)

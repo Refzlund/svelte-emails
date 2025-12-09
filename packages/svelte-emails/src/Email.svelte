@@ -164,7 +164,7 @@ This affects `responsive` columns, `mobile-only`, and `desktop-only` elements.
 	})
 	
 	// Register with collector synchronously (required for SSR - effects don't run during SSR)
-	collector.registerRoot(node)
+	collector.registerRoot(() => node)
 
 	// Set this node as parent for children
 	setEmailParent(node)

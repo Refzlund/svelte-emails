@@ -77,8 +77,8 @@ Sets up the IR tree collector context and provides bindable output.
 
 	// Create collector that Email component will use to register itself
 	const collector: Collector = {
-		registerRoot(node: Mail.EmailNode) {
-			root = node
+		registerRoot(node: () => Mail.EmailNode) {
+			root = node()
 		},
 		markDirty() {
 			treeVersion++

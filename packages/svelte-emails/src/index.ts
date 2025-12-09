@@ -118,8 +118,8 @@ export async function render<TProps extends Record<string, unknown> = Record<str
 	// Create a collector to capture the IR tree
 	let root: Mail.EmailNode | null = null
 	const collector: Collector = {
-		registerRoot(node: Mail.EmailNode) {
-			root = node
+		registerRoot(node: () => Mail.EmailNode) {
+			root = node()
 		}
 	}
 
