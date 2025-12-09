@@ -24,10 +24,10 @@ Use `Table.Row` for each row. Row styles are inherited by child elements.
 @see ARCHITECTURE.md for style inheritance details
 -->
 <script lang='ts'>
-	import { onDestroy } from 'svelte'
+	import { untrack } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { TableAttributes } from '../../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, generateMarkerId, type Mail } from '../../context'
+	import { getEmailParent, getEmailRoot, setEmailParent, addChild, removeChild, normalizeAttrs, generateMarkerId, type Mail } from '../../context'
 	import { parseColumnTemplate, parseCellPadding } from '../../rendering/parse-attrs'
 
 	export interface Props extends TableAttributes {
@@ -38,6 +38,7 @@ Use `Table.Row` for each row. Row styles are inherited by child elements.
 	const { children, ...attrs }: Props = $props()
 
 	const parent = getEmailParent()
+	const collector = getEmailRoot()
 	const markerId = generateMarkerId()
 	// normalizeAttrs converts value-attributes (bg="#fff") to bracket syntax (bg-[#fff])
 	const attrKeys = normalizeAttrs(attrs)
@@ -68,7 +69,15 @@ Use `Table.Row` for each row. Row styles are inherited by child elements.
 		get cellPadding() { return cellPadding }
 	})
 
-	onDestroy(addChild(parent, node, markerId))
+	// Synchronous registration for SSR (effects don't run during SSR)
+	addChild(parent, node, markerId, collector)
+
+	// Effect handles client-side lifecycle (see Text.svelte for explanation)
+	$effect(() => {
+		untrack(() => addChild(parent, node, markerId, collector))
+		return () => untrack(() => removeChild(parent, markerId, collector))
+	})
+
 	setEmailParent(node)
 </script>
 

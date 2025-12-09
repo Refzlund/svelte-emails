@@ -252,6 +252,12 @@ export namespace Mail {
 export interface Collector {
 	/** Register the root Email node */
 	registerRoot(node: Mail.EmailNode): void
+	/**
+	 * Signal that the tree structure has changed.
+	 * This should be called whenever children are added/removed to trigger re-renders.
+	 * Only implemented in client-side preview mode (no-op in SSR).
+	 */
+	markDirty?: () => void
 }
 
 // ============================================================================
@@ -291,15 +297,6 @@ export function setEmailParent(node: Mail.IRParentNode): Mail.IRParentNode {
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/**
- * Detect if we're running in SSR mode.
- * In SSR, we don't want cleanup functions to run because:
- * 1. SSR is a one-time render, there's no "unmounting"
- * 2. Svelte's onDestroy runs during SSR (unlike other lifecycle hooks)
- * 3. Running cleanup would remove children we just added
- */
-const isSSR = typeof window === 'undefined'
 
 // ============================================================================
 // Attribute Normalization
@@ -424,12 +421,12 @@ export function normalizeAttrs(attrs: Record<string, unknown>): string[] {
  * Add a child node to a parent node.
  * Handles the type narrowing for different parent types.
  * 
- * Returns a cleanup function that removes the child from the parent.
- * This should be called in `onDestroy` to support dynamic content
- * (e.g., conditional rendering with {#if} or {#each} blocks).
+ * This function adds a child to the parent's children array and signals
+ * the collector to mark the tree as dirty for reactivity.
  * 
- * Note: In SSR mode, returns a no-op function because onDestroy runs
- * during SSR and would otherwise remove children immediately after adding.
+ * Note: In Svelte 5, components automatically clean up when unmounted,
+ * so we don't need manual cleanup functions. The IR tree is rebuilt
+ * fresh on each reactive update.
  * 
  * Note: TableNode only accepts TableRowNode children - this is enforced
  * at runtime with an error if violated.
@@ -437,22 +434,28 @@ export function normalizeAttrs(attrs: Record<string, unknown>): string[] {
  * @param parent - The parent node to add the child to
  * @param child - The child node to add
  * @param markerId - Optional marker ID for DOM-based ordering (client-side only)
+ * @param collector - Optional collector to signal tree changes (for reactivity)
  * 
  * @example
  * ```svelte
  * <script lang='ts'>
- *   import { onDestroy } from 'svelte'
- *   import { getEmailParent, addChild, generateMarkerId } from '../context'
+ *   import { getEmailParent, getEmailRoot, addChild, generateMarkerId } from '../context'
  *   
  *   const parent = getEmailParent()
+ *   const collector = getEmailRoot()
  *   const markerId = generateMarkerId()
  *   const node = { type: 'div', attrs: [], children: [], _markerId: markerId }
- *   onDestroy(addChild(parent, node))
+ *   addChild(parent, node, markerId, collector)
  * </script>
  * <svelte-email-marker id={markerId} />
  * ```
  */
-export function addChild(parent: Mail.IRParentNode, child: Mail.IRNode, markerId?: string): () => void {
+export function addChild(
+	parent: Mail.IRParentNode,
+	child: Mail.IRNode,
+	markerId?: string,
+	collector?: Collector
+): void {
 	// Validate table children must be rows
 	if (parent.type === 'table' && child.type !== 'table-row') {
 		throw new Error(
@@ -467,19 +470,37 @@ export function addChild(parent: Mail.IRParentNode, child: Mail.IRNode, markerId
 	}
 
 	const children = parent.children as Mail.IRNode[]
+	
+	// Skip if already added (idempotent for SSR + client hydration)
+	if (markerId && children.some(c => c._markerId === markerId)) {
+		return
+	}
+	
 	children.push(child)
 
-	// In SSR, return no-op because onDestroy runs during SSR
-	// and would remove children we just added
-	if (isSSR) {
-		return () => {}
-	}
+	// Signal tree change to collector for reactivity (client-side only)
+	collector?.markDirty?.()
+}
 
-	// In browser, return cleanup function to remove child from parent
-	// This supports dynamic content (conditional rendering, {#each}, etc.)
-	return () => {
-		const index = children.indexOf(child)
-		if (index !== -1) children.splice(index, 1)
+/**
+ * Remove a child from its parent's children array.
+ * Uses markerId for comparison to avoid Svelte proxy reference issues.
+ * 
+ * @param parent - Parent IR node
+ * @param markerId - The marker ID of the child to remove
+ * @param collector - Optional collector to signal tree changes
+ */
+export function removeChild(
+	parent: Mail.IRParentNode,
+	markerId: string,
+	collector?: Collector
+): void {
+	const children = parent.children as Mail.IRNode[]
+	const idx = children.findIndex(c => c._markerId === markerId)
+	
+	if (idx >= 0) {
+		children.splice(idx, 1)
+		collector?.markDirty?.()
 	}
 }
 

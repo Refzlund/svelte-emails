@@ -16,10 +16,10 @@ inline anchor links within text content.
 @see Button.svelte for styled call-to-action buttons
 -->
 <script lang='ts'>
-	import { onDestroy } from 'svelte'
+	import { untrack } from 'svelte'
 	import type { Snippet } from 'svelte'
 	import type { LinkAttributes } from '../style-attributes'
-	import { getEmailParent, setEmailParent, addChild, normalizeAttrs, generateMarkerId, normalizeOptionalContent, type Mail, type ContentValue } from '../context'
+	import { getEmailParent, getEmailRoot, setEmailParent, addChild, removeChild, normalizeAttrs, generateMarkerId, normalizeOptionalContent, type Mail, type ContentValue } from '../context'
 
 	interface Props extends LinkAttributes {
 		/** Link destination URL */
@@ -35,6 +35,7 @@ inline anchor links within text content.
 	const normalizedContent = $derived(normalizeOptionalContent(content))
 
 	const parent = getEmailParent()
+	const collector = getEmailRoot()
 	const markerId = generateMarkerId()
 
 	const node: Mail.LinkNode = $state({
@@ -45,7 +46,15 @@ inline anchor links within text content.
 		get content() { return normalizedContent }
 	})
 
-	onDestroy(addChild(parent, node, markerId))
+	// Synchronous registration for SSR (effects don't run during SSR)
+	addChild(parent, node, markerId, collector)
+
+	// Effect handles client-side lifecycle (see Text.svelte for explanation)
+	$effect(() => {
+		untrack(() => addChild(parent, node, markerId, collector))
+		return () => untrack(() => removeChild(parent, markerId, collector))
+	})
+
 	setEmailParent(node)
 </script>
 

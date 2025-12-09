@@ -29,9 +29,9 @@ Variable interpolation: `[[variable_name]]` replaced at render time.
 @see ARCHITECTURE.md for content parsing details
 -->
 <script lang='ts'>
-	import { onDestroy } from 'svelte'
+	import { untrack } from 'svelte'
 	import type { TextAttributes } from '../../style-attributes'
-	import { getEmailParent, addChild, normalizeAttrs, normalizeContent, generateMarkerId, type Mail, type ContentValue } from '../../context'
+	import { getEmailParent, getEmailRoot, addChild, removeChild, normalizeAttrs, normalizeContent, generateMarkerId, type Mail, type ContentValue } from '../../context'
 
 	export interface Props extends TextAttributes {
 		/** Text content with markdown-like syntax support */
@@ -42,8 +42,9 @@ Variable interpolation: `[[variable_name]]` replaced at render time.
 
 	const normalizedContent = $derived(normalizeContent(content, 'Text'))
 
-	// Get parent and register this node
+	// Get parent and collector for tree registration
 	const parent = getEmailParent()
+	const collector = getEmailRoot()
 
 	// Generate unique marker ID for DOM-based ordering
 	const markerId = generateMarkerId()
@@ -55,8 +56,17 @@ Variable interpolation: `[[variable_name]]` replaced at render time.
 		get content() { return normalizedContent ?? '' }
 	})
 
-	// Always register - renderer handles null/empty content gracefully
-	onDestroy(addChild(parent, node, markerId))
+	// Synchronous registration for SSR (effects don't run during SSR)
+	addChild(parent, node, markerId, collector)
+
+	// Effect handles client-side lifecycle:
+	// - Re-adds on mount (idempotent, skipped if already present)
+	// - Cleanup removes on unmount (e.g., {#if} toggling)
+	// The effect body MUST run addChild to ensure correct ordering relative to cleanup
+	$effect(() => {
+		untrack(() => addChild(parent, node, markerId, collector))
+		return () => untrack(() => removeChild(parent, markerId, collector))
+	})
 </script>
 
 <svelte-email-marker id={markerId}></svelte-email-marker>

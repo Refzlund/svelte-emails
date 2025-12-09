@@ -21,9 +21,9 @@ Best practices for email images:
 @see EMAIL_CLIENT_SUPPORT.md for image format support details
 -->
 <script lang='ts'>
-	import { onDestroy } from 'svelte'
+	import { untrack } from 'svelte'
 	import type { ImgAttributes } from '../style-attributes'
-	import { getEmailParent, addChild, normalizeAttrs, generateMarkerId, type Mail } from '../context'
+	import { getEmailParent, getEmailRoot, addChild, removeChild, normalizeAttrs, generateMarkerId, type Mail } from '../context'
 
 	interface Props extends ImgAttributes {
 		/** Image source URL (use absolute HTTPS URLs) */
@@ -41,6 +41,7 @@ Best practices for email images:
 	const { src, alt, width, height, href, ...attrs }: Props = $props()
 
 	const parent = getEmailParent()
+	const collector = getEmailRoot()
 	const markerId = generateMarkerId()
 
 	const node: Mail.ImgNode = $state({
@@ -53,7 +54,14 @@ Best practices for email images:
 		get href() { return href }
 	})
 
-	onDestroy(addChild(parent, node, markerId))
+	// Synchronous registration for SSR (effects don't run during SSR)
+	addChild(parent, node, markerId, collector)
+
+	// Effect handles client-side lifecycle (see Text.svelte for explanation)
+	$effect(() => {
+		untrack(() => addChild(parent, node, markerId, collector))
+		return () => untrack(() => removeChild(parent, markerId, collector))
+	})
 </script>
 
 <svelte-email-marker id={markerId}></svelte-email-marker>

@@ -71,10 +71,17 @@ Sets up the IR tree collector context and provides bindable output.
 	// IR tree root - populated by Email component via collector
 	let root: Mail.EmailNode | null = $state(null)
 
+	// Tree version counter - incremented when tree structure changes
+	// This triggers re-renders when children are added/removed (via addChild())
+	let treeVersion = $state(0)
+
 	// Create collector that Email component will use to register itself
 	const collector: Collector = {
 		registerRoot(node: Mail.EmailNode) {
 			root = node
+		},
+		markDirty() {
+			treeVersion++
 		}
 	}
 
@@ -105,6 +112,10 @@ Sets up the IR tree collector context and provides bindable output.
 
 	// Re-render when dependencies change
 	$effect(() => {
+		// Track tree version to detect structure changes (children added/removed)
+		// This is incremented by addChild() via collector.markDirty()
+		void treeVersion
+
 		// Capture dependencies for reactive tracking
 		const currentRoot = $state.snapshot(root)
 		const currentPlaceholders = placeholders
