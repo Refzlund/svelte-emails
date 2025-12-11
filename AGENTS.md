@@ -7,7 +7,11 @@ This document guides AI agents working on the `svelte-emails` library.
 3. Execute
 4. Document [ARCHITECTURE.md](ARCHITECTURE.md)
 
-- Do not run `bun dev` etc. instead ask the developer to verify
+- Do **NOT** run `bun dev` etc. instead ask the developer to verify 
+
+- Changesets are
+  - for `svelte-emails-cli` (documentation/examples)
+  - for `svelte-emails` (feature/fixes etc.)
 
 ---
 

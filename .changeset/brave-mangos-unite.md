@@ -1,5 +1,5 @@
 ---
-"@svelte-emails/cli": patch
+"svelte-emails-cli": patch
 ---
 
 docs(dev-guide): add color picker extension setup instructions
