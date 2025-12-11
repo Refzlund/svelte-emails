@@ -1,5 +1,13 @@
 # svelte-emails
 
+## 1.0.7
+
+### Patch Changes
+
+- fix(iframe): improve content height calculation to eliminate scrollable gaps ([#16](https://github.com/Refzlund/svelte-emails/pull/16))
+
+  Enhanced `calculateContentHeight()` to use multiple measurement techniques (body.scrollHeight, body.offsetHeight, documentElement.scrollHeight, documentElement.offsetHeight) and take the maximum value. This ensures all content is visible without scrolling, handling edge cases like margin collapse, subpixel rendering differences, and floated/absolutely positioned elements.
+
 ## 1.0.6
 
 ### Patch Changes
