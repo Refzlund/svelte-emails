@@ -74,6 +74,34 @@ bunx svelte-emails build  # Build emails to static HTML`
 
 	<Divider border={colors.border} />
 
+	<!-- VSCode Color Picker -->
+	<Div rows gap-4 p-8>
+		<Text.H2 content="Color Picking Setup" text={colors.text} />
+		<Text.Paragraph content="Easily select and modify colors in your email templates. Use any color picker extension, such [Color Picker Universal](https://marketplace.visualstudio.com/items?itemName=JeronimoEkerdt.color-picker-universal) or any other. An extension lets you visually pick colors directly in attributes like `bg-[#ffffff]` and `text-[#333333]`." text={colors.textMuted} />
+		
+		<Div rows gap-3>
+			<Text.H4 content="Setup Steps" text={colors.text} />
+			<Text
+				text={colors.textMuted}
+				content={`
+**1. Install the extension**
+
+Install [Color Picker Universal](https://marketplace.visualstudio.com/items?itemName=JeronimoEkerdt.color-picker-universal) from the marketplace.
+
+**2. Configure for Svelte files IF required**		
+
+**3. Restart the extension host**
+
+Run the command **'Developer: Restart Extension Host'** in VSCode (Ctrl+Shift+P / Cmd+Shift+P).
+`}
+			/>
+		</Div>
+
+		{@render callout('tip', 'Once configured, clicking on any color value like \`#ffffff\` in your Svelte files will open a visual color picker. This works for all Tailwind-like color attributes: \`bg-[#...]\`, \`text-[#...]\`, \`border-[#...]\`, etc.')}
+	</Div>
+
+	<Divider border={colors.border} />
+
 	<!-- Pre-send Checklist -->
 	<Div rows gap-4 p-8>
 		<Text.H2 content="Pre-send Checklist" text={colors.text} />

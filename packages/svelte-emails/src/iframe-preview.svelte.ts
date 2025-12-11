@@ -404,18 +404,43 @@ export function restoreContentScroll(
 /**
  * Calculate the content height of an iframe document.
  * 
- * Includes body margins for accurate measurement, as they contribute
- * to the total scrollable height but aren't included in scrollHeight.
+ * Uses multiple measurement techniques and takes the maximum to ensure
+ * all content is visible without scrolling. This handles edge cases like:
+ * - Margin collapse at document edges
+ * - Subpixel rendering differences
+ * - Different browser measurement behaviors
+ * - Floated or absolutely positioned elements
+ * 
+ * The measurements used:
+ * - `body.scrollHeight`: Content height including overflow
+ * - `body.offsetHeight`: Rendered height including borders
+ * - `documentElement.scrollHeight`: Full document scroll height
+ * - `documentElement.offsetHeight`: Full document rendered height
+ * 
+ * Body margins are added since they contribute to visual height but
+ * aren't always included in scrollHeight/offsetHeight measurements.
+ * 
+ * `Math.ceil()` ensures subpixel values don't cause 1px scroll gaps.
  */
 export function calculateContentHeight(doc: Document): number {
 	const body = doc.body
+	const html = doc.documentElement
 	if (!body) return 0
 	
 	const bodyStyle = doc.defaultView?.getComputedStyle(body)
 	const marginTop = parseFloat(bodyStyle?.marginTop || '0')
 	const marginBottom = parseFloat(bodyStyle?.marginBottom || '0')
+	const bodyMargins = marginTop + marginBottom
 	
-	return body.scrollHeight + marginTop + marginBottom
+	// Take maximum of all measurement approaches for robustness
+	const height = Math.max(
+		body.scrollHeight,
+		body.offsetHeight,
+		html.scrollHeight,
+		html.offsetHeight
+	)
+	
+	return Math.ceil(height + bodyMargins)
 }
 
 // ============================================================================
