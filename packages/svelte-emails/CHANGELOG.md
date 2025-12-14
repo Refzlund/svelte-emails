@@ -1,5 +1,11 @@
 # svelte-emails
 
+## 1.0.8
+
+### Patch Changes
+
+- fix(package): default export causes pre-mature consumption ([`20d7497`](https://github.com/Refzlund/svelte-emails/commit/20d7497570e62d9ef5a636f2ca0d046ab503b34e))
+
 ## 1.0.7
 
 ### Patch Changes
