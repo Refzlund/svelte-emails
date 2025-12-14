@@ -3,7 +3,7 @@
 	"changelog": [
 		"@svitejs/changesets-changelog-github-compact",
 		{
-			"repo": "refzlund/svelte-emails"
+			"repo": "Refzlund/svelte-emails"
 		}
 	],
 	"commit": false,
