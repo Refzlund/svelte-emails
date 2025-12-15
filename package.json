@@ -5,7 +5,7 @@
 	},
 	"scripts": {
 		"dev": "bun run packages/cli/src/cli.ts --dev",
-		"build": "bun run scripts/build.ts",
+		"build": "cd packages/svelte-emails && bun scripts/pack.ts",
 		"changeset": "changeset",
 		"version": "changeset version",
 		"publish": "bun run build && changeset publish",
@@ -26,6 +26,7 @@
 		}
 	},
 	"devDependencies": {
+		"@refzlund/repo": "github:refzlund/repo#next",
 		"@changesets/cli": "^2.29.8",
 		"@svitejs/changesets-changelog-github-compact": "^1.2.0",
 		"@types/bun": "^1.3.4",
